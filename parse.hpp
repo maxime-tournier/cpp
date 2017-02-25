@@ -1,3 +1,6 @@
+#ifndef PARSE_HPP
+#define PARSE_HPP
+
 #include <istream>
 
 namespace parse {
@@ -312,3 +315,6 @@ namespace parse {
 
     
 }
+
+
+#endif
