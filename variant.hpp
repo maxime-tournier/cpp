@@ -2,6 +2,7 @@
 #define VARIANT_HPP
 
 #include <type_traits>
+#include <memory>
 
 #include <iostream>
 
@@ -29,7 +30,7 @@ class variant {
   ptr_type ptr;
   
   // TODO infer largest index_type based on data alignement?
-  using index_type = unsigned char;
+  using index_type = std::uintptr_t;
   index_type index;
 
   using select_type = impl::select<sizeof...(T), T...>;
@@ -42,7 +43,14 @@ class variant {
 
   
 public:
+  
+  variant() : ptr(nullptr), index(0) { }
 
+  explicit operator bool() {
+	return ptr;
+  }
+
+  
   template<class U>
   variant( const std::shared_ptr<U>& u)
 	: ptr( u ),
@@ -66,17 +74,17 @@ public:
   variant& operator=(variant&& ) = default;  
   
   
-  template<class Visitor, class ... Args>
-  void apply(Visitor&& visitor, Args&& ... args) {
-	using thunk_type = void (*)(variant&, Visitor&&, Args&& ...);
+  // template<class Visitor, class ... Args>
+  // void apply(Visitor&& visitor, Args&& ... args) {
+  // 	using thunk_type = void (*)(variant&, Visitor&&, Args&& ...);
 	
-	static constexpr thunk_type dispatch [] = {
-	  thunk<variant, T, Visitor, Args...>...
-	};
+  // 	static constexpr thunk_type dispatch [] = {
+  // 	  thunk<variant, T, Visitor, Args...>...
+  // 	};
 	
-	dispatch[index](*this, std::forward<Visitor>(visitor),
-					std::forward<Args>(args)...);
-  }
+  // 	dispatch[index](*this, std::forward<Visitor>(visitor),
+  // 					std::forward<Args>(args)...);
+  // }
 
 
   template<class Visitor, class ... Args>
@@ -84,7 +92,7 @@ public:
 	using thunk_type = void (*)(const variant&, Visitor&&, Args&& ...);
 	
 	static constexpr thunk_type dispatch [] = {
-	  thunk<const variant, const T, Visitor, Args...>...
+	  thunk<const variant, T, Visitor, Args...>...
 	};
 	
 	dispatch[index](*this, std::forward<Visitor>(visitor),

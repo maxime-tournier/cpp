@@ -10,6 +10,8 @@
 template<class Vertex>
 struct vertex_property : Vertex {
 
+  using Vertex::Vertex;
+  
   boost::default_color_type color;
   unsigned char flags;
 

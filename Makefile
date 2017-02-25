@@ -1,20 +1,14 @@
 
 
-CXXFLAGS=-std=c++11
-
-SOURCES=$(wildcard *.cpp)
-
+INCLUDEPATH=-I/usr/include/eigen3
+CXXFLAGS=-std=c++11 $(INCLUDEPATH) -g
 
 first: all
 
 all:
 
-bin:
-	mkdir -p bin
-
-bin/%: %.cpp %.hpp bin 
-	$(CXX) $(CXXFLAGS) $< -o bin/$*
 
 clean:
 	rm -r bin/*
+
 
