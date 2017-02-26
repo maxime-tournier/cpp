@@ -25,7 +25,7 @@ int main(int, char** ) {
   };
 
 
-  class other : public base, 
+  class other : public base,  
 				public rtti::derived<other> {
   
   public:

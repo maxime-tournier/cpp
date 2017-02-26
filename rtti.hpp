@@ -9,7 +9,7 @@ namespace rtti {
   template<class Base>
   class base {
 	
-	using type_id = void (*)();
+	using type_id = const void* (*)();
 	const type_id type;
 	
   protected:  
@@ -24,7 +24,10 @@ namespace rtti {
 	type_id get_type() const { return type; }
 
 	template<class Derived>
-	static void get_type_id() { };
+	static const void* get_type_id() {
+	  static const char unique = 0;
+	  return &unique;
+	};
   };
 
 
