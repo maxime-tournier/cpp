@@ -3,7 +3,7 @@
 #include "indices.hpp"
 
 #include <Eigen/Core>
-
+#include <cassert>
 
 #include <cstdlib>
 #include <memory>
@@ -262,7 +262,7 @@ struct stack_overflow : std::runtime_error {
 };
 
 struct frame_type {
-  std::size_t start, size;
+  std::size_t start, size;		// TODO store dim (number of dofs)
 };
 
 struct propagate : dispatch<propagate> {
@@ -285,10 +285,25 @@ struct propagate : dispatch<propagate> {
 
 
   template<class G>
-  std::size_t aligned_sp() const {
-	std::size_t space;
+  std::size_t aligned_sp(std::size_t size) const {
+	std::size_t space = -1;
 	void* buf = stack.data() + sp;
-	return (real*)std::align( alignof(G), (unsigned) -1, buf, space) - stack.data();
+	real* aligned = (real*)std::align( alignof(G), size * sizeof(real), buf, space);
+	return aligned - stack.data();
+  }
+
+  template<class G>
+  std::size_t allocate(std::size_t dim) const {
+	assert( stack.capacity() );
+	
+	const std::size_t new_sp = aligned_sp<G>(dim);
+	const std::size_t required = new_sp + dim;
+	if( required > stack.capacity() ) throw stack_overflow(required);
+	
+	// allocate space
+	stack.resize( required );
+
+	return new_sp;
   }
   
 
@@ -296,25 +311,20 @@ struct propagate : dispatch<propagate> {
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
 	const std::size_t dim = traits<G>::size(self->pos);
-	
-	sp = aligned_sp<G>();
-	
-	const std::size_t required = sp + dim;
-	// std::clog << "sp: " << sp << "dim: " << dim << std::endl;
-	if( required > stack.capacity() ) throw stack_overflow(required);
 
-	// allocate space
-	stack.resize( required );
-
+	// allocate data
+	sp = allocate<G>(dim);
+	
 	// copy
-	G* ptr = reinterpret_cast<G*>(stack.data() + sp);
-	*ptr = self->pos;
-
+	G& data = reinterpret_cast<G&>(stack[sp]);
+	data = self->pos;
+	
 	// set stack/frame pointers
 	frame[v] = {sp, dim};
 	
 	sp += dim;
   }
+
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(mapping<To (From...) >* self, unsigned v, const graph& g) const {
@@ -339,13 +349,9 @@ struct propagate : dispatch<propagate> {
 	const std::size_t dim =
 	  self->size(reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
 
-	sp = aligned_sp<To>();
-	const std::size_t required = sp + dim;
-	if( required > stack.capacity() ) throw stack_overflow(required);
+	// allocate
+	sp = allocate<To>(dim);
 	
-	// allocate space
-	stack.resize( required );
-
 	To& to = reinterpret_cast<To&>(stack[sp]);
 
 	self->apply(to, reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
@@ -391,21 +397,12 @@ int main(int, char**) {
 	g[v].apply( typecheck(), v, g );
   }
   
-  // g.update(order, [&](unsigned v) {
-  // 	  std::cout << "updated " << v << std::endl;
-  // 	  g[v].set<graph::clear>();
-  // 	});
-
-
-  std::vector<real> stack;
+  std::vector<real> stack(1);
   std::size_t sp;
   std::vector<frame_type> frame(num_vertices(g));
 
   propagate vis(stack, sp, frame);
-  // const dispatch<propagate>& up = vis;
-
-  // indices_for<int, double, real> test = 0;
-
+  
   while(true) {
 	try{
 	  sp = 0;
