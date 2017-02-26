@@ -1,5 +1,6 @@
 #include "flow.hpp"
 #include "variant.hpp"
+#include "indices.hpp"
 
 #include <Eigen/Core>
 
@@ -21,7 +22,10 @@ std::string demangle(const char* name) {
     return (status==0) ? res.get() : name ;
 }
 
-template<int N = Eigen::Dynamic, class U = double>
+
+using real = double;
+
+template<int N = Eigen::Dynamic, class U = real>
 using vector = Eigen::Matrix<U, N, Eigen::Dynamic>;
 
 using vec1 = vector<1>;
@@ -32,18 +36,26 @@ using vec6 = vector<6>;
 
 template<class G> struct dofs;
 
+template<class G> struct traits;
+
+template<int N, class U>
+struct traits< vector<N, U> > {
+  static const std::size_t size = N;
+};
+
 
 struct dofs_base {
   virtual ~dofs_base() { }
 
   virtual void init() { }
 
-  using cast_type = variant< dofs<double>,
-							 dofs<vec1>,
-							 dofs<vec2>,
-							 dofs<vec3>,
-							 dofs<vec4>,
-							 dofs<vec6>>;
+  using cast_type = variant< 
+	dofs<real>,
+	dofs<vec1>,
+	dofs<vec2>,
+	dofs<vec3>,
+	dofs<vec4>,
+	dofs<vec6>>;
   
   virtual cast_type cast() = 0;
   
@@ -68,10 +80,11 @@ struct mapping_base {
 
   virtual void init() { }
 
-  using cast_type = variant< mapping<double (double) >,
-							 mapping<vec1 (vec3)>,
-							 mapping<vec1 (vec3, vec2)>
-							 >;
+  using cast_type = variant< 
+	mapping<real (real) >,
+	mapping<vec1 (vec3)>,
+	mapping<real (vec3, vec2)>
+	>;
   
   virtual cast_type cast() = 0;
 
@@ -83,13 +96,29 @@ template<class To, class ... From>
 struct mapping< To (From...) > : public mapping_base,
 								 public std::enable_shared_from_this< mapping< To (From...) > >{
   
-  virtual void apply(To& to, const From&... from) const { };
-
+  virtual void apply(To& to, const From&... from) const = 0; 
+  virtual std::size_t size(const From&... from) const = 0;
+  
   mapping::cast_type cast() {
 	return this->shared_from_this();
   }
-
+  
 };
+
+
+template<int M, int N, class U = real>
+struct sum : mapping< U (vector<M, U>, vector<N, U> ) > {
+
+  virtual void apply(U& to, const vector<M, U>& lhs, const vector<N, U>& rhs) const {
+	to = lhs.sum() + rhs.sum();
+  }
+  
+  virtual std::size_t size(const vector<M, U>& lhs, const vector<N, U>& rhs) const {
+	return 1;
+  }
+  
+};
+
 
 
 using vertex = variant<dofs_base, mapping_base>;
@@ -101,6 +130,11 @@ struct graph : dependency_graph<vertex, edge> {
   unsigned add_shared(Args&& ... args) {
 	return add_vertex( std::make_shared<T>(std::forward<Args>(args)...), *this);
   }
+
+
+  range<graph::vertex_iterator> vertices() {
+	return make_range( boost::vertices(*this) );
+  }
   
 };
 
@@ -111,7 +145,7 @@ struct typecheck {
 	
   }
 
-
+  // dispatch
   void operator()(mapping_base* self, unsigned v, const graph& g) const {
 	self->cast().apply(*this, v, g);
   }
@@ -130,6 +164,7 @@ struct typecheck {
   template<class Expected>
   struct expected_check {
 
+	// dispatch
 	void operator()(dofs_base* self) const {
 	  self->cast().apply(*this);
 	}
@@ -145,6 +180,7 @@ struct typecheck {
 	void operator()(mapping<Expected (From...) >* ) const { };	
 
 
+	// error cases
 	template<class T>
 	void operator()(dofs<T>* ) const {
 	  throw std::runtime_error("type error: "+ demangle( typeid(Expected (T) ).name() ));
@@ -168,7 +204,9 @@ struct typecheck {
 	
 	g[v].apply(expected_check<Expected>());
   }
-  
+
+
+  // typecheck from types
   template<class To, class ... From>
   void operator()(mapping<To (From...)>* self, unsigned v, const graph& g) const {
 
@@ -188,12 +226,112 @@ struct typecheck {
 };
 
 
+// apply itself on the same variant after calling ->cast()
+template<class Derived>
+struct dispatch {
+
+  const Derived& derived() const { return static_cast<const Derived&>(*this); }
+  
+  template<class T, class ... Args>
+  void operator()(T* self, Args&& ... args) const {
+	self->cast().apply( derived(), std::forward<Args>(args)...);
+  }
+  
+};
+
+
+struct stack_overflow : std::runtime_error {
+  const std::size_t required;
+  stack_overflow(std::size_t required)
+	: std::runtime_error("stack overflow"),
+	  required(required) { }
+};
+
+struct frame_type {
+  std::size_t start, size;
+};
+
+struct propagate : dispatch<propagate> {
+
+  std::vector<real>& stack;		// stack
+  std::size_t& sp; 				// stack pointer
+  std::vector<frame_type>& frame;   	// frame pointers
+  
+
+  propagate(std::vector<real>& stack,
+			std::size_t& sp,
+			std::vector<frame_type>& frame)
+	: stack(stack),
+	  sp(sp),
+	  frame(frame) {
+
+  }
+
+  // push dofs data to the stack  
+  template<class G>
+  void operator()(dofs<G>* self, unsigned v, const graph& g) const {
+	const std::size_t dim = self->pos.size();
+
+	const std::size_t required = sp + dim;
+	if( required >= stack.capacity() ) throw stack_overflow(required);
+
+	// allocate space
+	stack.resize( required );
+
+	// copy
+	G* ptr = reinterpret_cast<G*>(stack.data() + sp);
+	*ptr = self->pos;
+
+	// set stack/frame pointers
+	frame[v] = {sp, dim};
+	
+	sp += dim;
+  }
+
+
+  template<class To, class ... From, std::size_t ... I>
+  void operator()(mapping<To (From...) >* self, unsigned v, const graph& g,
+				  indices<I...> = indices_for<From...>()) const {
+
+	const std::size_t dim = self->size();
+
+	const std::size_t required = sp + dim;
+	if( required >= stack.capacity() ) throw stack_overflow(required);
+
+	// allocate space
+	stack.resize( required );
+
+	frame_type pframes[sizeof...(From)];
+	
+	// fetch frame pointers
+	frame_type* fp = pframes;
+	for(unsigned p : make_range(adjacent_vertices(v, g)) ) {
+	  *fp++ = frame[p];
+	}
+
+	To& to = reinterpret_cast<To&>(stack[sp]);
+	self->apply(to, reinterpret_cast<const From&>(stack[ fp[I].start ])...);
+
+	// set stack/frame pointers
+	frame[v] = {sp, dim};
+	
+	sp += dim;
+  }
+  
+  
+};
+
+
+
+
+
+
 int main(int, char**) {
 
   graph g;
   
   unsigned u = g.add_shared<dofs<vec3>>();
-  unsigned v = g.add_shared<mapping<vec1 (vec3, vec2)>>();
+  unsigned v = g.add_shared< sum<3, 2> >();
   unsigned w = g.add_shared<dofs<vec2>>();
   
   add_edge(v, u, g);
@@ -206,11 +344,24 @@ int main(int, char**) {
 	g[v].apply( typecheck(), v, g );
   }
   
-  g.update(order, [&](unsigned v) {
-	  std::cout << "updated " << v << std::endl;
-	  g[v].set<graph::clear>();
-	});
+  // g.update(order, [&](unsigned v) {
+  // 	  std::cout << "updated " << v << std::endl;
+  // 	  g[v].set<graph::clear>();
+  // 	});
 
+
+  std::vector<real> stack;
+  std::size_t sp = 0;
+  std::vector<frame_type> frame(num_vertices(g));
+
+  propagate vis(stack, sp, frame);
+  const dispatch<propagate>& up = vis;
+
+  indices_for<int, double, real> test = 0;
+  
+  for(unsigned v : order) {
+	g[v].apply(up, v, g);
+  }
   
 }
  

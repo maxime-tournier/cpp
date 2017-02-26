@@ -2,6 +2,7 @@
 #define PARSE_HPP
 
 #include <istream>
+#include <functional>
 
 namespace parse {
 

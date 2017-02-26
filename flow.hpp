@@ -7,6 +7,8 @@
 
 #include <iostream>
 
+#include "range.hpp"
+
 template<class Vertex>
 struct vertex_property : Vertex {
 
@@ -19,17 +21,6 @@ struct vertex_property : Vertex {
   void set() { flags |= c; }
   
 };
-
-template<class C>
-struct reverse_range {
-  C& container;
-  
-  auto begin() -> decltype(container.rbegin() ) const { return container.rbegin(); }
-  auto end() -> decltype(container.rend() )const { return container.rend(); }	  
-};
-
-template<class C>
-static reverse_range<C> reverse(C& container) { return {container}; }
 
 
 template<class Vertex, class Edge>
