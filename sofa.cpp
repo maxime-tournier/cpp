@@ -414,6 +414,7 @@ int main(int, char**) {
 	  std::clog << "stack reserve: " << stack.capacity() << std::endl;
 	}
   }
-  
+
+  return 0;
 }
  

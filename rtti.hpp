@@ -3,7 +3,10 @@
 
 #include <typeindex>
 
+// llvm-style rtti using static std::type_index
+
 namespace rtti {
+  
   template<class Base>
   class base {
 	const std::type_index type;
@@ -22,11 +25,10 @@ namespace rtti {
 
   template<class Derived>
   class derived {
-
   public:
 
-	template<class Self = Derived>
-	static bool classof(const typename Self::base_type* obj) {
+	template<class Self = Derived, class Base>
+	static bool classof(const Base* obj) {
 	  return obj->get_type() == typeid(Derived);
 	}
 	
