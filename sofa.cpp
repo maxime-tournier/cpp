@@ -40,7 +40,17 @@ template<class G> struct traits;
 
 template<int N, class U>
 struct traits< vector<N, U> > {
-  static const std::size_t size = N;
+  static std::size_t size(const vector<N, U>& ) {
+	return N;
+  }
+};
+
+
+template<>
+struct traits<real> {
+  static std::size_t size(const real& ) {
+	return 1;
+  }
 };
 
 
@@ -66,7 +76,7 @@ struct dofs : public dofs_base,
 			  public std::enable_shared_from_this< dofs<G> > {
   G pos;
 
-  dofs::cast_type cast() {
+  dofs_base::cast_type cast() {
 	return this->shared_from_this();
   }
   
@@ -99,7 +109,7 @@ struct mapping< To (From...) > : public mapping_base,
   virtual void apply(To& to, const From&... from) const = 0; 
   virtual std::size_t size(const From&... from) const = 0;
   
-  mapping::cast_type cast() {
+  mapping_base::cast_type cast() {
 	return this->shared_from_this();
   }
   
@@ -218,7 +228,9 @@ struct typecheck {
 		throw std::runtime_error("too many out edges");
 	  }
 	} catch( std::runtime_error& e ){
-	  throw std::runtime_error(e.what() + std::string(" when processing vertex: ") + std::to_string(v) );
+	  throw std::runtime_error(e.what() 
+							   + std::string(" when processing vertex: ") 
+							   + std::to_string(v) );
 	}
 	
   }
@@ -231,10 +243,12 @@ template<class Derived>
 struct dispatch {
 
   const Derived& derived() const { return static_cast<const Derived&>(*this); }
-  
+
+  // note: we don't want perfect forwarding here since it may preempt
+  // derived classes operator()
   template<class T, class ... Args>
-  void operator()(T* self, Args&& ... args) const {
-	self->cast().apply( derived(), std::forward<Args>(args)...);
+  void operator()(T* self, const Args& ... args) {
+	self->cast().apply( derived(), args...);
   }
   
 };
@@ -267,13 +281,17 @@ struct propagate : dispatch<propagate> {
 
   }
 
+  using dispatch<propagate>::operator();
+  
+
   // push dofs data to the stack  
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
-	const std::size_t dim = self->pos.size();
+	const std::size_t dim = traits<G>::size(self->pos);
 
 	const std::size_t required = sp + dim;
-	if( required >= stack.capacity() ) throw stack_overflow(required);
+	// std::clog << "sp: " << sp << "dim: " << dim << std::endl;
+	if( required > stack.capacity() ) throw stack_overflow(required);
 
 	// allocate space
 	stack.resize( required );
@@ -288,18 +306,14 @@ struct propagate : dispatch<propagate> {
 	sp += dim;
   }
 
+  template<class To, class ... From, std::size_t ... I>
+  void operator()(mapping<To (From...) >* self, unsigned v, const graph& g) const {
+	operator()(self, v, g, indices_for<From...>() );
+  }
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(mapping<To (From...) >* self, unsigned v, const graph& g,
-				  indices<I...> = indices_for<From...>()) const {
-
-	const std::size_t dim = self->size();
-
-	const std::size_t required = sp + dim;
-	if( required >= stack.capacity() ) throw stack_overflow(required);
-
-	// allocate space
-	stack.resize( required );
+				  indices<I...>) const {
 
 	frame_type pframes[sizeof...(From)];
 	
@@ -308,6 +322,16 @@ struct propagate : dispatch<propagate> {
 	for(unsigned p : make_range(adjacent_vertices(v, g)) ) {
 	  *fp++ = frame[p];
 	}
+
+	// result size
+	const std::size_t dim =
+	  self->size(reinterpret_cast<const From&>(stack[ fp[I].start ])...);
+
+	const std::size_t required = sp + dim;
+	if( required > stack.capacity() ) throw stack_overflow(required);
+	
+	// allocate space
+	stack.resize( required );
 
 	To& to = reinterpret_cast<To&>(stack[sp]);
 	self->apply(to, reinterpret_cast<const From&>(stack[ fp[I].start ])...);
@@ -351,16 +375,28 @@ int main(int, char**) {
 
 
   std::vector<real> stack;
-  std::size_t sp = 0;
+  std::size_t sp;
   std::vector<frame_type> frame(num_vertices(g));
 
   propagate vis(stack, sp, frame);
-  const dispatch<propagate>& up = vis;
+  // const dispatch<propagate>& up = vis;
 
-  indices_for<int, double, real> test = 0;
-  
-  for(unsigned v : order) {
-	g[v].apply(up, v, g);
+  // indices_for<int, double, real> test = 0;
+
+  while(true) {
+	try{
+	  sp = 0;
+	  stack.clear();
+	  for(unsigned v : order) {
+		g[v].apply(vis, v, g);
+	  }
+	  break;
+	} catch( stack_overflow& e ) {
+	  std::cerr << e.what() << std::endl;
+	  std::clog << "stack capacity: " << stack.capacity() << std::endl;
+	  stack.reserve(e.required);
+	  std::clog << "required: " << e.required << std::endl;
+	}
   }
   
 }
