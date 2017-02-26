@@ -5,21 +5,31 @@
 
 // llvm-style rtti using static std::type_index
 
+// TODO alternatively, we could number derived types automatically
+// using static functions
 namespace rtti {
   
   template<class Base>
   class base {
-	const std::type_index type;
+	
+	using type_id = void (*)();
+	const type_id type;
+	
   protected:  
-  
-	template<class Derived>
-	base(Derived* ) : type( typeid(Derived) ) { }
 
+	template<class Derived>
+	base(Derived* ) : type( get_type_id<Derived> ) { }
+
+	
   public:
   
 	using base_type = Base;
-	std::type_index get_type() const { return type; }
-  
+	type_id get_type() const { return type; }
+
+	template<class Derived>
+	static void get_type_id() { };
+	
+	
   };
 
 
@@ -29,7 +39,7 @@ namespace rtti {
 
 	template<class Self = Derived, class Base>
 	static bool classof(const Base* obj) {
-	  return obj->get_type() == typeid(Derived);
+	  return obj->get_type() == &Base::template get_type_id<Derived>;
 	}
 	
   };

@@ -1,3 +1,4 @@
+#include <iostream>
 #include "rtti.hpp"
 
 #include <iostream>
@@ -28,11 +29,11 @@ int main(int, char** ) {
   
   public:
 	other() : base(this) { }
-  };
+  }; 
 
 
   base* x = new derived;
-  base* y = new other;  
+  base* y = new other;   
   
   std::cout << derived::classof(x) << std::endl;
   std::cout << other::classof(x) << std::endl;
