@@ -45,7 +45,7 @@ int main(int, char** ) {
 
   std::vector<base*> test;
 
-  for(unsigned i = 0; i < 10000000; ++i) {
+  for(unsigned i = 0; i < 30000000; ++i) {
 
 	base* obj = std::rand() % 2 ? (base*) new derived : (base*) new other;
 	test.push_back( obj );
