@@ -3,10 +3,7 @@
 
 #include <typeindex>
 
-// llvm-style rtti using static std::type_index
-
-// TODO alternatively, we could number derived types automatically
-// using static functions
+// llvm-style rtti using function pointers as type ids
 namespace rtti {
   
   template<class Base>
@@ -18,7 +15,7 @@ namespace rtti {
   protected:  
 
 	template<class Derived>
-	base(Derived* ) : type( get_type_id<Derived> ) { }
+	base(Derived* ) : type( &get_type_id<Derived> ) { }
 
 	
   public:
@@ -28,8 +25,6 @@ namespace rtti {
 
 	template<class Derived>
 	static void get_type_id() { };
-	
-	
   };
 
 

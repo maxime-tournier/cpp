@@ -2,6 +2,7 @@
 #include "rtti.hpp"
 
 #include <iostream>
+#include <vector>
 
 int main(int, char** ) {
 
@@ -9,7 +10,7 @@ int main(int, char** ) {
   class base : public rtti::base<base> {
   
   public:
-	// 
+	//  
 
   protected:
 	using rtti::base<base>::base;
@@ -42,6 +43,27 @@ int main(int, char** ) {
 	std::cout << "it's a derived: " << cast << std::endl;
   }
 
+  std::vector<base*> test;
+
+  for(unsigned i = 0; i < 10000000; ++i) {
+
+	base* obj = std::rand() % 2 ? (base*) new derived : (base*) new other;
+	test.push_back( obj );
+  }
+	
+  int cd = 0, co = 0;
+
+  for(base* obj : test) {
+
+	if(rtti::isa<derived>(obj) ) {
+	  cd += 1;
+	}
+
+	if(rtti::isa<other>(obj) ) {
+	  co += 1;
+	}
+  }
+  
   // multiple inheritance
   struct A : rtti::base<A> {
   protected:
@@ -63,6 +85,7 @@ int main(int, char** ) {
   C* c = new C;
   A* a = c;
   B* b = c;
+
   
   if( auto cast = rtti::cast<C>(a) ) {
 	std::cout << "C" << std::endl;
