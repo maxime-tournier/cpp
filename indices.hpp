@@ -19,7 +19,7 @@ struct tuple_indices<> {
 
 template<class H, class ... T>
 struct tuple_indices<H, T...> {
-  using type = typename tuple_indices<T...>::type::template push<1 + sizeof...(T)>;
+  using type = typename tuple_indices<T...>::type::template push<sizeof...(T)>;
 };
 
 

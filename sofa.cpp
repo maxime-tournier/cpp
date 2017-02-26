@@ -26,7 +26,7 @@ std::string demangle(const char* name) {
 using real = double;
 
 template<int N = Eigen::Dynamic, class U = real>
-using vector = Eigen::Matrix<U, N, Eigen::Dynamic>;
+using vector = Eigen::Matrix<U, N, 1>;
 
 using vec1 = vector<1>;
 using vec2 = vector<2>;
@@ -282,13 +282,23 @@ struct propagate : dispatch<propagate> {
   }
 
   using dispatch<propagate>::operator();
+
+
+  template<class G>
+  std::size_t aligned_sp() const {
+	std::size_t space;
+	void* buf = stack.data() + sp;
+	return (real*)std::align( alignof(G), (unsigned) -1, buf, space) - stack.data();
+  }
   
 
   // push dofs data to the stack  
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
 	const std::size_t dim = traits<G>::size(self->pos);
-
+	
+	sp = aligned_sp<G>();
+	
 	const std::size_t required = sp + dim;
 	// std::clog << "sp: " << sp << "dim: " << dim << std::endl;
 	if( required > stack.capacity() ) throw stack_overflow(required);
@@ -313,20 +323,23 @@ struct propagate : dispatch<propagate> {
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(mapping<To (From...) >* self, unsigned v, const graph& g,
-				  indices<I...>) const {
+				  indices<I...> idx) const {
 
 	frame_type pframes[sizeof...(From)];
 	
 	// fetch frame pointers
-	frame_type* fp = pframes;
-	for(unsigned p : make_range(adjacent_vertices(v, g)) ) {
-	  *fp++ = frame[p];
+	{
+	  frame_type* fp = pframes;
+	  for(unsigned p : make_range(adjacent_vertices(v, g)) ) {
+		*fp++ = frame[p];
+	  }
 	}
 
 	// result size
 	const std::size_t dim =
-	  self->size(reinterpret_cast<const From&>(stack[ fp[I].start ])...);
+	  self->size(reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
 
+	sp = aligned_sp<To>();
 	const std::size_t required = sp + dim;
 	if( required > stack.capacity() ) throw stack_overflow(required);
 	
@@ -334,8 +347,11 @@ struct propagate : dispatch<propagate> {
 	stack.resize( required );
 
 	To& to = reinterpret_cast<To&>(stack[sp]);
-	self->apply(to, reinterpret_cast<const From&>(stack[ fp[I].start ])...);
 
+	self->apply(to, reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
+
+	std::clog << "mapped: " << to << std::endl;
+	
 	// set stack/frame pointers
 	frame[v] = {sp, dim};
 	
@@ -353,10 +369,17 @@ struct propagate : dispatch<propagate> {
 int main(int, char**) {
 
   graph g;
+
+  auto point3 = std::make_shared< dofs<vec3> >();
+  auto point2 = std::make_shared< dofs<vec2> >();  
+  auto map = std::make_shared< sum<3, 2> >();
+
+  point3->pos = {1, 2, 3};
+  point2->pos = {4, 5};  
   
-  unsigned u = g.add_shared<dofs<vec3>>();
-  unsigned v = g.add_shared< sum<3, 2> >();
-  unsigned w = g.add_shared<dofs<vec2>>();
+  unsigned u = add_vertex(point3, g);
+  unsigned w = add_vertex(point2, g);
+  unsigned v = add_vertex(map, g);
   
   add_edge(v, u, g);
   add_edge(v, w, g);
@@ -392,10 +415,8 @@ int main(int, char**) {
 	  }
 	  break;
 	} catch( stack_overflow& e ) {
-	  std::cerr << e.what() << std::endl;
-	  std::clog << "stack capacity: " << stack.capacity() << std::endl;
 	  stack.reserve(e.required);
-	  std::clog << "required: " << e.required << std::endl;
+	  std::clog << "stack reserve: " << stack.capacity() << std::endl;
 	}
   }
   
