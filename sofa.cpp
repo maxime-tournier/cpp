@@ -11,15 +11,15 @@
 
 std::string demangle(const char* name) {
 
-    int status = -4; // some arbitrary value to eliminate the compiler warning
+  int status = -4; // some arbitrary value to eliminate the compiler warning
 
-    // enable c++11 by passing the flag -std=c++11 to g++
-    std::unique_ptr<char, void(*)(void*)> res {
-        abi::__cxa_demangle(name, NULL, NULL, &status),
-        std::free
-    };
+  // enable c++11 by passing the flag -std=c++11 to g++
+  std::unique_ptr<char, void(*)(void*)> res {
+	abi::__cxa_demangle(name, NULL, NULL, &status),
+	  std::free
+	  };
 
-    return (status==0) ? res.get() : name ;
+  return (status==0) ? res.get() : name ;
 }
 
 
@@ -83,33 +83,31 @@ struct dofs : public dofs_base,
 };
 
 template<class T>
-struct mapping;
+struct func;
 
-struct mapping_base {
-  virtual ~mapping_base() { }
+struct func_base {
+  virtual ~func_base() { }
 
   virtual void init() { }
 
   using cast_type = variant< 
-	mapping<real (real) >,
-	mapping<vec1 (vec3)>,
-	mapping<real (vec3, vec2)>
+	func<real (real) >,
+	func<vec1 (vec3)>,
+	func<real (vec3, vec2)>
 	>;
   
   virtual cast_type cast() = 0;
 
-
-  
 };
 
 template<class To, class ... From>
-struct mapping< To (From...) > : public mapping_base,
-								 public std::enable_shared_from_this< mapping< To (From...) > >{
+struct func< To (From...) > : public func_base,
+							  public std::enable_shared_from_this< func< To (From...) > >{
   
   virtual void apply(To& to, const From&... from) const = 0; 
   virtual std::size_t size(const From&... from) const = 0;
   
-  mapping_base::cast_type cast() {
+  func_base::cast_type cast() {
 	return this->shared_from_this();
   }
   
@@ -117,7 +115,7 @@ struct mapping< To (From...) > : public mapping_base,
 
 
 template<int M, int N, class U = real>
-struct sum : mapping< U (vector<M, U>, vector<N, U> ) > {
+struct sum : func< U (vector<M, U>, vector<N, U> ) > {
 
   virtual void apply(U& to, const vector<M, U>& lhs, const vector<N, U>& rhs) const {
 	to = lhs.sum() + rhs.sum();
@@ -131,7 +129,7 @@ struct sum : mapping< U (vector<M, U>, vector<N, U> ) > {
 
 
 
-using vertex = variant<dofs_base, mapping_base>;
+using vertex = variant<dofs_base, func_base>;
 struct edge {};
 
 struct graph : dependency_graph<vertex, edge> {
@@ -156,7 +154,7 @@ struct typecheck {
   }
 
   // dispatch
-  void operator()(mapping_base* self, unsigned v, const graph& g) const {
+  void operator()(func_base* self, unsigned v, const graph& g) const {
 	self->cast().apply(*this, v, g);
   }
 
@@ -179,7 +177,7 @@ struct typecheck {
 	  self->cast().apply(*this);
 	}
 
-	void operator()(mapping_base* self) const {
+	void operator()(func_base* self) const {
 	  self->cast().apply(*this);
 	}
 
@@ -187,7 +185,7 @@ struct typecheck {
 	void operator()(dofs<Expected>* ) const { };
 
 	template<class ... From>
-	void operator()(mapping<Expected (From...) >* ) const { };	
+	void operator()(func<Expected (From...) >* ) const { };	
 
 
 	// error cases
@@ -198,7 +196,7 @@ struct typecheck {
 
 
 	template<class T, class ... From>
-	void operator()(mapping<T (From...) >* ) const {
+	void operator()(func<T (From...) >* ) const {
 	  throw std::runtime_error("type error: " + demangle( typeid(Expected (T) ).name() ));
 	}
 	
@@ -218,7 +216,7 @@ struct typecheck {
 
   // typecheck from types
   template<class To, class ... From>
-  void operator()(mapping<To (From...)>* self, unsigned v, const graph& g) const {
+  void operator()(func<To (From...)>* self, unsigned v, const graph& g) const {
 
 	auto out = adjacent_vertices(v, g);
 	try {
@@ -327,12 +325,12 @@ struct propagate : dispatch<propagate> {
 
 
   template<class To, class ... From, std::size_t ... I>
-  void operator()(mapping<To (From...) >* self, unsigned v, const graph& g) const {
+  void operator()(func<To (From...) >* self, unsigned v, const graph& g) const {
 	operator()(self, v, g, indices_for<From...>() );
   }
 
   template<class To, class ... From, std::size_t ... I>
-  void operator()(mapping<To (From...) >* self, unsigned v, const graph& g,
+  void operator()(func<To (From...) >* self, unsigned v, const graph& g,
 				  indices<I...> idx) const {
 
 	frame_type pframes[sizeof...(From)];
