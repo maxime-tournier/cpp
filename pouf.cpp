@@ -291,17 +291,28 @@ struct propagate : dispatch<propagate> {
   }
 
   template<class G>
-  std::size_t allocate(std::size_t dim) const {
+  G& allocate(unsigned v, std::size_t dim) const {
 	assert( stack.capacity() );
-	
-	const std::size_t new_sp = aligned_sp<G>(dim);
-	const std::size_t required = new_sp + dim;
-	if( required > stack.capacity() ) throw stack_overflow(required);
+
+	// align
+	sp = aligned_sp<G>(dim);
+
+	// check stack
+	const std::size_t required = sp + dim;
+	if( required > stack.capacity() ) {
+	  throw stack_overflow(required);
+	}
 	
 	// allocate space
 	stack.resize( required );
 
-	return new_sp;
+	G& res = reinterpret_cast<G&>(stack[sp]);
+
+	// push frame
+	frame[v] = {sp, dim};
+	sp += dim;
+
+	return res;
   }
   
 
@@ -310,17 +321,11 @@ struct propagate : dispatch<propagate> {
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
 	const std::size_t dim = traits<G>::size(self->pos);
 
-	// allocate data
-	sp = allocate<G>(dim);
-	
+	// allocate
+	G& data = allocate<G>(v, dim);
+
 	// copy
-	G& data = reinterpret_cast<G&>(stack[sp]);
 	data = self->pos;
-	
-	// set stack/frame pointers
-	frame[v] = {sp, dim};
-	
-	sp += dim;
   }
 
 
@@ -347,19 +352,12 @@ struct propagate : dispatch<propagate> {
 	const std::size_t dim =
 	  self->size(reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
 
-	// allocate
-	sp = allocate<To>(dim);
-	
-	To& to = reinterpret_cast<To&>(stack[sp]);
+	// allocate result
+	To& to = allocate<To>(v, dim);
 
 	self->apply(to, reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
 
 	std::clog << "mapped: " << to << std::endl;
-	
-	// set stack/frame pointers
-	frame[v] = {sp, dim};
-	
-	sp += dim;
   }
   
   

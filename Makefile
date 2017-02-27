@@ -12,7 +12,8 @@ all: $(ALL)
 
 
 clean:
-	rm $(ALL)
+	rm $(ALL) *.o
+
 
 
 debug: CXXFLAGS += -g
