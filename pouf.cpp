@@ -104,7 +104,7 @@ template<class To, class ... From>
 struct func< To (From...) > : public func_base,
 							  public std::enable_shared_from_this< func< To (From...) > >{
   
-  virtual void apply(To& to, const From&... from) const = 0; 
+  virtual void apply(To& to, const From&... from) const = 0;
   virtual std::size_t size(const From&... from) const = 0;
   
   func_base::cast_type cast() {
@@ -260,17 +260,19 @@ struct stack_overflow : std::runtime_error {
 };
 
 struct frame_type {
-  std::size_t start, size;		// TODO store dim (number of dofs)
+  std::size_t start, size, dim;
 };
 
-struct propagate : dispatch<propagate> {
 
-  std::vector<real>& stack;		// stack
+
+struct push : dispatch<push> {
+
+  std::vector<char>& stack;		// stack
   std::size_t& sp; 				// stack pointer
   std::vector<frame_type>& frame;   	// frame pointers
   
 
-  propagate(std::vector<real>& stack,
+  push(std::vector<char>& stack,
 			std::size_t& sp,
 			std::vector<frame_type>& frame)
 	: stack(stack),
@@ -279,16 +281,17 @@ struct propagate : dispatch<propagate> {
 
   }
 
-  using dispatch<propagate>::operator();
+  using dispatch<push>::operator();
 
 
   template<class G>
   std::size_t aligned_sp(std::size_t size) const {
 	std::size_t space = -1;
 	void* buf = stack.data() + sp;
-	real* aligned = (real*)std::align( alignof(G), size * sizeof(real), buf, space);
+	char* aligned = (char*)std::align( alignof(G), size * sizeof(G), buf, space);
 	return aligned - stack.data();
   }
+
 
   template<class G>
   G& allocate(unsigned v, std::size_t dim) const {
@@ -298,7 +301,8 @@ struct propagate : dispatch<propagate> {
 	sp = aligned_sp<G>(dim);
 
 	// check stack
-	const std::size_t required = sp + dim;
+	const std::size_t size = dim * sizeof(G);
+	const std::size_t required = sp + size;
 	if( required > stack.capacity() ) {
 	  throw stack_overflow(required);
 	}
@@ -309,9 +313,9 @@ struct propagate : dispatch<propagate> {
 	G& res = reinterpret_cast<G&>(stack[sp]);
 
 	// push frame
-	frame[v] = {sp, dim};
-	sp += dim;
-
+	frame[v] = {sp, size, dim};
+	sp += size;
+	
 	return res;
   }
   
@@ -319,7 +323,7 @@ struct propagate : dispatch<propagate> {
   // push dofs data to the stack  
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
-	const std::size_t dim = traits<G>::size(self->pos);
+	const std::size_t dim = 1; // traits<G>::size(self->pos);
 
 	// allocate
 	G& data = allocate<G>(v, dim);
@@ -333,6 +337,7 @@ struct propagate : dispatch<propagate> {
   void operator()(func<To (From...) >* self, unsigned v, const graph& g) const {
 	operator()(self, v, g, indices_for<From...>() );
   }
+
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g,
@@ -351,7 +356,7 @@ struct propagate : dispatch<propagate> {
 	// result size
 	const std::size_t dim =
 	  self->size(reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
-
+	
 	// allocate result
 	To& to = allocate<To>(v, dim);
 
@@ -393,11 +398,11 @@ int main(int, char**) {
 	g[v].apply( typecheck(), v, g );
   }
   
-  std::vector<real> stack(1);
+  std::vector<char> stack(1);
   std::size_t sp;
   std::vector<frame_type> frame(num_vertices(g));
 
-  propagate vis(stack, sp, frame);
+  push vis(stack, sp, frame);
   
   while(true) {
 	try{
