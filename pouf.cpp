@@ -40,20 +40,53 @@ template<class G> struct dofs;
 
 template<class G> struct traits;
 
+template<class G>
+using deriv = typename traits<G>::deriv;
+
+template<class G>
+using scalar = typename traits<G>::scalar;
+
+
 template<int N, class U>
 struct traits< vector<N, U> > {
 
-  static const std::size_t deriv_dim = N * traits<U>::deriv_dim;
-  static const std::size_t coord_dim = N * traits<U>::coord_dim;
+  using scalar = typename traits<U>::scalar;
+  using deriv = vector<N, typename traits<U>::deriv>;
+  
+  static const std::size_t dim = N * traits<U>::dim;
+
+  static scalar dot(const vector<N, U>& x,
+		    const vector<N, U>& y) {
+    return x.dot(y);
+  }
+
+  static scalar& coord(std::size_t i, vector<N, U>& v) {
+    return reinterpret_cast<scalar*>(v.data())[i];
+  }
+
+  static const scalar& coord(std::size_t i, const vector<N, U>& v) {
+    return reinterpret_cast<scalar*>(v.data())[i];
+  }
   
 };
 
 
+
 template<>
 struct traits<real> {
-  static const std::size_t deriv_dim = 1;
-  static const std::size_t coord_dim = 1;
+  
+  using deriv = real;
+  using scalar = real;
+
+  static const std::size_t dim = 1;
+
+  static scalar dot(real x, real y) { return x * y; }
+
+  static const scalar& coord(std::size_t, const real& value) { return value; }
+  static scalar& coord(std::size_t, real& value) { return value; }  
 };
+
+
 
 
 struct dofs_base {
@@ -163,6 +196,32 @@ struct sum : func< U (vector<M, U>, vector<N, U> ) > {
 
 
 
+template<class U>
+struct norm2 : func< typename traits<U>::scalar ( U ) > {
+  
+  virtual std::size_t size(const U& ) const {
+    return 1;
+  }
+  
+  
+  virtual void apply(typename traits<U>::scalar& to, const U& from) const {
+    to = traits<U>::dot(from, from) / 2.0;
+  }
+  
+
+  virtual void jacobian(std::vector<triplet>& block, const U& from) const {
+    for(unsigned i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
+      block.emplace_back(0, i, traits<U>::coord(i, from));
+    }
+    
+  }
+  
+};
+
+
+
+
+
 using vertex = variant<dofs_base, func_base>;
 struct edge {};
 
@@ -239,7 +298,7 @@ struct typecheck {
   template<class Expected, class Iterator, class G>
   static void check_type(Iterator first, Iterator last, const G& g) {
     if(first == last) {
-      throw std::runtime_error("not enough out edges");
+      throw std::runtime_error("expected more out-edges");
     }
 
     const unsigned v = *first;
@@ -255,13 +314,14 @@ struct typecheck {
     auto out = adjacent_vertices(v, g);
     try {
       const int expand[] = { (check_type<From>(out.first++, out.second, g), 0)...};
-	  
+
+      // TODO this could be ok though
       if(out.first != out.second) {
-	throw std::runtime_error("too many out edges");
+	throw std::runtime_error("expected less out-edges");
       }
     } catch( std::runtime_error& e ){
       throw std::runtime_error(e.what() 
-			       + std::string(" when processing vertex: ") 
+			       + std::string(" for vertex: ") 
 			       + std::to_string(v) );
     }
 	
@@ -524,7 +584,7 @@ struct numbering : dispatch<numbering> {
   void operator()(dofs<G>* self, unsigned v) const {
     chunk* c = storage.allocate<chunk>(v);
 
-    c->size = pos.count(v) * traits<G>::deriv_dim;
+    c->size = pos.count(v) * traits< deriv<G> >::dim;
     c->start = offset;
     
     offset += c->size;
@@ -535,7 +595,7 @@ struct numbering : dispatch<numbering> {
   void operator()(func<To (From...) >* self, unsigned v) const {
     chunk* c = storage.allocate<chunk>(v);
     
-    c->size = pos.count(v) * traits<To>::deriv_dim;
+    c->size = pos.count(v) * traits< deriv<To> >::dim;
     c->start = offset;
     
     offset += c->size;
@@ -603,8 +663,8 @@ struct fetch : dispatch<fetch> {
     const std::size_t count = pos.count(v);
     const std::size_t parent_count[] = { pos.count(parents[I])... };
       
-    const std::size_t rows = count * traits<To>::deriv_dim;
-    const std::size_t cols[] = { parent_count[I] * traits<From>::deriv_dim... };    
+    const std::size_t rows = count * traits< deriv<To> >::dim;
+    const std::size_t cols[] = { parent_count[I] * traits< deriv<From> >::dim... };    
     
     // no child: allocate mask
     if( in_degree(v, g) == 0 ) {
@@ -713,16 +773,20 @@ int main(int, char**) {
   auto point3 = std::make_shared< dofs<vec3> >();
   auto point2 = std::make_shared< dofs<vec2> >();  
   auto map = std::make_shared< sum<3, 2> >();
-
+  auto map2 = std::make_shared< norm2<double> >();  
+  
   point3->pos = {1, 2, 3};
   point2->pos = {4, 5};  
   
   unsigned u = add_vertex(point3, g);
   unsigned w = add_vertex(point2, g);
   unsigned v = add_vertex(map, g);
+  unsigned x = add_vertex(map2, g);  
+  
   
   add_edge(v, u, g);
   add_edge(v, w, g);
+  add_edge(x, v, g);  
   
   std::vector<unsigned> order;
   g.sort(order);
@@ -756,6 +820,8 @@ int main(int, char**) {
   
   // compute masks/jacobians
   with_auto_stack([&] {
+      triplets.clear();
+      
       for(unsigned v : reverse(order)) {
 	g[v].apply( fetch(triplets, mask, elements, chunks, pos), v, g);
       }
