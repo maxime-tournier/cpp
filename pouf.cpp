@@ -307,10 +307,14 @@ public:
   };
   
   struct overflow : std::runtime_error {
+    stack& who;
     const std::size_t required;
-    overflow(std::size_t required)
+    
+    overflow(stack& who, std::size_t required)
       : std::runtime_error("stack overflow"),
+	who(who),
 	required(required) { }
+    
   };
   
   
@@ -335,7 +339,7 @@ public:
     const std::size_t required = sp + size;
     
     if( required > storage.capacity() ) {
-      throw overflow(required);
+      throw overflow(*this, required);
     }
     
     // allocate space
@@ -377,11 +381,12 @@ public:
     storage.reserve(size);
   }
 
-  void grow() {
+  void grow(std::size_t required = 0) {
     const std::size_t c = capacity();
     assert( c );
-    
-    reserve( std::max(c + 1, c + c / 2) );
+
+    const std::size_t min = std::max(required, c+1);
+    reserve( std::max(min, c + c / 2) );
   }
 };
 
@@ -579,9 +584,20 @@ struct fetch : dispatch<fetch> {
     
   }
   
-  
 };
 
+template<class F>
+static void with_auto_stack( const F& f ) {
+  while (true) {
+    try{
+      f();
+      return;
+    } catch(stack::overflow& e) {
+      e.who.grow();
+      e.who.reset();
+    }
+  }
+}
 
 
 
@@ -613,36 +629,23 @@ int main(int, char**) {
   }
 
   graph_data pos(num_vertices(g));
-  
-  while(true) {
-    try{
-      pos.reset();
+
+  with_auto_stack([&] {
       for(unsigned v : order) {
 	g[v].apply( push(pos), v, g);
       }
-      break;
-    } catch( stack::overflow& e ) {
-      pos.grow();
-    }
-  }
-
-
+    });
+  
   graph_data mask(num_vertices(g));
   
   std::vector< std::vector<rmat> > jacobian(num_vertices(g));
   std::vector< std::vector<triplet> > elements;
-  
-  while(true) {
-    try{
-      mask.reset();
+
+  with_auto_stack([&] {
       for(unsigned v : reverse(order)) {
 	g[v].apply( fetch(pos, mask, jacobian, elements), v, g);
       }
-      break;
-    } catch( stack::overflow& e ) {
-      mask.grow();
-    }
-  }
+    });
 
   for(const auto& J : jacobian) {
     for(const auto& block : J) {
