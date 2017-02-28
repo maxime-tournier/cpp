@@ -498,6 +498,7 @@ struct push : dispatch<push> {
 using rmat = Eigen::SparseMatrix<real, Eigen::RowMajor>;
 
 // fetch jacobians w/ masking
+// TODO fetch offsets as well
 struct fetch : dispatch<fetch> {
   graph_data& pos;
   graph_data& mask;
@@ -571,7 +572,8 @@ struct fetch : dispatch<fetch> {
     self->jacobian(elements[I]..., pos.get<const From>(parents[I])...);
 
     // TODO sort/filter elements by mask
-
+    // TODO set parent masks
+    
     // assemble matrices
     jacobian[v].resize(n);
     
@@ -585,6 +587,46 @@ struct fetch : dispatch<fetch> {
   }
   
 };
+
+
+struct assemble : dispatch<assemble> {
+  graph_data& offset;
+  std::size_t& current;
+  
+  std::vector<rmat>& jacobian;
+  std::vector<std::vector<rmat>>& blocks;
+
+  
+  using dispatch<assemble>::operator();
+  
+  template<class G>
+  void operator()(dofs<G>* self, unsigned v, const graph& g) const {
+    const std::size_t count = self->size();
+
+    std::size_t& off = offset.allocate<std::size_t>(v);
+    off = current;
+
+    const std::size_t rows = count * traits<G>::deriv_dim;
+
+    // TODO 
+    
+    current += rows;
+  }
+    
+  template<class To, class ... From, std::size_t ... I>
+  void operator()(func<To (From...) >* self, unsigned v, const graph& g) const {
+    operator()(self, v, g, indices_for<From...>() );
+  }
+
+  
+  template<class To, class ... From, std::size_t ... I>
+  void operator()(func<To (From...) >* self, unsigned v, const graph& g,
+		  indices<I...> idx) const {
+  }
+  
+};
+
+
 
 template<class F>
 static void with_auto_stack( const F& f ) {
