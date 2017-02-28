@@ -81,6 +81,10 @@ struct dofs : public dofs_base,
   dofs_base::cast_type cast() {
     return this->shared_from_this();
   }
+
+  std::size_t size() const {
+    return 1;
+  }
   
 };
 
@@ -391,7 +395,8 @@ public:
 };
 
 
-
+// TODO we probably want a tag phantom type here to get stricter
+// typechecking
 class graph_data {
   stack storage;
   std::vector<stack::frame> frame;
@@ -448,16 +453,16 @@ struct push : dispatch<push> {
   push(graph_data& pos) : pos(pos) { }
   
   
-  using dispatch<push>::operator();
+  using dispatch::operator();
   
   
   // push dofs data to the stack  
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
-    const std::size_t dim = 1; // traits<G>::size(self->pos);
+    const std::size_t count = self->size();
 
     // allocate
-    G* data = pos.allocate<G>(v, dim);
+    G* data = pos.allocate<G>(v, count);
     
     // TODO static_assert G is pod ?
     
@@ -495,31 +500,79 @@ struct push : dispatch<push> {
 };
 
 
+// deriv data numbering
+struct numbering : dispatch<numbering> {
+
+  struct chunk {
+    std::size_t start, size;
+  };
+
+  numbering(graph_data& storage, std::size_t& offset, const graph_data& pos)
+    : storage(storage),
+      offset(offset),
+      pos(pos) {
+
+  }
+
+  using dispatch::operator();
+  
+  graph_data& storage;
+  std::size_t& offset;
+  const graph_data& pos;
+  
+  template<class G>
+  void operator()(dofs<G>* self, unsigned v) const {
+    chunk* c = storage.allocate<chunk>(v);
+
+    c->size = pos.count(v) * traits<G>::deriv_dim;
+    c->start = offset;
+    
+    offset += c->size;
+  }
+
+
+  template<class To, class ... From>
+  void operator()(func<To (From...) >* self, unsigned v) const {
+    chunk* c = storage.allocate<chunk>(v);
+    
+    c->size = pos.count(v) * traits<To>::deriv_dim;
+    c->start = offset;
+    
+    offset += c->size;
+  }  
+  
+};
+
+
+
+
 using rmat = Eigen::SparseMatrix<real, Eigen::RowMajor>;
 
 // fetch jacobians w/ masking
-// TODO fetch offsets as well
 struct fetch : dispatch<fetch> {
-  graph_data& pos;
-  graph_data& mask;
 
-  using jacobian_type = std::vector< std::vector<rmat> >;
-  using elements_type = std::vector< std::vector<triplet> >;
-  
+  using jacobian_type = std::vector<triplet>;
   jacobian_type& jacobian;
-
+  graph_data& mask;
+  
+  using elements_type = std::vector< jacobian_type >;
+  
   // internal
   elements_type& elements;
 
-
-  fetch(graph_data& pos,
+  const graph_data& chunks;
+  const graph_data& pos;
+  
+  fetch(jacobian_type& jacobian,
 	graph_data& mask,
-	jacobian_type& jacobian,
-	elements_type& elements)
-    : pos(pos),
+	elements_type& elements,
+	const graph_data& chunks,	
+	const graph_data& pos)
+    : jacobian(jacobian),
       mask(mask),
-      jacobian(jacobian),
-      elements(elements) {
+      elements(elements),
+      chunks(chunks),
+      pos(pos) {
     
   }
 
@@ -527,7 +580,11 @@ struct fetch : dispatch<fetch> {
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
+    const numbering::chunk& chunk = chunks.get<numbering::chunk>(v);
 
+    for(unsigned i = chunk.start, n = chunk.start + chunk.size; i < n; ++i) {
+      jacobian.emplace_back(i, i, 1.0);
+    }
   }
     
   template<class To, class ... From, std::size_t ... I>
@@ -570,20 +627,24 @@ struct fetch : dispatch<fetch> {
     // fetch data
     elements.clear();
     self->jacobian(elements[I]..., pos.get<const From>(parents[I])...);
-
-    // TODO sort/filter elements by mask
-    // TODO set parent masks
     
-    // assemble matrices
-    jacobian[v].resize(n);
+    // TODO set parent masks
+
+    const numbering::chunk& chunk = chunks.get<numbering::chunk>(v);
     
     for(unsigned p = 0; p < n; ++p) {
-      jacobian[v][p].resize(rows, cols[p]);
-
-      // TODO set from sorted triplets
-      jacobian[v][p].setFromTriplets( elements[p].begin(), elements[p].end() );
+      const unsigned vp = parents[p];
+      const numbering::chunk& parent_chunk = chunks.get<numbering::chunk>(vp);
+	
+      // shift elements
+      for(triplet& it : elements[p]) {
+	// TODO filter by mask
+	jacobian.emplace_back(it.row() + chunk.start,
+			      it.col() + parent_chunk.start,
+			      it.value());
+      }
     }
-    
+
   }
   
 };
@@ -670,31 +731,41 @@ int main(int, char**) {
     g[v].apply( typecheck(), v, g );
   }
 
-  graph_data pos(num_vertices(g));
+  const std::size_t n = num_vertices(g);
+  
+  graph_data pos(n);
+  graph_data chunks(n);
 
+  // propagate positions and number dofs
+  std::size_t offset;
+  
   with_auto_stack([&] {
+      offset = 0;
       for(unsigned v : order) {
 	g[v].apply( push(pos), v, g);
+	g[v].apply( numbering(chunks, offset, pos), v);	
       }
     });
-  
-  graph_data mask(num_vertices(g));
-  
-  std::vector< std::vector<rmat> > jacobian(num_vertices(g));
-  std::vector< std::vector<triplet> > elements;
 
+  const std::size_t total_dim = offset;
+  
+  graph_data mask(n);
+  
+  std::vector<triplet> triplets;
+  std::vector< std::vector<triplet> > elements;
+  
+  // compute masks/jacobians
   with_auto_stack([&] {
       for(unsigned v : reverse(order)) {
-	g[v].apply( fetch(pos, mask, jacobian, elements), v, g);
+	g[v].apply( fetch(triplets, mask, elements, chunks, pos), v, g);
       }
     });
 
-  for(const auto& J : jacobian) {
-    for(const auto& block : J) {
-      std::cout << block << std::endl;
-    }
-  }
+  rmat jacobian(total_dim, total_dim);
+  jacobian.setFromTriplets(triplets.begin(), triplets.end());
 
+  std::cout << jacobian << std::endl;
+  
   return 0;
 }
  
