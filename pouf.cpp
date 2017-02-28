@@ -15,9 +15,9 @@ std::string demangle(const char* name) {
 
   // enable c++11 by passing the flag -std=c++11 to g++
   std::unique_ptr<char, void(*)(void*)> res {
-	abi::__cxa_demangle(name, NULL, NULL, &status),
-	  std::free
-	  };
+    abi::__cxa_demangle(name, NULL, NULL, &status),
+      std::free
+      };
 
   return (status==0) ? res.get() : name ;
 }
@@ -41,7 +41,7 @@ template<class G> struct traits;
 template<int N, class U>
 struct traits< vector<N, U> > {
   static std::size_t size(const vector<N, U>& ) {
-	return N;
+    return N;
   }
 };
 
@@ -49,7 +49,7 @@ struct traits< vector<N, U> > {
 template<>
 struct traits<real> {
   static std::size_t size(const real& ) {
-	return 1;
+    return 1;
   }
 };
 
@@ -60,12 +60,12 @@ struct dofs_base {
   virtual void init() { }
 
   using cast_type = variant< 
-	dofs<real>,
-	dofs<vec1>,
-	dofs<vec2>,
-	dofs<vec3>,
-	dofs<vec4>,
-	dofs<vec6>>;
+    dofs<real>,
+    dofs<vec1>,
+    dofs<vec2>,
+    dofs<vec3>,
+    dofs<vec4>,
+    dofs<vec6>>;
   
   virtual cast_type cast() = 0;
   
@@ -73,11 +73,11 @@ struct dofs_base {
 
 template<class G>
 struct dofs : public dofs_base,
-			  public std::enable_shared_from_this< dofs<G> > {
+	      public std::enable_shared_from_this< dofs<G> > {
   G pos;
 
   dofs_base::cast_type cast() {
-	return this->shared_from_this();
+    return this->shared_from_this();
   }
   
 };
@@ -91,10 +91,10 @@ struct func_base {
   virtual void init() { }
 
   using cast_type = variant< 
-	func<real (real) >,
-	func<vec1 (vec3)>,
-	func<real (vec3, vec2)>
-	>;
+    func<real (real) >,
+    func<vec1 (vec3)>,
+    func<real (vec3, vec2)>
+    >;
   
   virtual cast_type cast() = 0;
 
@@ -102,13 +102,13 @@ struct func_base {
 
 template<class To, class ... From>
 struct func< To (From...) > : public func_base,
-							  public std::enable_shared_from_this< func< To (From...) > >{
+  public std::enable_shared_from_this< func< To (From...) > >{
   
   virtual void apply(To& to, const From&... from) const = 0;
   virtual std::size_t size(const From&... from) const = 0;
   
   func_base::cast_type cast() {
-	return this->shared_from_this();
+    return this->shared_from_this();
   }
   
 };
@@ -118,11 +118,11 @@ template<int M, int N, class U = real>
 struct sum : func< U (vector<M, U>, vector<N, U> ) > {
 
   virtual void apply(U& to, const vector<M, U>& lhs, const vector<N, U>& rhs) const {
-	to = lhs.sum() + rhs.sum();
+    to = lhs.sum() + rhs.sum();
   }
   
   virtual std::size_t size(const vector<M, U>& lhs, const vector<N, U>& rhs) const {
-	return 1;
+    return 1;
   }
   
 };
@@ -136,12 +136,12 @@ struct graph : dependency_graph<vertex, edge> {
 
   template<class T, class ... Args>
   unsigned add_shared(Args&& ... args) {
-	return add_vertex( std::make_shared<T>(std::forward<Args>(args)...), *this);
+    return add_vertex( std::make_shared<T>(std::forward<Args>(args)...), *this);
   }
 
 
   range<graph::vertex_iterator> vertices() {
-	return make_range( boost::vertices(*this) );
+    return make_range( boost::vertices(*this) );
   }
   
 };
@@ -155,62 +155,62 @@ struct typecheck {
 
   // dispatch
   void operator()(func_base* self, unsigned v, const graph& g) const {
-	self->cast().apply(*this, v, g);
+    self->cast().apply(*this, v, g);
   }
 
 
 
   struct type_error : std::runtime_error {
-	using std::runtime_error::runtime_error;
+    using std::runtime_error::runtime_error;
   };
 
   struct edge_error : std::runtime_error {
-	using std::runtime_error::runtime_error;
+    using std::runtime_error::runtime_error;
   };
 
   
   template<class Expected>
   struct expected_check {
 
-	// dispatch
-	void operator()(dofs_base* self) const {
-	  self->cast().apply(*this);
-	}
+    // dispatch
+    void operator()(dofs_base* self) const {
+      self->cast().apply(*this);
+    }
 
-	void operator()(func_base* self) const {
-	  self->cast().apply(*this);
-	}
+    void operator()(func_base* self) const {
+      self->cast().apply(*this);
+    }
 
-	// ok cases
-	void operator()(dofs<Expected>* ) const { };
+    // ok cases
+    void operator()(dofs<Expected>* ) const { };
 
-	template<class ... From>
-	void operator()(func<Expected (From...) >* ) const { };	
-
-
-	// error cases
-	template<class T>
-	void operator()(dofs<T>* ) const {
-	  throw std::runtime_error("type error: "+ demangle( typeid(Expected (T) ).name() ));
-	}
+    template<class ... From>
+    void operator()(func<Expected (From...) >* ) const { };	
 
 
-	template<class T, class ... From>
-	void operator()(func<T (From...) >* ) const {
-	  throw std::runtime_error("type error: " + demangle( typeid(Expected (T) ).name() ));
-	}
+    // error cases
+    template<class T>
+    void operator()(dofs<T>* ) const {
+      throw std::runtime_error("type error: "+ demangle( typeid(Expected (T) ).name() ));
+    }
+
+
+    template<class T, class ... From>
+    void operator()(func<T (From...) >* ) const {
+      throw std::runtime_error("type error: " + demangle( typeid(Expected (T) ).name() ));
+    }
 	
   };
   
   template<class Expected, class Iterator, class G>
   static void check_type(Iterator first, Iterator last, const G& g) {
-	if(first == last) {
-	  throw std::runtime_error("not enough out edges");
-	}
+    if(first == last) {
+      throw std::runtime_error("not enough out edges");
+    }
 
-	const unsigned v = *first;
+    const unsigned v = *first;
 	
-	g[v].apply(expected_check<Expected>());
+    g[v].apply(expected_check<Expected>());
   }
 
 
@@ -218,18 +218,18 @@ struct typecheck {
   template<class To, class ... From>
   void operator()(func<To (From...)>* self, unsigned v, const graph& g) const {
 
-	auto out = adjacent_vertices(v, g);
-	try {
-	  const int expand[] = { (check_type<From>(out.first++, out.second, g), 0)...};
+    auto out = adjacent_vertices(v, g);
+    try {
+      const int expand[] = { (check_type<From>(out.first++, out.second, g), 0)...};
 	  
-	  if(out.first != out.second) {
-		throw std::runtime_error("too many out edges");
-	  }
-	} catch( std::runtime_error& e ){
-	  throw std::runtime_error(e.what() 
-							   + std::string(" when processing vertex: ") 
-							   + std::to_string(v) );
-	}
+      if(out.first != out.second) {
+	throw std::runtime_error("too many out edges");
+      }
+    } catch( std::runtime_error& e ){
+      throw std::runtime_error(e.what() 
+			       + std::string(" when processing vertex: ") 
+			       + std::to_string(v) );
+    }
 	
   }
   
@@ -246,123 +246,172 @@ struct dispatch {
   // derived classes operator()
   template<class T, class ... Args>
   void operator()(T* self, const Args& ... args) {
-	self->cast().apply( derived(), args...);
+    self->cast().apply( derived(), args...);
   }
   
 };
 
 
-struct stack_overflow : std::runtime_error {
-  const std::size_t required;
-  stack_overflow(std::size_t required)
-	: std::runtime_error("stack overflow"),
-	  required(required) { }
-};
 
 struct frame_type {
-  std::size_t start, size, dim;
+  std::size_t sp, size, dim;
 };
 
+
+class stack {
+  std::vector<char> storage;
+  std::size_t sp;
+
+  // TODO not sure we need num here
+  template<class G>
+  std::size_t aligned_sp(std::size_t num) {
+    std::size_t space = -1;
+    void* buf = storage.data() + sp;
+    char* aligned = (char*)std::align( alignof(G), num * sizeof(G), buf, space);
+    return aligned - storage.data();
+  }
+
+
+public:
+
+  struct frame {
+    std::size_t sp, size, dim;
+  };
+  
+  struct overflow : std::runtime_error {
+    const std::size_t required;
+    overflow(std::size_t required)
+      : std::runtime_error("stack overflow"),
+	required(required) { }
+  };
+  
+  
+  stack(std::size_t size = 0)
+    : storage(size),
+      sp(0) {
+    
+  }
+  
+  template<class G>
+  G* allocate(frame& f, std::size_t num = 1) {
+    const std::size_t size = num * sizeof(G);
+
+    if(!storage.capacity()) {
+      reserve(size);
+    }
+    
+    // align
+    sp = aligned_sp<G>(num);
+    const std::size_t required = sp + size;
+    
+    if( required > storage.capacity() ) {
+      throw overflow(required);
+    }
+    
+    // allocate space
+    storage.resize( required );
+
+    G* res = reinterpret_cast<G*>(&storage[sp]);
+    
+    // record frame
+    f = {sp, size, num};
+    sp += size;
+	
+    return res;
+  }
+
+
+  template<class G>
+  G& get(const frame& f) {
+    return reinterpret_cast<G&>(storage[f.sp]);
+  }
+
+  template<class G>
+  const G& get(const frame& f) const {
+    return reinterpret_cast<const G&>(storage[f.sp]);
+  }
+  
+
+  void reset() {
+    sp = 0;
+  }
+
+
+  std::size_t capacity() const { return storage.capacity(); }
+  std::size_t size() const { return storage.size(); }
+
+  void reserve(std::size_t size) {
+    std::clog << "stack reserve: " << capacity()
+	      << " -> " << size << std::endl;
+	  
+    storage.reserve(size);
+  }
+  
+};
 
 
 struct push : dispatch<push> {
 
-  std::vector<char>& stack;		// stack
-  std::size_t& sp; 				// stack pointer
-  std::vector<frame_type>& frame;   	// frame pointers
+  stack& s;			 
+  std::vector<stack::frame>& frame;
   
 
-  push(std::vector<char>& stack,
-			std::size_t& sp,
-			std::vector<frame_type>& frame)
-	: stack(stack),
-	  sp(sp),
-	  frame(frame) {
-
+  push(stack& s,
+       std::vector<stack::frame>& frame)
+    : s(s),
+      frame(frame) {
+    
   }
 
+  
   using dispatch<push>::operator();
-
-
-  template<class G>
-  std::size_t aligned_sp(std::size_t size) const {
-	std::size_t space = -1;
-	void* buf = stack.data() + sp;
-	char* aligned = (char*)std::align( alignof(G), size * sizeof(G), buf, space);
-	return aligned - stack.data();
-  }
-
-
-  template<class G>
-  G& allocate(unsigned v, std::size_t dim) const {
-	assert( stack.capacity() );
-
-	// align
-	sp = aligned_sp<G>(dim);
-
-	// check stack
-	const std::size_t size = dim * sizeof(G);
-	const std::size_t required = sp + size;
-	if( required > stack.capacity() ) {
-	  throw stack_overflow(required);
-	}
-	
-	// allocate space
-	stack.resize( required );
-
-	G& res = reinterpret_cast<G&>(stack[sp]);
-
-	// push frame
-	frame[v] = {sp, size, dim};
-	sp += size;
-	
-	return res;
-  }
   
-
+  
   // push dofs data to the stack  
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
-	const std::size_t dim = 1; // traits<G>::size(self->pos);
+    const std::size_t dim = 1; // traits<G>::size(self->pos);
 
-	// allocate
-	G& data = allocate<G>(v, dim);
+    // allocate
+    G* data = s.allocate<G>(frame[v], dim);
 
-	// copy
-	data = self->pos;
+    // TODO static_assert G is pod ?
+    
+    // copy
+    *data = self->pos;
   }
 
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g) const {
-	operator()(self, v, g, indices_for<From...>() );
+    operator()(self, v, g, indices_for<From...>() );
   }
 
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g,
-				  indices<I...> idx) const {
+		  indices<I...> idx) const {
 
-	frame_type pframes[sizeof...(From)];
+    stack::frame* parent_frame[sizeof...(From)];
 	
-	// fetch frame pointers
-	{
-	  frame_type* fp = pframes;
-	  for(unsigned p : make_range(adjacent_vertices(v, g)) ) {
-		*fp++ = frame[p];
-	  }
-	}
+    // fetch frame pointers
+    {
+      stack::frame** fp = parent_frame;
+      for(unsigned p : make_range(adjacent_vertices(v, g)) ) {
+	*fp++ = &frame[p];
+      }
+    }
 
-	// result size
-	const std::size_t dim =
-	  self->size(reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
-	
-	// allocate result
-	To& to = allocate<To>(v, dim);
-
-	self->apply(to, reinterpret_cast<const From&>(stack[ pframes[I].start ])...);
-
-	std::clog << "mapped: " << to << std::endl;
+    // result size
+    const std::size_t dim =
+      self->size( s.get<const From>(*parent_frame[I])... );
+    
+    // allocate result
+    To* to = s.allocate<To>(frame[v], dim);
+    
+    self->apply(*to, s.get<const From>(*parent_frame[I])... );
+    
+    std::clog << "mapped: " << *to << std::endl;
   }
   
   
@@ -395,27 +444,24 @@ int main(int, char**) {
   g.sort(order);
 
   for(unsigned v : order) {
-	g[v].apply( typecheck(), v, g );
+    g[v].apply( typecheck(), v, g );
   }
   
-  std::vector<char> stack(1);
-  std::size_t sp;
-  std::vector<frame_type> frame(num_vertices(g));
+  stack s;
+  std::vector<stack::frame> frame(num_vertices(g));
 
-  push vis(stack, sp, frame);
+  push vis(s, frame);
   
   while(true) {
-	try{
-	  sp = 0;
-	  stack.clear();
-	  for(unsigned v : order) {
-		g[v].apply(vis, v, g);
-	  }
-	  break;
-	} catch( stack_overflow& e ) {
-	  stack.reserve(e.required);
-	  std::clog << "stack reserve: " << stack.capacity() << std::endl;
-	}
+    try{
+      s.reset();
+      for(unsigned v : order) {
+	g[v].apply(vis, v, g);
+      }
+      break;
+    } catch( stack::overflow& e ) {
+      s.reserve(e.required);
+    }
   }
 
   return 0;

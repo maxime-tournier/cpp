@@ -6,7 +6,7 @@ CXXFLAGS=-std=c++11 $(INCLUDEPATH) # -g # -fuse-ld=gold #-Xlinker -icf=all
 ALL=parse rtti graph flow pouf
 
 
-first: release
+first: all
 
 all: $(ALL) 
 
