@@ -636,7 +636,7 @@ struct fetch : dispatch<fetch> {
     
   }
 
-  using dispatch<fetch>::operator();
+  using dispatch::operator();
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
@@ -710,40 +710,30 @@ struct fetch : dispatch<fetch> {
 };
 
 
-struct assemble : dispatch<assemble> {
-  graph_data& offset;
-  std::size_t& current;
+struct concatenate {
+  rmat& jacobian;
+  const graph_data& chunks;
+
+  concatenate(rmat& jacobian,
+	      const graph_data& chunks)
+    : jacobian(jacobian),
+      chunks(chunks) {
+
+  }
   
-  std::vector<rmat>& jacobian;
-  std::vector<std::vector<rmat>>& blocks;
-
+  void operator()(dofs_base* self, unsigned v) const { }
   
-  using dispatch<assemble>::operator();
-  
-  template<class G>
-  void operator()(dofs<G>* self, unsigned v, const graph& g) const {
-    const std::size_t count = self->size();
+  void operator()(func_base* self, unsigned v) const {
+    const numbering::chunk& chunk = chunks.get<numbering::chunk>(v);
 
-    std::size_t& off = offset.allocate<std::size_t>(v);
-    off = current;
-
-    const std::size_t rows = count * traits<G>::deriv_dim;
-
-    // TODO 
+    // noalias should be safe here (diagonal is zero)
+    jacobian.middleRows(chunk.start, chunk.size) =
+      jacobian.middleRows(chunk.start, chunk.size) * jacobian;
     
-    current += rows;
-  }
-    
-  template<class To, class ... From, std::size_t ... I>
-  void operator()(func<To (From...) >* self, unsigned v, const graph& g) const {
-    operator()(self, v, g, indices_for<From...>() );
   }
 
   
-  template<class To, class ... From, std::size_t ... I>
-  void operator()(func<To (From...) >* self, unsigned v, const graph& g,
-		  indices<I...> idx) const {
-  }
+
   
 };
 
@@ -830,7 +820,16 @@ int main(int, char**) {
   rmat jacobian(total_dim, total_dim);
   jacobian.setFromTriplets(triplets.begin(), triplets.end());
 
+  std::cout << "before concatenation: " << std::endl;
   std::cout << jacobian << std::endl;
+
+  for(unsigned v : order) {
+    g[v].apply(concatenate(jacobian, chunks), v);
+  }
+
+  std::cout << "after concatenation: " << std::endl;
+  std::cout << jacobian << std::endl;
+  
   
   return 0;
 }
