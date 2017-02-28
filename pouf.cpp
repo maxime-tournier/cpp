@@ -3,6 +3,8 @@
 #include "indices.hpp"
 
 #include <Eigen/Core>
+#include <Eigen/Sparse>
+
 #include <cassert>
 
 #include <cstdlib>
@@ -40,17 +42,17 @@ template<class G> struct traits;
 
 template<int N, class U>
 struct traits< vector<N, U> > {
-  static std::size_t size(const vector<N, U>& ) {
-    return N;
-  }
+
+  static const std::size_t deriv_dim = N * traits<U>::deriv_dim;
+  static const std::size_t coord_dim = N * traits<U>::coord_dim;
+  
 };
 
 
 template<>
 struct traits<real> {
-  static std::size_t size(const real& ) {
-    return 1;
-  }
+  static const std::size_t deriv_dim = 1;
+  static const std::size_t coord_dim = 1;
 };
 
 
@@ -100,16 +102,29 @@ struct func_base {
 
 };
 
+using triplet = Eigen::Triplet<real>;
+
+template<class, class T>
+using repeat = T;
+
 template<class To, class ... From>
 struct func< To (From...) > : public func_base,
   public std::enable_shared_from_this< func< To (From...) > >{
-  
-  virtual void apply(To& to, const From&... from) const = 0;
-  virtual std::size_t size(const From&... from) const = 0;
-  
+
   func_base::cast_type cast() {
     return this->shared_from_this();
   }
+  
+  // output size from inputs
+  virtual std::size_t size(const From&... from) const = 0;
+
+  // apply function
+  virtual void apply(To& to, const From&... from) const = 0;
+
+  // sparse jacobian
+  virtual void jacobian(repeat<From, std::vector<triplet>>& ... out,
+			const From& ... from) const = 0;
+  
   
 };
 
@@ -117,12 +132,27 @@ struct func< To (From...) > : public func_base,
 template<int M, int N, class U = real>
 struct sum : func< U (vector<M, U>, vector<N, U> ) > {
 
+  virtual std::size_t size(const vector<M, U>& lhs, const vector<N, U>& rhs) const {
+    return 1;
+  }
+  
+  
   virtual void apply(U& to, const vector<M, U>& lhs, const vector<N, U>& rhs) const {
     to = lhs.sum() + rhs.sum();
   }
   
-  virtual std::size_t size(const vector<M, U>& lhs, const vector<N, U>& rhs) const {
-    return 1;
+
+  virtual void jacobian(std::vector<triplet>& lhs_block, std::vector<triplet>& rhs_block,			
+			const vector<M, U>& lhs, const vector<N, U>& rhs) const {
+
+    for(unsigned i = 0, n = lhs.size(); i < n; ++i) {
+      lhs_block.emplace_back(0, i, 1.0);
+    }
+    
+    for(unsigned i = 0, n = rhs.size(); i < n; ++i) {
+      rhs_block.emplace_back(0, i, 1.0);      
+    }
+
   }
   
 };
@@ -253,9 +283,6 @@ struct dispatch {
 
 
 
-struct frame_type {
-  std::size_t sp, size, dim;
-};
 
 
 class stack {
@@ -275,7 +302,8 @@ class stack {
 public:
 
   struct frame {
-    std::size_t sp, size, dim;
+    // stack pointer, buffer size, element count
+    std::size_t sp, size, count;
   };
   
   struct overflow : std::runtime_error {
@@ -293,15 +321,17 @@ public:
   }
   
   template<class G>
-  G* allocate(frame& f, std::size_t num = 1) {
-    const std::size_t size = num * sizeof(G);
+  G* allocate(frame& f, std::size_t count = 1) {
+    assert(count > 0 && "zero-size allocation");
+    
+    const std::size_t size = count * sizeof(G);
 
     if(!storage.capacity()) {
       reserve(size);
     }
     
     // align
-    sp = aligned_sp<G>(num);
+    sp = aligned_sp<G>(count);
     const std::size_t required = sp + size;
     
     if( required > storage.capacity() ) {
@@ -314,7 +344,7 @@ public:
     G* res = reinterpret_cast<G*>(&storage[sp]);
     
     // record frame
-    f = {sp, size, num};
+    f = {sp, size, count};
     sp += size;
 	
     return res;
@@ -346,23 +376,72 @@ public:
 	  
     storage.reserve(size);
   }
+
+  void grow() {
+    const std::size_t c = capacity();
+    assert( c );
+    
+    reserve( std::max(c + 1, c + c / 2) );
+  }
+};
+
+
+
+class graph_data {
+  stack storage;
+  std::vector<stack::frame> frame;
+public:
+  graph_data(std::size_t num_vertices,
+	     std::size_t capacity = 0)
+    : storage(capacity),
+      frame(num_vertices) {
+
+  }
+
+  
+  template<class G>
+  G* allocate(unsigned v, std::size_t count = 1) {
+    return storage.allocate<G>(frame[v], count);
+  }
+  
+
+  template<class G>
+  G& get(unsigned v) {
+    return storage.get<G>(frame[v]);
+  }
+
+  template<class G>
+  const G& get(unsigned v) const {
+    return storage.get<G>(frame[v]);    
+  }
+
+
+  std::size_t count(unsigned v) const {
+    return frame[v].count;
+  }
+
+
+  // TODO reserve, size, etc
+  void grow() {
+    storage.grow();
+  }
+
+  void reset() {
+    storage.reset();
+  }
   
 };
 
 
+
+
+// push positions
 struct push : dispatch<push> {
 
-  stack& s;			 
-  std::vector<stack::frame>& frame;
+  graph_data& pos;
   
-
-  push(stack& s,
-       std::vector<stack::frame>& frame)
-    : s(s),
-      frame(frame) {
-    
-  }
-
+  push(graph_data& pos) : pos(pos) { }
+  
   
   using dispatch<push>::operator();
   
@@ -373,8 +452,8 @@ struct push : dispatch<push> {
     const std::size_t dim = 1; // traits<G>::size(self->pos);
 
     // allocate
-    G* data = s.allocate<G>(frame[v], dim);
-
+    G* data = pos.allocate<G>(v, dim);
+    
     // TODO static_assert G is pod ?
     
     // copy
@@ -392,26 +471,112 @@ struct push : dispatch<push> {
   void operator()(func<To (From...) >* self, unsigned v, const graph& g,
 		  indices<I...> idx) const {
 
-    stack::frame* parent_frame[sizeof...(From)];
-	
-    // fetch frame pointers
-    {
-      stack::frame** fp = parent_frame;
-      for(unsigned p : make_range(adjacent_vertices(v, g)) ) {
-	*fp++ = &frame[p];
-      }
-    }
-
+    // note: we need random access parent iterator for this
+    auto parents = adjacent_vertices(v, g).first;
+    
     // result size
-    const std::size_t dim =
-      self->size( s.get<const From>(*parent_frame[I])... );
+    const std::size_t count =
+      self->size( pos.get<const From>(parents[I])... );
     
     // allocate result
-    To* to = s.allocate<To>(frame[v], dim);
+    To* to = pos.allocate<To>(v, count);
     
-    self->apply(*to, s.get<const From>(*parent_frame[I])... );
+    self->apply(*to, pos.get<const From>(parents[I])...);
     
     std::clog << "mapped: " << *to << std::endl;
+  }
+  
+  
+};
+
+
+using rmat = Eigen::SparseMatrix<real, Eigen::RowMajor>;
+
+// fetch jacobians w/ masking
+struct fetch : dispatch<fetch> {
+  graph_data& pos;
+  graph_data& mask;
+
+  using jacobian_type = std::vector< std::vector<rmat> >;
+  using elements_type = std::vector< std::vector<triplet> >;
+  
+  jacobian_type& jacobian;
+
+  // internal
+  elements_type& elements;
+
+
+  fetch(graph_data& pos,
+	graph_data& mask,
+	jacobian_type& jacobian,
+	elements_type& elements)
+    : pos(pos),
+      mask(mask),
+      jacobian(jacobian),
+      elements(elements) {
+    
+  }
+
+  using dispatch<fetch>::operator();
+  
+  template<class G>
+  void operator()(dofs<G>* self, unsigned v, const graph& g) const {
+
+  }
+    
+  template<class To, class ... From, std::size_t ... I>
+  void operator()(func<To (From...) >* self, unsigned v, const graph& g) const {
+    operator()(self, v, g, indices_for<From...>() );
+  }
+
+
+  template<class To, class ... From, std::size_t ... I>
+  void operator()(func<To (From...) >* self, unsigned v, const graph& g,
+		  indices<I...> idx) const {
+
+    auto parents = adjacent_vertices(v, g).first;
+
+    // get dofs count
+    const std::size_t count = pos.count(v);
+    const std::size_t parent_count[] = { pos.count(parents[I])... };
+      
+    const std::size_t rows = count * traits<To>::deriv_dim;
+    const std::size_t cols[] = { parent_count[I] * traits<From>::deriv_dim... };    
+    
+    // no child: allocate mask
+    if( in_degree(v, g) == 0 ) {
+      mask.allocate<char>(v, count);
+    }
+
+    const std::size_t n = sizeof...(From);
+    
+    if( elements.size() < n) elements.resize(n);
+    
+    for(unsigned p = 0; p < n; ++p) {
+      // alloc parent masks
+      const unsigned vp = parents[p];
+      mask.allocate<char>(vp, parent_count[p]);
+
+      // TODO make sure this does not dealloc
+      elements[p].clear();
+    }
+
+    // fetch data
+    elements.clear();
+    self->jacobian(elements[I]..., pos.get<const From>(parents[I])...);
+
+    // TODO sort/filter elements by mask
+
+    // assemble matrices
+    jacobian[v].resize(n);
+    
+    for(unsigned p = 0; p < n; ++p) {
+      jacobian[v][p].resize(rows, cols[p]);
+
+      // TODO set from sorted triplets
+      jacobian[v][p].setFromTriplets( elements[p].begin(), elements[p].end() );
+    }
+    
   }
   
   
@@ -446,21 +611,42 @@ int main(int, char**) {
   for(unsigned v : order) {
     g[v].apply( typecheck(), v, g );
   }
-  
-  stack s;
-  std::vector<stack::frame> frame(num_vertices(g));
 
-  push vis(s, frame);
+  graph_data pos(num_vertices(g));
   
   while(true) {
     try{
-      s.reset();
+      pos.reset();
       for(unsigned v : order) {
-	g[v].apply(vis, v, g);
+	g[v].apply( push(pos), v, g);
       }
       break;
     } catch( stack::overflow& e ) {
-      s.reserve(e.required);
+      pos.grow();
+    }
+  }
+
+
+  graph_data mask(num_vertices(g));
+  
+  std::vector< std::vector<rmat> > jacobian(num_vertices(g));
+  std::vector< std::vector<triplet> > elements;
+  
+  while(true) {
+    try{
+      mask.reset();
+      for(unsigned v : reverse(order)) {
+	g[v].apply( fetch(pos, mask, jacobian, elements), v, g);
+      }
+      break;
+    } catch( stack::overflow& e ) {
+      mask.grow();
+    }
+  }
+
+  for(const auto& J : jacobian) {
+    for(const auto& block : J) {
+      std::cout << block << std::endl;
     }
   }
 
