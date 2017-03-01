@@ -1,7 +1,6 @@
 #include "flow.hpp"
 #include "variant.hpp"
 #include "indices.hpp"
-#include "timer.hpp"
 
 #include <Eigen/Core>
 #include <Eigen/Sparse>
@@ -560,6 +559,7 @@ struct push : dispatch<push> {
   
 };
 
+
 // deriv data numbering
 struct numbering : dispatch<numbering> {
 
@@ -710,6 +710,35 @@ struct fetch : dispatch<fetch> {
 };
 
 
+struct concatenate {
+  rmat& jacobian;
+  const graph_data& chunks;
+
+  concatenate(rmat& jacobian,
+	      const graph_data& chunks)
+    : jacobian(jacobian),
+      chunks(chunks) {
+
+  }
+  
+  void operator()(dofs_base* self, unsigned v) const { }
+  
+  void operator()(func_base* self, unsigned v) const {
+    const numbering::chunk& chunk = chunks.get<numbering::chunk>(v);
+
+    // noalias should be safe here (diagonal is zero)
+    jacobian.middleRows(chunk.start, chunk.size) =
+      jacobian.middleRows(chunk.start, chunk.size) * jacobian;
+    
+  }
+
+  
+
+  
+};
+
+
+
 template<class F>
 static void with_auto_stack( const F& f ) {
   while (true) {
@@ -791,9 +820,16 @@ int main(int, char**) {
   rmat jacobian(total_dim, total_dim);
   jacobian.setFromTriplets(triplets.begin(), triplets.end());
 
-  const rmat concat = jacobian * jacobian;
+  std::cout << "before concatenation: " << std::endl;
+  std::cout << jacobian << std::endl;
 
-  std::cout << "concatenation: " << concat << std::endl;
+  for(unsigned v : order) {
+    g[v].apply(concatenate(jacobian, chunks), v);
+  }
+
+  std::cout << "after concatenation: " << std::endl;
+  std::cout << jacobian << std::endl;
+  
   
   return 0;
 }
