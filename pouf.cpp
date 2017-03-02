@@ -660,14 +660,17 @@ struct push : dispatch<push> {
 
 
 // deriv data numbering
+struct chunk {
+  std::size_t start, size;
+};
+
 struct numbering : dispatch<numbering> {
 
-  struct chunk {
-    std::size_t start, size;
-  };
-
-  numbering(graph_data& storage, std::size_t& offset, const graph_data& pos)
-    : storage(storage),
+  using chunks_type = std::vector<chunk>;
+  numbering(chunks_type& chunks,
+			std::size_t& offset, 
+			const graph_data& pos)
+    : chunks(chunks),
       offset(offset),
       pos(pos) {
 
@@ -675,36 +678,35 @@ struct numbering : dispatch<numbering> {
 
   using dispatch::operator();
   
-  graph_data& storage;
+  chunks_type& chunks;
   std::size_t& offset;
   const graph_data& pos;
-
-
+  
   template<class G>
   void operator()(metric<G>* self, unsigned v) const {
-
+	// TODO don't dispatch
   }
-
+  
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v) const {
-    chunk* c = storage.allocate<chunk>(v);
-
-    c->size = pos.count(v) * traits< deriv<G> >::dim;
-    c->start = offset;
+	chunk& c = chunks[v];
+	
+    c.size = pos.count(v) * traits< deriv<G> >::dim;
+    c.start = offset;
     
-    offset += c->size;
+    offset += c.size;
   }
 
 
   template<class To, class ... From>
   void operator()(func<To (From...) >* self, unsigned v) const {
-    chunk* c = storage.allocate<chunk>(v);
+    chunk& c = chunks[v];
+	
+    c.size = pos.count(v) * traits< deriv<To> >::dim;
+    c.start = offset;
     
-    c->size = pos.count(v) * traits< deriv<To> >::dim;
-    c->start = offset;
-    
-    offset += c->size;
+    offset += c.size;
   }  
   
 };
@@ -728,14 +730,14 @@ struct fetch : dispatch<fetch> {
   // internal
   elements_type& elements;
 
-  const graph_data& chunks;
+  const numbering::chunks_type& chunks;
   const graph_data& pos;
   
   fetch(matrix_type& jacobian,
 		matrix_type& diagonal,
 		graph_data& mask,
 		elements_type& elements,
-		const graph_data& chunks,	
+		const numbering::chunks_type& chunks,	
 		const graph_data& pos)
     : jacobian(jacobian),
 	  diagonal(diagonal),
@@ -771,7 +773,7 @@ struct fetch : dispatch<fetch> {
 
 	const unsigned parent = *adjacent_vertices(v, g).first;
 	
-	const numbering::chunk& c = chunks.get<numbering::chunk>(parent);
+	const chunk& c = chunks[parent];
 
 	// shift/scale inserted data
 	for(unsigned i = start; i < end; ++i) {
@@ -784,9 +786,9 @@ struct fetch : dispatch<fetch> {
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
-    const numbering::chunk& chunk = chunks.get<numbering::chunk>(v);
+    const chunk& c = chunks[v];
 
-    for(unsigned i = chunk.start, n = chunk.start + chunk.size; i < n; ++i) {
+    for(unsigned i = c.start, n = c.start + c.size; i < n; ++i) {
       jacobian.emplace_back(i, i, 1.0);
     }
   }
@@ -833,17 +835,16 @@ struct fetch : dispatch<fetch> {
     self->jacobian(elements[I]..., pos.get<const From>(parents[I])...);
     
     // TODO set parent masks
-
-    const numbering::chunk& chunk = chunks.get<numbering::chunk>(v);
+    const chunk& curr_chunk = chunks[v];
     
     for(unsigned p = 0; p < n; ++p) {
       const unsigned vp = parents[p];
-      const numbering::chunk& parent_chunk = chunks.get<numbering::chunk>(vp);
+      const chunk& parent_chunk = chunks[vp];
 	
       // shift elements
       for(triplet& it : elements[p]) {
 		// TODO filter by mask
-		jacobian.emplace_back(it.row() + chunk.start,
+		jacobian.emplace_back(it.row() + curr_chunk.start,
 							  it.col() + parent_chunk.start,
 							  it.value());
       }
@@ -856,10 +857,10 @@ struct fetch : dispatch<fetch> {
 
 struct concatenate {
   rmat& jacobian;
-  const graph_data& chunks;
+  const numbering::chunks_type& chunks;
 
   concatenate(rmat& jacobian,
-			  const graph_data& chunks)
+			  const numbering::chunks_type& chunks)
     : jacobian(jacobian),
       chunks(chunks) {
 
@@ -868,11 +869,11 @@ struct concatenate {
   void operator()(dofs_base* self, unsigned v) const { }
   
   void operator()(func_base* self, unsigned v) const {
-    const numbering::chunk& chunk = chunks.get<numbering::chunk>(v);
+    const chunk& c = chunks[v];
 
     // noalias should be safe here (diagonal is zero)
-    jacobian.middleRows(chunk.start, chunk.size) =
-      jacobian.middleRows(chunk.start, chunk.size) * jacobian;
+    jacobian.middleRows(c.start, c.size) =
+      jacobian.middleRows(c.start, c.size) * jacobian;
     
   }
 
@@ -997,7 +998,7 @@ int main(int, char**) {
   const std::size_t n = num_vertices(g);
   
   graph_data pos(n);
-  graph_data chunks(n);
+  std::vector<chunk> chunks(n);
 
   // propagate positions and number dofs
   std::size_t offset;
