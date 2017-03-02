@@ -129,14 +129,13 @@ struct metric : metric_base, std::enable_shared_from_this< metric<G> > {
 };
 
 
+template<metric_kind kind, class G>
+struct uniform : metric<G> {
 
-template<class G>
-struct uniform_mass : metric<G> {
-
-  uniform_mass(real value = 1.0)
-	: metric<G>(metric_kind::mass),
-	  value(value) {
-
+  uniform(real value = 1.0)
+	: metric<G>(kind),
+	value(value) {
+	
   }
   
   real value;
@@ -149,45 +148,6 @@ struct uniform_mass : metric<G> {
 	
 };
 
-
-template<class T>
-struct stiffness;
-
-struct stiffness_base {
-  virtual ~stiffness_base() { }
-
-  using cast_type = variant< 
-    stiffness<real>,
-    stiffness<vec1>,
-    stiffness<vec2>,
-    stiffness<vec3>,
-    stiffness<vec4>,
-    stiffness<vec6>>;
-
-  virtual cast_type cast() const = 0;
-
-};
-
-
-
-template<class G>
-struct stiffness : stiffness_base, std::enable_shared_from_this< stiffness<G> >{
-
-  stiffness_base::cast_type cast() { return this->shared_from_this(); }
-  virtual void tensor(std::vector<triplet>& out, const G& at) const = 0;
-};
-
-template<class G>
-struct uniform_stiffness : stiffness<G> {
-  scalar< deriv<G> > value = 1.0;
-  
-  virtual void tensor(std::vector<triplet>& out, const G& at) const {
-	for(unsigned i = 0, n = traits<G>::dim; i < n; ++i) {
-	  out.emplace_back(i, i, value);
-	}
-  }
-	
-};
 
 
 template<class T>
@@ -994,12 +954,14 @@ int main(int, char**) {
   auto point3 = std::make_shared< dofs<vec3> >();
   auto point2 = std::make_shared< dofs<vec2> >();
 
-  auto mass3 = std::make_shared< uniform_mass<vec3> >(2);
-  auto mass2 = std::make_shared< uniform_mass<vec2> >();  
+  auto mass3 = std::make_shared< uniform<metric_kind::mass, vec3> >(2);
+  auto mass2 = std::make_shared< uniform<metric_kind::mass, vec2> >();  
   
   // mapped
   auto map = std::make_shared< sum<3, 2> >();
   auto map2 = std::make_shared< norm2<double> >();  
+
+  auto ff1 = std::make_shared< uniform<metric_kind::stiffness, double> >(3);
   
   point3->pos = {1, 2, 3};
   point2->pos = {4, 5};  
@@ -1021,7 +983,9 @@ int main(int, char**) {
 
   unsigned m2 = add_vertex(mass2, g);
   add_edge(m2, p2, g);
-  
+
+  unsigned k1 = add_vertex(ff1, g);
+  add_edge(k1, f2, g);
   
   std::vector<unsigned> order;
   g.sort(order);
@@ -1052,14 +1016,19 @@ int main(int, char**) {
   
   std::vector<triplet> jacobian, diagonal;
   std::vector< std::vector<triplet> > elements;
+
+  const real dt = 0.01;
   
   // compute masks/jacobians
   with_auto_stack([&] {
       jacobian.clear();
       diagonal.clear();
+
+	  fetch vis(jacobian, diagonal, mask, elements, chunks, pos);
+	  vis.dt = dt;
 	  
       for(unsigned v : reverse(order)) {
-		g[v].apply( fetch(jacobian, diagonal, mask, elements, chunks, pos), v, g);
+		g[v].apply( vis, v, g);
       }
     });
 
@@ -1075,6 +1044,9 @@ int main(int, char**) {
   
   std::cout << "after concatenation: " << std::endl;
   std::cout << concat << std::endl;
+
+  rmat full = concat.transpose() * H * concat;
+  std::cout << "H: " << full << std::endl;
   
   return 0;
 }
