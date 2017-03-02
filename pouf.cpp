@@ -778,7 +778,9 @@ struct fetch : dispatch<fetch> {
 	// shift/scale inserted data
 	for(unsigned i = start; i < end; ++i) {
 	  auto& it = diagonal[i];
-	  it = {it.row() + c.start, it.col() + c.start, factor * it.value()};
+	  it = {it.row() + int(c.start),
+			it.col() + int(c.start),
+			factor * it.value()};
 	}
 	
   }
