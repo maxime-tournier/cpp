@@ -56,7 +56,7 @@ struct traits< vector<N, U> > {
   static const std::size_t dim = N * traits<U>::dim;
 
   static scalar dot(const vector<N, U>& x,
-		    const vector<N, U>& y) {
+					const vector<N, U>& y) {
     return x.dot(y);
   }
 
@@ -87,12 +87,123 @@ struct traits<real> {
 };
 
 
+using triplet = Eigen::Triplet<real>;
+
+// TODO maybe we can simplify stiffness based on mappings ?
+
+template<class G>
+struct metric;
+
+enum class metric_kind {
+  mass,
+  damping,
+  stiffness
+};
+
+struct metric_base {
+  virtual ~metric_base() { }
+
+  using cast_type = variant< 
+    metric<real>,
+    metric<vec1>,
+    metric<vec2>,
+    metric<vec3>,
+    metric<vec4>,
+    metric<vec6>>;
+
+  virtual cast_type cast() = 0;
+
+  const metric_kind kind;
+  
+  metric_base(metric_kind kind) : kind(kind) { };
+};
+
+template<class G>
+struct metric : metric_base, std::enable_shared_from_this< metric<G> > {
+
+  using metric_base::metric_base;
+  
+  typename metric::cast_type cast() { return this->shared_from_this(); }
+  virtual void tensor(std::vector<triplet>& out, const G& at) const = 0;
+
+};
+
+
+
+template<class G>
+struct uniform_mass : metric<G> {
+
+  uniform_mass(real value = 1.0)
+	: metric<G>(metric_kind::mass),
+	  value(value) {
+
+  }
+  
+  real value;
+  
+  virtual void tensor(std::vector<triplet>& out, const G& at) const {
+	for(unsigned i = 0, n = traits<G>::dim; i < n; ++i) {
+	  out.emplace_back(i, i, value);
+	}
+  }
+	
+};
+
+
+template<class T>
+struct stiffness;
+
+struct stiffness_base {
+  virtual ~stiffness_base() { }
+
+  using cast_type = variant< 
+    stiffness<real>,
+    stiffness<vec1>,
+    stiffness<vec2>,
+    stiffness<vec3>,
+    stiffness<vec4>,
+    stiffness<vec6>>;
+
+  virtual cast_type cast() const = 0;
+
+};
+
+
+
+template<class G>
+struct stiffness : stiffness_base, std::enable_shared_from_this< stiffness<G> >{
+
+  stiffness_base::cast_type cast() { return this->shared_from_this(); }
+  virtual void tensor(std::vector<triplet>& out, const G& at) const = 0;
+};
+
+template<class G>
+struct uniform_stiffness : stiffness<G> {
+  scalar< deriv<G> > value = 1.0;
+  
+  virtual void tensor(std::vector<triplet>& out, const G& at) const {
+	for(unsigned i = 0, n = traits<G>::dim; i < n; ++i) {
+	  out.emplace_back(i, i, value);
+	}
+  }
+	
+};
+
+
+template<class T>
+struct constraint;
+
+struct constraint_base {
+  virtual ~constraint_base() { }
+
+  using cast_type = variant<constraint<real>>;
+  virtual cast_type cast() = 0;
+};
+
 
 
 struct dofs_base {
   virtual ~dofs_base() { }
-
-  virtual void init() { }
 
   using cast_type = variant< 
     dofs<real>,
@@ -108,7 +219,7 @@ struct dofs_base {
 
 template<class G>
 struct dofs : public dofs_base,
-	      public std::enable_shared_from_this< dofs<G> > {
+			  public std::enable_shared_from_this< dofs<G> > {
   G pos;
 
   dofs_base::cast_type cast() {
@@ -127,8 +238,6 @@ struct func;
 struct func_base {
   virtual ~func_base() { }
 
-  virtual void init() { }
-
   using cast_type = variant< 
     func<real (real) >,
     func<vec1 (vec3)>,
@@ -139,14 +248,14 @@ struct func_base {
 
 };
 
-using triplet = Eigen::Triplet<real>;
+
 
 template<class, class T>
 using repeat = T;
 
 template<class To, class ... From>
 struct func< To (From...) > : public func_base,
-  public std::enable_shared_from_this< func< To (From...) > >{
+							  public std::enable_shared_from_this< func< To (From...) > >{
 
   func_base::cast_type cast() {
     return this->shared_from_this();
@@ -160,7 +269,7 @@ struct func< To (From...) > : public func_base,
 
   // sparse jacobian
   virtual void jacobian(repeat<From, std::vector<triplet>>& ... out,
-			const From& ... from) const = 0;
+						const From& ... from) const = 0;
   
   
 };
@@ -180,7 +289,7 @@ struct sum : func< U (vector<M, U>, vector<N, U> ) > {
   
 
   virtual void jacobian(std::vector<triplet>& lhs_block, std::vector<triplet>& rhs_block,			
-			const vector<M, U>& lhs, const vector<N, U>& rhs) const {
+						const vector<M, U>& lhs, const vector<N, U>& rhs) const {
 
     for(unsigned i = 0, n = lhs.size(); i < n; ++i) {
       lhs_block.emplace_back(0, i, 1.0);
@@ -222,7 +331,7 @@ struct norm2 : func< typename traits<U>::scalar ( U ) > {
 
 
 
-using vertex = variant<dofs_base, func_base>;
+using vertex = variant<dofs_base, func_base, metric_base>;
 struct edge {};
 
 struct graph : dependency_graph<vertex, edge> {
@@ -243,7 +352,27 @@ struct graph : dependency_graph<vertex, edge> {
 struct typecheck {
 
   void operator()(dofs_base* self, unsigned v, const graph& g) const {
+	if( out_degree(v, g) > 0 ) {
+	  throw std::runtime_error("dofs must be independent (zero out-edge)");
+	}
+  }
+
+  void operator()(metric_base* self, unsigned v, const graph& g) const {
+
+	if( out_degree(v, g) != 1 ) {
+	  throw std::runtime_error("metric must be dependent (single out-edge)");
+	}
+
+	self->cast().apply(*this, v, g);
+  }
+
+
+  template<class G>
+  void operator()(metric<G>* self, unsigned v, const graph& g) const {
+
+	auto p = *adjacent_vertices(v, g).first;
 	
+	g[p].apply(expected_check<G>());
   }
 
   // dispatch
@@ -265,6 +394,11 @@ struct typecheck {
   template<class Expected>
   struct expected_check {
 
+	template<class T>
+	void operator()(T* self) const {
+	  throw std::logic_error("should not happen");
+	}
+	
     // dispatch
     void operator()(dofs_base* self) const {
       self->cast().apply(*this);
@@ -317,12 +451,12 @@ struct typecheck {
 
       // TODO this could be ok though
       if(out.first != out.second) {
-	throw std::runtime_error("expected less out-edges");
+		throw std::runtime_error("expected less out-edges");
       }
     } catch( std::runtime_error& e ){
       throw std::runtime_error(e.what() 
-			       + std::string(" for vertex: ") 
-			       + std::to_string(v) );
+							   + std::string(" for vertex: ") 
+							   + std::to_string(v) );
     }
 	
   }
@@ -376,8 +510,8 @@ public:
     
     overflow(stack& who, std::size_t required)
       : std::runtime_error("stack overflow"),
-	who(who),
-	required(required) { }
+	  who(who),
+	  required(required) { }
     
   };
   
@@ -440,7 +574,7 @@ public:
 
   void reserve(std::size_t size) {
     std::clog << "stack reserve: " << capacity()
-	      << " -> " << size << std::endl;
+			  << " -> " << size << std::endl;
 	  
     storage.reserve(size);
   }
@@ -462,7 +596,7 @@ class graph_data {
   std::vector<stack::frame> frame;
 public:
   graph_data(std::size_t num_vertices,
-	     std::size_t capacity = 0)
+			 std::size_t capacity = 0)
     : storage(capacity),
       frame(num_vertices) {
 
@@ -514,6 +648,11 @@ struct push : dispatch<push> {
   
   
   using dispatch::operator();
+
+  template<class G>
+  void operator()(metric<G>* self, unsigned v, const graph& g) const {
+
+  }
   
   
   // push dofs data to the stack  
@@ -539,7 +678,7 @@ struct push : dispatch<push> {
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g,
-		  indices<I...> idx) const {
+				  indices<I...> idx) const {
 
     // note: we need random access parent iterator for this
     auto parents = adjacent_vertices(v, g).first;
@@ -579,6 +718,13 @@ struct numbering : dispatch<numbering> {
   graph_data& storage;
   std::size_t& offset;
   const graph_data& pos;
+
+
+  template<class G>
+  void operator()(metric<G>* self, unsigned v) const {
+
+  }
+
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v) const {
@@ -611,11 +757,13 @@ using rmat = Eigen::SparseMatrix<real, Eigen::RowMajor>;
 // fetch jacobians w/ masking
 struct fetch : dispatch<fetch> {
 
-  using jacobian_type = std::vector<triplet>;
-  jacobian_type& jacobian;
+  using matrix_type = std::vector<triplet>;
+  matrix_type& jacobian;
+  matrix_type& diagonal;
+  
   graph_data& mask;
   
-  using elements_type = std::vector< jacobian_type >;
+  using elements_type = std::vector< matrix_type >;
   
   // internal
   elements_type& elements;
@@ -623,12 +771,14 @@ struct fetch : dispatch<fetch> {
   const graph_data& chunks;
   const graph_data& pos;
   
-  fetch(jacobian_type& jacobian,
-	graph_data& mask,
-	elements_type& elements,
-	const graph_data& chunks,	
-	const graph_data& pos)
+  fetch(matrix_type& jacobian,
+		matrix_type& diagonal,
+		graph_data& mask,
+		elements_type& elements,
+		const graph_data& chunks,	
+		const graph_data& pos)
     : jacobian(jacobian),
+	  diagonal(diagonal),
       mask(mask),
       elements(elements),
       chunks(chunks),
@@ -636,7 +786,41 @@ struct fetch : dispatch<fetch> {
     
   }
 
+  real dt = 1.0;
+  
   using dispatch::operator();
+
+  template<class G>
+  void operator()(metric<G>* self, unsigned v, const graph& g) const {
+
+	// remember current size
+	const std::size_t start = diagonal.size();
+
+	// obtain triplets
+	self->tensor(diagonal, pos.get<G>(v));
+	
+	const std::size_t end = diagonal.size();
+
+	real factor = 0;
+
+	switch(self->kind) {
+	case metric_kind::mass: factor = 1; break;
+	case metric_kind::damping: factor = dt; break;
+	case metric_kind::stiffness: factor = dt * dt; break;	  
+	};
+
+	const unsigned parent = *adjacent_vertices(v, g).first;
+	
+	const numbering::chunk& c = chunks.get<numbering::chunk>(parent);
+
+	// shift/scale inserted data
+	for(unsigned i = start; i < end; ++i) {
+	  auto& it = diagonal[i];
+	  it = {it.row() + c.start, it.col() + c.start, factor * it.value()};
+	}
+	
+  }
+
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
@@ -655,7 +839,7 @@ struct fetch : dispatch<fetch> {
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g,
-		  indices<I...> idx) const {
+				  indices<I...> idx) const {
 
     auto parents = adjacent_vertices(v, g).first;
 
@@ -698,10 +882,10 @@ struct fetch : dispatch<fetch> {
 	
       // shift elements
       for(triplet& it : elements[p]) {
-	// TODO filter by mask
-	jacobian.emplace_back(it.row() + chunk.start,
-			      it.col() + parent_chunk.start,
-			      it.value());
+		// TODO filter by mask
+		jacobian.emplace_back(it.row() + chunk.start,
+							  it.col() + parent_chunk.start,
+							  it.value());
       }
     }
 
@@ -715,7 +899,7 @@ struct concatenate {
   const graph_data& chunks;
 
   concatenate(rmat& jacobian,
-	      const graph_data& chunks)
+			  const graph_data& chunks)
     : jacobian(jacobian),
       chunks(chunks) {
 
@@ -806,23 +990,38 @@ int main(int, char**) {
 
   graph g;
 
+  // independent dofs
   auto point3 = std::make_shared< dofs<vec3> >();
-  auto point2 = std::make_shared< dofs<vec2> >();  
+  auto point2 = std::make_shared< dofs<vec2> >();
+
+  auto mass3 = std::make_shared< uniform_mass<vec3> >(2);
+  auto mass2 = std::make_shared< uniform_mass<vec2> >();  
+  
+  // mapped
   auto map = std::make_shared< sum<3, 2> >();
   auto map2 = std::make_shared< norm2<double> >();  
   
   point3->pos = {1, 2, 3};
   point2->pos = {4, 5};  
   
-  unsigned u = add_vertex(point3, g);
-  unsigned w = add_vertex(point2, g);
-  unsigned v = add_vertex(map, g);
-  unsigned x = add_vertex(map2, g);  
+  unsigned p3 = add_vertex(point3, g);
+  unsigned p2 = add_vertex(point2, g);
+
+  
+  unsigned f3 = add_vertex(map, g);
+  add_edge(f3, p3, g);
+  add_edge(f3, p2, g);
+
+  unsigned f2 = add_vertex(map2, g);  
+  add_edge(f2, f3, g);  
   
   
-  add_edge(v, u, g);
-  add_edge(v, w, g);
-  add_edge(x, v, g);  
+  unsigned m3 = add_vertex(mass3, g);
+  add_edge(m3, p3, g);
+
+  unsigned m2 = add_vertex(mass2, g);
+  add_edge(m2, p2, g);
+  
   
   std::vector<unsigned> order;
   g.sort(order);
@@ -842,8 +1041,8 @@ int main(int, char**) {
   with_auto_stack([&] {
       offset = 0;
       for(unsigned v : order) {
-	g[v].apply( push(pos), v, g);
-	g[v].apply( numbering(chunks, offset, pos), v);	
+		g[v].apply( push(pos), v, g);
+		g[v].apply( numbering(chunks, offset, pos), v);	
       }
     });
 
@@ -851,30 +1050,31 @@ int main(int, char**) {
   
   graph_data mask(n);
   
-  std::vector<triplet> triplets;
+  std::vector<triplet> jacobian, diagonal;
   std::vector< std::vector<triplet> > elements;
   
   // compute masks/jacobians
   with_auto_stack([&] {
-      triplets.clear();
-      
+      jacobian.clear();
+      diagonal.clear();
+	  
       for(unsigned v : reverse(order)) {
-	g[v].apply( fetch(triplets, mask, elements, chunks, pos), v, g);
+		g[v].apply( fetch(jacobian, diagonal, mask, elements, chunks, pos), v, g);
       }
     });
 
-  rmat jacobian(total_dim, total_dim);
-  jacobian.setFromTriplets(triplets.begin(), triplets.end());
+  rmat J(total_dim, total_dim), H(total_dim, total_dim);
+  
+  J.setFromTriplets(jacobian.begin(), jacobian.end());
+  H.setFromTriplets(diagonal.begin(), diagonal.end());  
 
-  std::cout << "before concatenation: " << std::endl;
-  std::cout << jacobian << std::endl;
-
+  std::cout << "diagonal: " << H << std::endl;
+  
   rmat concat;
-  concatenate(concat, jacobian);
+  concatenate(concat, J);
   
   std::cout << "after concatenation: " << std::endl;
   std::cout << concat << std::endl;
-  
   
   return 0;
 }
