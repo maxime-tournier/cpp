@@ -88,11 +88,13 @@ struct traits<real> {
 
 
 using triplet = Eigen::Triplet<real>;
+using triplet_iterator = std::back_insert_iterator< std::vector<triplet> >;
 
-// TODO maybe we can simplify stiffness based on mappings ?
+
 
 template<class G>
 struct metric;
+
 
 enum class metric_kind {
   mass,
@@ -100,6 +102,7 @@ enum class metric_kind {
     stiffness,
     compliance
     };
+
 
 struct metric_base {
   virtual ~metric_base() { }
@@ -119,13 +122,14 @@ struct metric_base {
   metric_base(metric_kind kind) : kind(kind) { };
 };
 
+
 template<class G>
 struct metric : metric_base, std::enable_shared_from_this< metric<G> > {
 
   using metric_base::metric_base;
   
   typename metric::cast_type cast() { return this->shared_from_this(); }
-  virtual void tensor(std::vector<triplet>& out, const G& at) const = 0;
+  virtual void tensor(triplet_iterator out, const G& at) const = 0;
 
 };
 
@@ -141,9 +145,9 @@ struct uniform : metric<G> {
   
   real value;
   
-  virtual void tensor(std::vector<triplet>& out, const G& at) const {
-    for(unsigned i = 0, n = traits<G>::dim; i < n; ++i) {
-      out.emplace_back(i, i, value);
+  virtual void tensor(triplet_iterator out, const G& at) const {
+    for(int i = 0, n = traits<G>::dim; i < n; ++i) {
+      *out++ = {i, i, value};
     }
   }
 	
@@ -214,8 +218,6 @@ struct func_base {
 template<class, class T>
 using repeat = T;
 
-
-using triplet_iterator = std::back_insert_iterator< std::vector<triplet> >;
 
 template<class To, class ... From>
 struct func< To (From...) > : public func_base,
@@ -786,7 +788,7 @@ struct fetch : dispatch<fetch> {
     const std::size_t start = diagonal.size();
 
     // obtain triplets
-    self->tensor(diagonal, pos.get<G>(v));
+    self->tensor(std::back_inserter(diagonal), pos.get<G>(v));
 	
     const std::size_t end = diagonal.size();
 
