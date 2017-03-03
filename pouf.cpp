@@ -91,7 +91,7 @@ using triplet = Eigen::Triplet<real>;
 using triplet_iterator = std::back_insert_iterator< std::vector<triplet> >;
 
 
-
+// metrics
 template<class G>
 struct metric;
 
@@ -154,19 +154,7 @@ struct uniform : metric<G> {
 };
 
 
-
-template<class T>
-struct constraint;
-
-struct constraint_base {
-  virtual ~constraint_base() { }
-
-  using cast_type = variant<constraint<real>>;
-  virtual cast_type cast() = 0;
-};
-
-
-
+// dofs
 struct dofs_base {
   virtual ~dofs_base() { }
 
@@ -197,6 +185,8 @@ struct dofs : public dofs_base,
   
 };
 
+
+// functions
 template<class T>
 struct func;
 
@@ -294,7 +284,7 @@ struct norm2 : func< scalar<U> ( U ) > {
   }
 
 
-  virtual void hessian(triplet_iterator block, const scalar<To>& lambda, const U& from) const {
+  virtual void hessian(triplet_iterator block, const scalar<U>& lambda, const U& from) const {
     for(int i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
       *block++ = {i, i, lambda};
     }
@@ -324,7 +314,7 @@ struct pairing : func< scalar<U>(U, U) > {
   }
 
 
-  virtual void hessian(triplet_iterator block, const scalar<To>& lambda,
+  virtual void hessian(triplet_iterator block, const scalar<U>& lambda,
                        const U& lhs, const U& rhs) const {
     for(int i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
       *block++ = {i, n + i, lambda};
@@ -338,18 +328,29 @@ struct pairing : func< scalar<U>(U, U) > {
 
 
 
-
 using vertex = variant<dofs_base, func_base, metric_base>;
 struct edge {};
 
 struct graph : dependency_graph<vertex, edge> {
 
+  std::map< void*, unsigned > vertex;
+
+  template<class T>
+  struct node : T {
+	std::size_t vertex;
+
+	using T::T;
+  };
+  
   template<class T, class ... Args>
-  unsigned add_shared(Args&& ... args) {
-    return add_vertex( std::make_shared<T>(std::forward<Args>(args)...), *this);
+  std::shared_ptr< node<T> > add(Args&& ... args) {
+	
+	auto ptr = std::make_shared<node<T>>(std::forward<Args>(args)...);
+    ptr->vertex = add_vertex( std::shared_ptr<T>(ptr), *this);
+	
+	return ptr;
   }
-
-
+  
   range<graph::vertex_iterator> vertices() {
     return make_range( boost::vertices(*this) );
   }
@@ -1007,41 +1008,30 @@ int main(int, char**) {
   graph g;
 
   // independent dofs
-  auto point3 = std::make_shared< dofs<vec3> >();
-  auto point2 = std::make_shared< dofs<vec2> >();
+  auto point3 = g.add< dofs<vec3> >();
+  auto point2 = g.add< dofs<vec2> >();
 
-  auto mass3 = std::make_shared< uniform<metric_kind::mass, vec3> >(2);
-  auto mass2 = std::make_shared< uniform<metric_kind::mass, vec2> >();  
+  auto mass3 = g.add< uniform<metric_kind::mass, vec3> >(2);
+  auto mass2 = g.add< uniform<metric_kind::mass, vec2> >();  
   
   // mapped
-  auto map = std::make_shared< sum<3, 2> >();
-  auto map2 = std::make_shared< norm2<double> >();  
-
-  auto ff1 = std::make_shared< uniform<metric_kind::stiffness, double> >(3);
+  auto map1 = g.add< sum<3, 2> >();
+  auto map2 = g.add< norm2<double> >();  
+  
+  auto ff1 = g.add< uniform<metric_kind::stiffness, double> >(3);
   
   point3->pos = {1, 2, 3};
   point2->pos = {4, 5};  
   
-  unsigned p3 = add_vertex(point3, g);
-  unsigned p2 = add_vertex(point2, g);
+  add_edge(map1->vertex, point3->vertex, g);
+  add_edge(map1->vertex, point2->vertex, g);
 
+  add_edge(map2->vertex, map1->vertex, g);  
   
-  unsigned f3 = add_vertex(map, g);
-  add_edge(f3, p3, g);
-  add_edge(f3, p2, g);
+  add_edge(mass3->vertex, point3->vertex, g);
+  add_edge(mass2->vertex, point2->vertex, g);
 
-  unsigned f2 = add_vertex(map2, g);  
-  add_edge(f2, f3, g);  
-  
-  
-  unsigned m3 = add_vertex(mass3, g);
-  add_edge(m3, p3, g);
-
-  unsigned m2 = add_vertex(mass2, g);
-  add_edge(m2, p2, g);
-
-  unsigned k1 = add_vertex(ff1, g);
-  add_edge(k1, f2, g);
+  add_edge(ff1->vertex, map2->vertex, g);
   
   std::vector<unsigned> order;
   g.sort(order);
