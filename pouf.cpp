@@ -56,7 +56,7 @@ struct traits< vector<N, U> > {
   static const std::size_t dim = N * traits<U>::dim;
 
   static scalar dot(const vector<N, U>& x,
-					const vector<N, U>& y) {
+                    const vector<N, U>& y) {
     return x.dot(y);
   }
 
@@ -96,9 +96,10 @@ struct metric;
 
 enum class metric_kind {
   mass,
-  damping,
-  stiffness
-};
+    damping,
+    stiffness,
+    compliance
+    };
 
 struct metric_base {
   virtual ~metric_base() { }
@@ -133,17 +134,17 @@ template<metric_kind kind, class G>
 struct uniform : metric<G> {
 
   uniform(real value = 1.0)
-	: metric<G>(kind),
-	value(value) {
+    : metric<G>(kind),
+    value(value) {
 	
   }
   
   real value;
   
   virtual void tensor(std::vector<triplet>& out, const G& at) const {
-	for(unsigned i = 0, n = traits<G>::dim; i < n; ++i) {
-	  out.emplace_back(i, i, value);
-	}
+    for(unsigned i = 0, n = traits<G>::dim; i < n; ++i) {
+      out.emplace_back(i, i, value);
+    }
   }
 	
 };
@@ -179,7 +180,7 @@ struct dofs_base {
 
 template<class G>
 struct dofs : public dofs_base,
-			  public std::enable_shared_from_this< dofs<G> > {
+              public std::enable_shared_from_this< dofs<G> > {
   G pos;
 
   dofs_base::cast_type cast() {
@@ -215,7 +216,7 @@ using repeat = T;
 
 template<class To, class ... From>
 struct func< To (From...) > : public func_base,
-							  public std::enable_shared_from_this< func< To (From...) > >{
+                              public std::enable_shared_from_this< func< To (From...) > >{
 
   func_base::cast_type cast() {
     return this->shared_from_this();
@@ -229,7 +230,7 @@ struct func< To (From...) > : public func_base,
 
   // sparse jacobian
   virtual void jacobian(repeat<From, std::vector<triplet>>& ... out,
-						const From& ... from) const = 0;
+                        const From& ... from) const = 0;
   
   
 };
@@ -249,7 +250,7 @@ struct sum : func< U (vector<M, U>, vector<N, U> ) > {
   
 
   virtual void jacobian(std::vector<triplet>& lhs_block, std::vector<triplet>& rhs_block,			
-						const vector<M, U>& lhs, const vector<N, U>& rhs) const {
+                        const vector<M, U>& lhs, const vector<N, U>& rhs) const {
 
     for(unsigned i = 0, n = lhs.size(); i < n; ++i) {
       lhs_block.emplace_back(0, i, 1.0);
@@ -266,14 +267,14 @@ struct sum : func< U (vector<M, U>, vector<N, U> ) > {
 
 
 template<class U>
-struct norm2 : func< typename traits<U>::scalar ( U ) > {
+struct norm2 : func< scalar<U> ( U ) > {
   
   virtual std::size_t size(const U& ) const {
     return 1;
   }
   
   
-  virtual void apply(typename traits<U>::scalar& to, const U& from) const {
+  virtual void apply(scalar<U>& to, const U& from) const {
     to = traits<U>::dot(from, from) / 2.0;
   }
   
@@ -282,8 +283,31 @@ struct norm2 : func< typename traits<U>::scalar ( U ) > {
     for(unsigned i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
       block.emplace_back(0, i, traits<U>::coord(i, from));
     }
-    
   }
+  
+};
+
+
+// use this for constraints
+template<class U>
+struct pairing : func< scalar<U>(U, U) > {
+  virtual std::size_t size(const U& ) const {
+    return 1;
+  }
+
+  virtual void apply(scalar<U>& to, const U& lhs, const U& rhs) const {
+    to = traits<U>::dot(lhs, rhs);
+  }
+
+
+  virtual void jacobian(std::vector<triplet>& lhs_block, std::vector<triplet>& rhs_block,
+                        const U& lhs, const U& rhs) const {
+    for(unsigned i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
+      lhs_block.emplace_back(0, i, traits<U>::coord(i, rhs));
+      rhs_block.emplace_back(0, i, traits<U>::coord(i, lhs));      
+    }
+  }
+
   
 };
 
@@ -312,27 +336,27 @@ struct graph : dependency_graph<vertex, edge> {
 struct typecheck {
 
   void operator()(dofs_base* self, unsigned v, const graph& g) const {
-	if( out_degree(v, g) > 0 ) {
-	  throw std::runtime_error("dofs must be independent (zero out-edge)");
-	}
+    if( out_degree(v, g) > 0 ) {
+      throw std::runtime_error("dofs must be independent (zero out-edge)");
+    }
   }
 
   void operator()(metric_base* self, unsigned v, const graph& g) const {
 
-	if( out_degree(v, g) != 1 ) {
-	  throw std::runtime_error("metric must be dependent (single out-edge)");
-	}
+    if( out_degree(v, g) != 1 ) {
+      throw std::runtime_error("metric must be dependent (single out-edge)");
+    }
 
-	self->cast().apply(*this, v, g);
+    self->cast().apply(*this, v, g);
   }
 
 
   template<class G>
   void operator()(metric<G>* self, unsigned v, const graph& g) const {
 
-	auto p = *adjacent_vertices(v, g).first;
+    auto p = *adjacent_vertices(v, g).first;
 	
-	g[p].apply(expected_check<G>());
+    g[p].apply(expected_check<G>());
   }
 
   // dispatch
@@ -354,10 +378,10 @@ struct typecheck {
   template<class Expected>
   struct expected_check {
 
-	template<class T>
-	void operator()(T* self) const {
-	  throw std::logic_error("should not happen");
-	}
+    template<class T>
+    void operator()(T* self) const {
+      throw std::logic_error("should not happen");
+    }
 	
     // dispatch
     void operator()(dofs_base* self) const {
@@ -411,12 +435,12 @@ struct typecheck {
 
       // TODO this could be ok though
       if(out.first != out.second) {
-		throw std::runtime_error("expected less out-edges");
+        throw std::runtime_error("expected less out-edges");
       }
     } catch( std::runtime_error& e ){
       throw std::runtime_error(e.what() 
-							   + std::string(" for vertex: ") 
-							   + std::to_string(v) );
+                               + std::string(" for vertex: ") 
+                               + std::to_string(v) );
     }
 	
   }
@@ -470,8 +494,8 @@ public:
     
     overflow(stack& who, std::size_t required)
       : std::runtime_error("stack overflow"),
-	  who(who),
-	  required(required) { }
+        who(who),
+        required(required) { }
     
   };
   
@@ -534,7 +558,7 @@ public:
 
   void reserve(std::size_t size) {
     std::clog << "stack reserve: " << capacity()
-			  << " -> " << size << std::endl;
+              << " -> " << size << std::endl;
 	  
     storage.reserve(size);
   }
@@ -556,7 +580,7 @@ class graph_data {
   std::vector<stack::frame> frame;
 public:
   graph_data(std::size_t num_vertices,
-			 std::size_t capacity = 0)
+             std::size_t capacity = 0)
     : storage(capacity),
       frame(num_vertices) {
 
@@ -638,7 +662,7 @@ struct push : dispatch<push> {
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g,
-				  indices<I...> idx) const {
+                  indices<I...> idx) const {
 
     // note: we need random access parent iterator for this
     auto parents = adjacent_vertices(v, g).first;
@@ -668,8 +692,8 @@ struct numbering : dispatch<numbering> {
 
   using chunks_type = std::vector<chunk>;
   numbering(chunks_type& chunks,
-			std::size_t& offset, 
-			const graph_data& pos)
+            std::size_t& offset, 
+            const graph_data& pos)
     : chunks(chunks),
       offset(offset),
       pos(pos) {
@@ -684,13 +708,13 @@ struct numbering : dispatch<numbering> {
   
   template<class G>
   void operator()(metric<G>* self, unsigned v) const {
-	// TODO don't dispatch
+    // TODO don't dispatch
   }
   
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v) const {
-	chunk& c = chunks[v];
+    chunk& c = chunks[v];
 	
     c.size = pos.count(v) * traits< deriv<G> >::dim;
     c.start = offset;
@@ -734,13 +758,13 @@ struct fetch : dispatch<fetch> {
   const graph_data& pos;
   
   fetch(matrix_type& jacobian,
-		matrix_type& diagonal,
-		graph_data& mask,
-		elements_type& elements,
-		const numbering::chunks_type& chunks,	
-		const graph_data& pos)
+        matrix_type& diagonal,
+        graph_data& mask,
+        elements_type& elements,
+        const numbering::chunks_type& chunks,	
+        const graph_data& pos)
     : jacobian(jacobian),
-	  diagonal(diagonal),
+      diagonal(diagonal),
       mask(mask),
       elements(elements),
       chunks(chunks),
@@ -755,33 +779,34 @@ struct fetch : dispatch<fetch> {
   template<class G>
   void operator()(metric<G>* self, unsigned v, const graph& g) const {
 
-	// remember current size
-	const std::size_t start = diagonal.size();
+    // remember current size
+    const std::size_t start = diagonal.size();
 
-	// obtain triplets
-	self->tensor(diagonal, pos.get<G>(v));
+    // obtain triplets
+    self->tensor(diagonal, pos.get<G>(v));
 	
-	const std::size_t end = diagonal.size();
+    const std::size_t end = diagonal.size();
 
-	real factor = 0;
+    real factor = 0;
 
-	switch(self->kind) {
-	case metric_kind::mass: factor = 1; break;
-	case metric_kind::damping: factor = dt; break;
-	case metric_kind::stiffness: factor = dt * dt; break;	  
-	};
-
-	const unsigned parent = *adjacent_vertices(v, g).first;
+    switch(self->kind) {
+    case metric_kind::mass: factor = 1; break;
+    case metric_kind::damping: factor = dt; break;
+    case metric_kind::stiffness: factor = dt * dt; break;
+    case metric_kind::compliance: factor = -1.0 / (dt * dt); break;	        
+    };
+    
+    const unsigned parent = *adjacent_vertices(v, g).first;
 	
-	const chunk& c = chunks[parent];
+    const chunk& c = chunks[parent];
 
-	// shift/scale inserted data
-	for(unsigned i = start; i < end; ++i) {
-	  auto& it = diagonal[i];
-	  it = {it.row() + int(c.start),
-			it.col() + int(c.start),
-			factor * it.value()};
-	}
+    // shift/scale inserted data
+    for(unsigned i = start; i < end; ++i) {
+      auto& it = diagonal[i];
+      it = {it.row() + int(c.start),
+            it.col() + int(c.start),
+            factor * it.value()};
+    }
 	
   }
 
@@ -803,7 +828,7 @@ struct fetch : dispatch<fetch> {
 
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g,
-				  indices<I...> idx) const {
+                  indices<I...> idx) const {
 
     auto parents = adjacent_vertices(v, g).first;
 
@@ -845,10 +870,10 @@ struct fetch : dispatch<fetch> {
 	
       // shift elements
       for(triplet& it : elements[p]) {
-		// TODO filter by mask
-		jacobian.emplace_back(it.row() + curr_chunk.start,
-							  it.col() + parent_chunk.start,
-							  it.value());
+        // TODO filter by mask
+        jacobian.emplace_back(it.row() + curr_chunk.start,
+                              it.col() + parent_chunk.start,
+                              it.value());
       }
     }
 
@@ -862,7 +887,7 @@ struct concatenate {
   const numbering::chunks_type& chunks;
 
   concatenate(rmat& jacobian,
-			  const numbering::chunks_type& chunks)
+              const numbering::chunks_type& chunks)
     : jacobian(jacobian),
       chunks(chunks) {
 
@@ -914,34 +939,34 @@ static void concatenate(rmat& res, const rmat& src) {
   std::fill(mask.begin(), mask.end(), false);
   
   for(unsigned i = 0, n = src.rows(); i < n; ++i) {
-	unsigned nnz = 0;
+    unsigned nnz = 0;
 	
-	for(rmat::InnerIterator src_it(src, i); src_it; ++src_it) {
-	  const real y = src_it.value();
-	  const unsigned k = src_it.col();
+    for(rmat::InnerIterator src_it(src, i); src_it; ++src_it) {
+      const real y = src_it.value();
+      const unsigned k = src_it.col();
 
-	  // take row from previously computed if possible
-	  for(rmat::InnerIterator res_it(k < i ? res : src, k); res_it; ++res_it) {
-		const unsigned j = res_it.col();
+      // take row from previously computed if possible
+      for(rmat::InnerIterator res_it(k < i ? res : src, k); res_it; ++res_it) {
+        const unsigned j = res_it.col();
         const real x = res_it.value();
 
-		if(!mask[j]) {
-		  mask[j] = true;
-		  values[j] = x * y;
-		  indices[nnz] = j;
+        if(!mask[j]) {
+          mask[j] = true;
+          values[j] = x * y;
+          indices[nnz] = j;
           ++nnz;
-		} else {
-		  values[j] += x * y;
-		}
-	  }
-	}
+        } else {
+          values[j] += x * y;
+        }
+      }
+    }
 
-	res.startVec(i);
-	for(unsigned k = 0; k < nnz; ++k) {
-	  const unsigned j = indices[k];
-	  res.insertBack(i, j) = values[j];
-	  mask[j] = false;
-	}
+    res.startVec(i);
+    for(unsigned k = 0; k < nnz; ++k) {
+      const unsigned j = indices[k];
+      res.insertBack(i, j) = values[j];
+      mask[j] = false;
+    }
 	
   }
   
@@ -1008,8 +1033,8 @@ int main(int, char**) {
   with_auto_stack([&] {
       offset = 0;
       for(unsigned v : order) {
-		g[v].apply( push(pos), v, g);
-		g[v].apply( numbering(chunks, offset, pos), v);	
+        g[v].apply( push(pos), v, g);
+        g[v].apply( numbering(chunks, offset, pos), v);	
       }
     });
 
@@ -1027,11 +1052,11 @@ int main(int, char**) {
       jacobian.clear();
       diagonal.clear();
 
-	  fetch vis(jacobian, diagonal, mask, elements, chunks, pos);
-	  vis.dt = dt;
+      fetch vis(jacobian, diagonal, mask, elements, chunks, pos);
+      vis.dt = dt;
 	  
       for(unsigned v : reverse(order)) {
-		g[v].apply( vis, v, g);
+        g[v].apply( vis, v, g);
       }
     });
 
