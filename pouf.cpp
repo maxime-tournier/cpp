@@ -214,6 +214,9 @@ struct func_base {
 template<class, class T>
 using repeat = T;
 
+
+using triplet_iterator = std::back_insert_iterator< std::vector<triplet> >;
+
 template<class To, class ... From>
 struct func< To (From...) > : public func_base,
                               public std::enable_shared_from_this< func< To (From...) > >{
@@ -229,7 +232,7 @@ struct func< To (From...) > : public func_base,
   virtual void apply(To& to, const From&... from) const = 0;
 
   // sparse jacobian
-  virtual void jacobian(repeat<From, std::vector<triplet>>& ... out,
+  virtual void jacobian(repeat<From, triplet_iterator> ... out,
                         const From& ... from) const = 0;
   
   
@@ -249,15 +252,15 @@ struct sum : func< U (vector<M, U>, vector<N, U> ) > {
   }
   
 
-  virtual void jacobian(std::vector<triplet>& lhs_block, std::vector<triplet>& rhs_block,			
+  virtual void jacobian(triplet_iterator lhs_block, triplet_iterator rhs_block,			
                         const vector<M, U>& lhs, const vector<N, U>& rhs) const {
 
-    for(unsigned i = 0, n = lhs.size(); i < n; ++i) {
-      lhs_block.emplace_back(0, i, 1.0);
+    for(int i = 0, n = lhs.size(); i < n; ++i) {
+      *lhs_block++ = {0, i, 1.0};
     }
     
-    for(unsigned i = 0, n = rhs.size(); i < n; ++i) {
-      rhs_block.emplace_back(0, i, 1.0);      
+    for(int i = 0, n = rhs.size(); i < n; ++i) {
+      *rhs_block++ = {0, i, 1.0};
     }
 
   }
@@ -279,9 +282,9 @@ struct norm2 : func< scalar<U> ( U ) > {
   }
   
 
-  virtual void jacobian(std::vector<triplet>& block, const U& from) const {
-    for(unsigned i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
-      block.emplace_back(0, i, traits<U>::coord(i, from));
+  virtual void jacobian(triplet_iterator block, const U& from) const {
+    for(int i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
+      *block++ = {0, i, traits<U>::coord(i, from)};
     }
   }
   
@@ -300,11 +303,11 @@ struct pairing : func< scalar<U>(U, U) > {
   }
 
 
-  virtual void jacobian(std::vector<triplet>& lhs_block, std::vector<triplet>& rhs_block,
+  virtual void jacobian(triplet_iterator lhs_block, triplet_iterator rhs_block,
                         const U& lhs, const U& rhs) const {
     for(unsigned i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
-      lhs_block.emplace_back(0, i, traits<U>::coord(i, rhs));
-      rhs_block.emplace_back(0, i, traits<U>::coord(i, lhs));      
+      *lhs_block++ = {0, i, traits<U>::coord(i, rhs)};
+      *rhs_block++ = {0, i, traits<U>::coord(i, lhs)};
     }
   }
 
@@ -859,7 +862,8 @@ struct fetch : dispatch<fetch> {
 
     // fetch data
     elements.clear();
-    self->jacobian(elements[I]..., pos.get<const From>(parents[I])...);
+    self->jacobian(std::back_inserter(elements[I])...,
+                   pos.get<const From>(parents[I])...);
     
     // TODO set parent masks
     const chunk& curr_chunk = chunks[v];
