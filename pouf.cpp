@@ -237,7 +237,10 @@ struct func< To (From...) > : public func_base,
   virtual void jacobian(repeat<From, triplet_iterator> ... out,
                         const From& ... from) const = 0;
   
-  
+  // sparse hessian
+  virtual void hessian(triplet_iterator out,
+                       const deriv<To>& dto,
+                       const From& ... from) const { }
 };
 
 
@@ -289,6 +292,13 @@ struct norm2 : func< scalar<U> ( U ) > {
       *block++ = {0, i, traits<U>::coord(i, from)};
     }
   }
+
+
+  virtual void hessian(triplet_iterator block, const scalar<To>& lambda, const U& from) const {
+    for(int i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
+      *block++ = {i, i, lambda};
+    }
+  }
   
 };
 
@@ -313,6 +323,15 @@ struct pairing : func< scalar<U>(U, U) > {
     }
   }
 
+
+  virtual void hessian(triplet_iterator block, const scalar<To>& lambda,
+                       const U& lhs, const U& rhs) const {
+    for(int i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
+      *block++ = {i, n + i, lambda};
+      *block++ = {n + i, i, lambda};      
+    }
+    
+  }
   
 };
 
@@ -862,7 +881,7 @@ struct fetch : dispatch<fetch> {
       elements[p].clear();
     }
 
-    // fetch data
+    // fetch jacobian data
     elements.clear();
     self->jacobian(std::back_inserter(elements[I])...,
                    pos.get<const From>(parents[I])...);
@@ -882,10 +901,13 @@ struct fetch : dispatch<fetch> {
                               it.value());
       }
     }
-
+    
   }
   
 };
+
+
+// TODO compute forces + hessians
 
 
 struct concatenate {
