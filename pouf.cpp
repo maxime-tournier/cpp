@@ -990,6 +990,8 @@ static void concatenate(rmat& res, const rmat& src) {
       }
     }
 
+    std::sort(indices.data(), indices.data() + nnz);
+    
     res.startVec(i);
     for(unsigned k = 0; k < nnz; ++k) {
       const unsigned j = indices[k];
