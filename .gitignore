@@ -1,9 +1,9 @@
 *~
 *.o
+*.so
 /flow
 /graph
 /parse
 /rtti
-/pouf
 
 /pcg

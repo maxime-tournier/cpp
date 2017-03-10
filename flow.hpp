@@ -13,10 +13,13 @@ template<class Vertex>
 struct vertex_property : Vertex {
 
   using Vertex::Vertex;
+
+  vertex_property(const Vertex& vertex) : Vertex(vertex) { }
+  vertex_property() { }
   
   boost::default_color_type color;
-  unsigned char flags;
-
+  unsigned char flags = 0;
+  
   template<unsigned char c>
   void set() { flags |= c; }
   
