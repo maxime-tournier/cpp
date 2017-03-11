@@ -8,6 +8,8 @@
 
 #include "numbering.hpp"
 
+#include <Eigen/SparseCholesky>
+
 struct simulation {
 
   template<class F>
@@ -70,21 +72,38 @@ struct simulation {
     });
 
 	// concatenate/assemble
-	rmat J(total_dim, total_dim), H(total_dim, total_dim);
+	rmat J(total_dim, total_dim), K(total_dim, total_dim);
 	
 	J.setFromTriplets(jacobian.begin(), jacobian.end());
-	H.setFromTriplets(diagonal.begin(), diagonal.end());  
+	K.setFromTriplets(diagonal.begin(), diagonal.end());  
 	
-	std::cout << "diagonal: " << H << std::endl;
+	std::cout << "diagonal: " << K << std::endl;
 	
 	rmat concat;
 	concatenate(concat, J);
+
+	// collapse matrix on source dofs only
+	// concat = concat * select;
+
+	// TODO select compliant/master source dofs for easy matrix
+	// splitting:
+
+	// H = master.transpose() * K * master
+	// J = compliant.transpose() * K * master
+	// C = compliant.transpose() * K * compliant	
 	
 	std::cout << "after concatenation: " << std::endl;
 	std::cout << concat << std::endl;
 	
-	rmat full = concat.transpose() * H * concat;
-	std::cout << "H: " << full << std::endl;
+	rmat H = concat.transpose() * K * concat;
+	std::cout << "H: " << H << std::endl;
+
+	Eigen::SimplicialLDLT<cmat> inv;
+
+	inv.compute(H.transpose());
+
+	std::cout << "ldlt: " << (inv.info() == Eigen::Success) << std::endl;
+	
   }
   
 

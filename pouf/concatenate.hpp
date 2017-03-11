@@ -3,6 +3,8 @@
 
 #include "types.hpp"
 
+// concatenate incremental mapping matrix onto complete mapping matrix
+// on source dofs
 static void concatenate(rmat& res, const rmat& src) {
   res.resize(src.rows(), src.cols());
 
@@ -10,13 +12,14 @@ static void concatenate(rmat& res, const rmat& src) {
   std::vector<bool> mask(src.cols());
   std::vector<real> values(src.cols());
   std::vector<int> indices(src.cols());  
+
   
   // TODO better estimate? 
   const int estimated_nnz = src.nonZeros() + src.nonZeros() / 2;
   res.reserve(estimated_nnz);
   
   std::fill(mask.begin(), mask.end(), false);
-  
+
   for(unsigned i = 0, n = src.rows(); i < n; ++i) {
     unsigned nnz = 0;
 	
@@ -50,7 +53,7 @@ static void concatenate(rmat& res, const rmat& src) {
     }
 	
   }
-  
+
   res.finalize();
 }
 

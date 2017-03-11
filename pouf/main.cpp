@@ -14,6 +14,8 @@
 #include "fetch.hpp"
 #include "concatenate.hpp"
 
+#include "simulation.hpp"
+
 
 template<int M, int N, class U = real>
 struct sum : func< U (vector<M, U>, vector<N, U> ) > {
@@ -158,66 +160,11 @@ int main(int, char**) {
 
   g.connect(ff1, map2);
   
-  std::vector<unsigned> order;
-  g.sort( std::back_inserter(order) );
+  simulation sim;
 
-  for(unsigned v : order) {
-    g[v].apply( typecheck(), v, g );
-  }
-
-  const std::size_t n = num_vertices(g);
+  const real dt = 0.1;
   
-  graph_data pos(n);
-  std::vector<chunk> chunks(n);
-
-  // propagate positions and number dofs
-  std::size_t offset;
-  
-  with_auto_stack([&] {
-      offset = 0;
-      for(unsigned v : order) {
-        g[v].apply( push(pos), v, g);
-        g[v].apply( numbering(chunks, offset, pos), v);	
-      }
-    });
-
-  const std::size_t total_dim = offset;
-  
-  graph_data mask(n);
-  
-  std::vector<triplet> jacobian, diagonal;
-  std::vector< std::vector<triplet> > elements;
-
-  const real dt = 0.01;
-  
-  // compute masks/jacobians
-  with_auto_stack([&] {
-      jacobian.clear();
-      diagonal.clear();
-
-      fetch vis(jacobian, diagonal, mask, elements, chunks, pos);
-      vis.dt = dt;
-	  
-      for(unsigned v : reverse(order)) {
-        g[v].apply( vis, v, g);
-      }
-    });
-
-  rmat J(total_dim, total_dim), H(total_dim, total_dim);
-  
-  J.setFromTriplets(jacobian.begin(), jacobian.end());
-  H.setFromTriplets(diagonal.begin(), diagonal.end());  
-
-  std::cout << "diagonal: " << H << std::endl;
-  
-  rmat concat;
-  concatenate(concat, J);
-  
-  std::cout << "after concatenation: " << std::endl;
-  std::cout << concat << std::endl;
-
-  rmat full = concat.transpose() * H * concat;
-  std::cout << "H: " << full << std::endl;
+  sim.step(g, dt);
   
   return 0;
 }
