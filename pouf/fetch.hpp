@@ -3,7 +3,7 @@
 
 #include "dispatch.hpp"
 #include "graph_data.hpp"
-#include "types.hpp"
+#include "sparse.hpp"
 #include "numbering.hpp"
 
 // fetch jacobians w/ masking (bottom-up)
@@ -42,15 +42,20 @@ struct fetch : dispatch<fetch> {
   
   using dispatch::operator();
 
+  
+  // metrics
   template<class G>
   void operator()(metric<G>* self, unsigned v, const graph& g) const {
 
     // remember current size
     const std::size_t start = diagonal.size();
 
-    // obtain tensor triplets
+	// parent vertex
+    const unsigned p = *adjacent_vertices(v, g).first;
+	
+    // obtain tensor triplets at parent position
 	auto it_diag = std::back_inserter(diagonal);
-    self->tensor(it_diag, pos.get<G>(v));
+    self->tensor(it_diag, pos.get<G>(p));
 	
     const std::size_t end = diagonal.size();
 
@@ -63,8 +68,6 @@ struct fetch : dispatch<fetch> {
     case metric_kind::compliance: factor = -1.0 / (dt * dt); break;	        
     };
 
-	// parent chunk
-    const unsigned p = *adjacent_vertices(v, g).first;
     const chunk& parent = chunks[p];
 
 	// where to shift tensor data
@@ -75,8 +78,7 @@ struct fetch : dispatch<fetch> {
 	  const chunk& curr = chunks[v];
 
 	  auto it_jack = std::back_inserter(jacobian);
-
-
+	  
 	  for(unsigned i = 0, n = curr.size; i < n; ++i) {
 		
 		// TODO only lower diagonal should be needed
@@ -103,6 +105,7 @@ struct fetch : dispatch<fetch> {
   }
 
   
+  // dofs
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {
     const chunk& c = chunks[v];
@@ -111,7 +114,9 @@ struct fetch : dispatch<fetch> {
       jacobian.emplace_back(i, i, 1.0);
     }
   }
-    
+
+
+  // functions
   template<class To, class ... From, std::size_t ... I>
   void operator()(func<To (From...) >* self, unsigned v, const graph& g) const {
     operator()(self, v, g, indices_for<From...>() );

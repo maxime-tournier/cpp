@@ -28,12 +28,12 @@ struct push : dispatch<push> {
     const std::size_t count = self->size();
 
     // allocate
-    G* data = pos.allocate<G>(v, count);
+    slice<G> data = pos.allocate<G>(v, count);
     
     // TODO static_assert G is pod ?
     
     // copy
-	std::copy(self->pos.begin(), self->pos.end(), data);
+	std::copy(self->pos.begin(), self->pos.end(), data.begin());
   }
 
 
@@ -55,11 +55,11 @@ struct push : dispatch<push> {
       self->size( pos.get<const From>(parents[I])... );
     
     // allocate result
-    To* to = pos.allocate<To>(v, count);
+    slice<To> to = pos.allocate<To>(v, count);
     
-    self->apply(*to, pos.get<const From>(parents[I])...);
-    
-    std::clog << "mapped: " << *to << std::endl;
+    self->apply(to, pos.get<const From>(parents[I])...);
+
+    std::clog << "mapped: " << to[0] << std::endl;
   }
   
   

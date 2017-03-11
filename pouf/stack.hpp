@@ -4,6 +4,9 @@
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include <cassert>
+
+#include "slice.hpp"
 
 class stack {
   std::vector<char> storage;
@@ -44,7 +47,7 @@ public:
   }
   
   template<class G>
-  G* allocate(frame& f, std::size_t count = 1) {
+  slice<G> allocate(frame& f, std::size_t count) {
     assert(count > 0 && "zero-size allocation");
     
     const std::size_t size = count * sizeof(G);
@@ -70,25 +73,27 @@ public:
     f = {sp, size, count};
     sp += size;
 	
-    return res;
+    return {res, res + count};
   }
 
 
   template<class G>
-  G& get(const frame& f) {
-    return reinterpret_cast<G&>(storage[f.sp]);
+  slice<G> get(const frame& f) {
+	assert(f.count);
+    G* first = reinterpret_cast<G*>(&storage[f.sp]);
+	return {first, first + f.count};
   }
 
   template<class G>
-  const G& get(const frame& f) const {
-    return reinterpret_cast<const G&>(storage[f.sp]);
+  slice<const G> get(const frame& f) const {
+	assert(f.count);	
+	const G* first = reinterpret_cast<const G*>(&storage[f.sp]);
+	return {first, first + f.count};
   }
-  
 
   void reset() {
     sp = 0;
   }
-
 
   std::size_t capacity() const { return storage.capacity(); }
   std::size_t size() const { return storage.size(); }

@@ -1,7 +1,9 @@
 #ifndef DOFS_HPP
 #define DOFS_HPP
 
-#include "types.hpp"
+#include "vec.hpp"
+#include "real.hpp"
+
 #include "slice.hpp"
 
 #include "../variant.hpp"

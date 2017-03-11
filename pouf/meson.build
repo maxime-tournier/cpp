@@ -15,4 +15,4 @@ sources = ['python.cpp',
 
 library('pouf', sources, name_prefix : '', dependencies : deps, install: true, install_dir: meson.source_root() )
 
-executable('main', 'main.cpp', dependencies : [eigen], install: true, install_dir: meson.source_root() )
+executable('pouf', 'main.cpp', dependencies : [eigen], install: true, install_dir: meson.source_root() )

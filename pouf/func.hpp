@@ -3,8 +3,10 @@
 
 #include <memory>
 #include "../variant.hpp"
-#include "types.hpp"
-
+#include "vec.hpp"
+#include "real.hpp"
+#include "sparse.hpp"
+#include "slice.hpp"
 
 // functions
 template<class T>
@@ -38,19 +40,19 @@ struct func< To (From...) > : public func_base,
   }
   
   // output size from inputs
-  virtual std::size_t size(const From&... from) const = 0;
+  virtual std::size_t size(slice<const From>... from) const = 0;
 
   // apply function
-  virtual void apply(To& to, const From&... from) const = 0;
+  virtual void apply(slice<To> to, slice<const From>... from) const = 0;
 
   // sparse jacobian
   virtual void jacobian(repeat<From, triplet_iterator> ... out,
-                        const From& ... from) const = 0;
+                        slice<const From> ... from) const = 0;
   
   // sparse hessian
   virtual void hessian(triplet_iterator out,
-                       const deriv<To>& dto,
-                       const From& ... from) const { }
+                       slice< const deriv<To> >& dto,
+                       slice< const From> ... from) const { }
 };
 
 

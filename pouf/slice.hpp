@@ -1,6 +1,7 @@
 #ifndef SLICE_HPP
 #define SLICE_HPP
 
+#include <cassert>
 
 template<class G>
 class slice {
@@ -10,7 +11,9 @@ protected:
 public:
   slice(G* first, G* last)
 	: first(first),
-	  last(last) { }
+	  last(last) {
+	assert(last > first);
+  }
   
   G* begin() { return first; }
   G* end() { return last; }  
@@ -23,7 +26,6 @@ public:
   G& operator[](std::size_t index) { return first[index]; }
   const G& operator[](std::size_t index) const { return first[index]; }  
 
-
   template<class T>
   slice& operator=( const std::initializer_list<T>& data ) {
 	std::copy(data.begin(), data.end(), begin());
@@ -32,6 +34,9 @@ public:
   
 };
 
+
+// template<class G>
+// using cslice = slice<const G>;
 
 
 #endif

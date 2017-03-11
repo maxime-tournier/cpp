@@ -1,8 +1,12 @@
-#ifndef METRIC_HPP
-#define METRIC_HPP
+#ifndef POUF_METRIC_HPP
+#define POUF_METRIC_HPP
 
 #include <memory>
-#include "types.hpp"
+
+#include "vec.hpp"
+#include "real.hpp"
+#include "slice.hpp"
+#include "sparse.hpp"
 #include "../variant.hpp"
 
 // metrics
@@ -42,8 +46,8 @@ struct metric : metric_base, std::enable_shared_from_this< metric<G> > {
   using metric_base::metric_base;
   
   typename metric::cast_type cast() { return this->shared_from_this(); }
-  virtual void tensor(triplet_iterator out, const G& at) const = 0;
-
+  virtual void tensor(triplet_iterator out, slice<const G> at) const = 0;
+  
 };
 
 
@@ -59,8 +63,9 @@ struct uniform : metric<G> {
   
   real value;
   
-  virtual void tensor(triplet_iterator out, const G& at) const {
-    for(int i = 0, n = traits<G>::dim; i < n; ++i) {
+  virtual void tensor(triplet_iterator out, slice<const G> at) const {
+	std::clog << "uniform at size: " << at.size() << std::endl;
+    for(int i = 0, n = at.size() * traits<G>::dim; i < n; ++i) {
       *out++ = {i, i, value};
     }
   }
