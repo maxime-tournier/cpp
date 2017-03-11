@@ -3,6 +3,7 @@
 
 #include <memory>
 #include "types.hpp"
+#include "../variant.hpp"
 
 // metrics
 template<class G>
@@ -10,10 +11,10 @@ struct metric;
 
 enum class metric_kind {
   mass,
-    damping,
-    stiffness,
-    compliance
-    };
+  damping,
+  stiffness,
+  compliance
+};
 
 
 struct metric_base {
@@ -46,6 +47,7 @@ struct metric : metric_base, std::enable_shared_from_this< metric<G> > {
 };
 
 
+
 template<metric_kind kind, class G>
 struct uniform : metric<G> {
 
@@ -64,6 +66,9 @@ struct uniform : metric<G> {
   }
 	
 };
+
+
+
 
 template<class G>
 using uniform_mass = uniform<metric_kind::mass, G>;

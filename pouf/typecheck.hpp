@@ -124,7 +124,8 @@ struct typecheck {
     auto out = adjacent_vertices(v, g);
     try {
       const int expand[] = { (check_type<From>(out.first++, out.second, g), 0)...};
-
+	  (void) expand;
+	  
       // TODO this could be ok though
       if(out.first != out.second) {
         throw std::runtime_error("expected less out-edges");

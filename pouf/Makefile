@@ -8,5 +8,5 @@ all: main.o
 
 
 
-pouf.so: pouf.cpp
+pouf.so: python.cpp
 	$(CXX) $< $(CXXFLAGS)  -o $@ $(LIBS) $(LDFLAGS)

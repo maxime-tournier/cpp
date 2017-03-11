@@ -2,8 +2,11 @@
 #define DOFS_HPP
 
 #include "types.hpp"
+#include "../variant.hpp"
 
 // dofs
+template<class G> struct dofs;
+
 struct dofs_base {
   virtual ~dofs_base() { }
 
