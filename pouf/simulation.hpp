@@ -6,7 +6,13 @@
 
 #include "graph_data.hpp"
 
+// TODO move these guys to visitor?
+#include "typecheck.hpp"
 #include "numbering.hpp"
+#include "push.hpp"
+#include "fetch.hpp"
+
+#include "concatenate.hpp"
 
 #include <Eigen/SparseCholesky>
 
@@ -26,8 +32,8 @@ struct simulation {
 	  }
 	}
   }
-  
-  
+
+
   void step(graph& g, real dt) {
 
 	std::vector<unsigned> order;
@@ -39,6 +45,7 @@ struct simulation {
 	graph_data pos(n);
 	with_auto_stack([&] {
 		for(unsigned v : order) {
+		  g[v].apply( typecheck(), v, g);
 		  g[v].apply( push(pos), v, g);
 		}
 	  });
@@ -100,7 +107,7 @@ struct simulation {
 	// J = compliant.transpose() * K * master
 	// C = compliant.transpose() * K * compliant	
 	
-	std::cout << "after concatenation: " << std::endl;
+	std::cout << "mapping concatenation: " << std::endl;
 	std::cout << concat << std::endl;
 	
 	rmat H = concat.transpose() * K * concat;

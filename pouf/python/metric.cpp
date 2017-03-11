@@ -22,5 +22,11 @@ namespace python {
 	  .def_readwrite("value", &uniform_mass<vec3>::value)
 	  ;
 
+	class_< uniform_compliance<vec3>, std::shared_ptr< uniform_compliance<vec3>>,
+			bases< metric_base > >("uniform_compliance_vec3")
+	  .def_readwrite("value", &uniform_compliance<vec3>::value)
+	  ;
+	
+	
   }
 }

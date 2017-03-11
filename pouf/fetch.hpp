@@ -49,8 +49,8 @@ struct fetch : dispatch<fetch> {
     const std::size_t start = diagonal.size();
 
     // obtain tensor triplets
-	auto it = std::back_inserter(diagonal);
-    self->tensor(it, pos.get<G>(v));
+	auto it_diag = std::back_inserter(diagonal);
+    self->tensor(it_diag, pos.get<G>(v));
 	
     const std::size_t end = diagonal.size();
 
@@ -62,30 +62,42 @@ struct fetch : dispatch<fetch> {
     case metric_kind::stiffness: factor = dt * dt; break;
     case metric_kind::compliance: factor = -1.0 / (dt * dt); break;	        
     };
-    
+
+	// parent chunk
     const unsigned p = *adjacent_vertices(v, g).first;
-	
     const chunk& parent = chunks[p];
+
+	// where to shift tensor data
+	const chunk* shift = &parent;
 	
-    // shift/scale inserted data
-    for(unsigned i = start; i < end; ++i) {
-      auto& it = diagonal[i];
-      it = {it.row() + int(parent.start),
-            it.col() + int(parent.start),
-            factor * it.value()};
-    }
-	
-	
-	// compliance slack variable stiffness
+	// compliance get special treatment for slack dofs
 	if(self->kind == metric_kind::compliance) {
 	  const chunk& curr = chunks[v];
+
+	  auto it_jack = std::back_inserter(jacobian);
+
 
 	  for(unsigned i = 0, n = curr.size; i < n; ++i) {
 		
 		// TODO only lower diagonal should be needed
-		*it++ = {parent.start + i, curr.start + i, 1};
-		*it++ = {curr.start + i, parent.start + i, 1};
+		*it_diag++ = triplet(parent.start + i, curr.start + i, 1);
+		*it_diag++ = triplet(curr.start + i, parent.start + i, 1);
+
+		// slack variables get identity jacobian
+		*it_jack++ = triplet(curr.start + i, curr.start + i, 1);
 	  }
+
+	  // tensor applies to slack dofs
+	  shift = &curr;
+	} 
+	
+
+	// shift/scale inserted data to chunk
+	for(unsigned i = start; i < end; ++i) {
+	  auto& it = diagonal[i];
+	  it = {it.row() + int(shift->start),
+			it.col() + int(shift->start),
+			factor * it.value()};
 	}
 	
   }
