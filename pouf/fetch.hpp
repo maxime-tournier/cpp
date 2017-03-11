@@ -48,8 +48,9 @@ struct fetch : dispatch<fetch> {
     // remember current size
     const std::size_t start = diagonal.size();
 
-    // obtain triplets
-    self->tensor(std::back_inserter(diagonal), pos.get<G>(v));
+    // obtain tensor triplets
+	auto it = std::back_inserter(diagonal);
+    self->tensor(it, pos.get<G>(v));
 	
     const std::size_t end = diagonal.size();
 
@@ -62,17 +63,30 @@ struct fetch : dispatch<fetch> {
     case metric_kind::compliance: factor = -1.0 / (dt * dt); break;	        
     };
     
-    const unsigned parent = *adjacent_vertices(v, g).first;
+    const unsigned p = *adjacent_vertices(v, g).first;
 	
-    const chunk& c = chunks[parent];
-
+    const chunk& parent = chunks[p];
+	
     // shift/scale inserted data
     for(unsigned i = start; i < end; ++i) {
       auto& it = diagonal[i];
-      it = {it.row() + int(c.start),
-            it.col() + int(c.start),
+      it = {it.row() + int(parent.start),
+            it.col() + int(parent.start),
             factor * it.value()};
     }
+	
+	
+	// compliance slack variable stiffness
+	if(self->kind == metric_kind::compliance) {
+	  const chunk& curr = chunks[v];
+
+	  for(unsigned i = 0, n = curr.size; i < n; ++i) {
+		
+		// TODO only lower diagonal should be needed
+		*it++ = {parent.start + i, curr.start + i, 1};
+		*it++ = {curr.start + i, parent.start + i, 1};
+	  }
+	}
 	
   }
 

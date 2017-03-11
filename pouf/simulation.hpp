@@ -35,18 +35,25 @@ struct simulation {
 
 	const std::size_t n = num_vertices(g);
 	
-	
-	// propagate positions and number dofs	  
+	// propagate positions
 	graph_data pos(n);
-	std::vector<chunk> chunks(n);
+	with_auto_stack([&] {
+		for(unsigned v : order) {
+		  g[v].apply( push(pos), v, g);
+		}
+	  });
 
+	// TODO update graph according to collision detection
+	// TODO reorder graph if it changed
+	
+	// number dofs
+	std::vector<chunk> chunks(n);
 	std::size_t offset;
   
 	with_auto_stack([&] {
 		offset = 0;
 		for(unsigned v : order) {
-		  g[v].apply( push(pos), v, g);
-		  g[v].apply( numbering(chunks, offset, pos), v);	
+		  g[v].apply( numbering(chunks, offset, pos), v, g);	
 		}
 	  });
 
@@ -73,7 +80,8 @@ struct simulation {
 
 	// concatenate/assemble
 	rmat J(total_dim, total_dim), K(total_dim, total_dim);
-	
+
+
 	J.setFromTriplets(jacobian.begin(), jacobian.end());
 	K.setFromTriplets(diagonal.begin(), diagonal.end());  
 	

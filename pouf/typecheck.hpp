@@ -39,6 +39,8 @@ struct typecheck {
       throw std::runtime_error("metric must be dependent (single out-edge)");
     }
 
+	// TODO in_degree == 0 ?
+	
     self->cast().apply(*this, v, g);
   }
 

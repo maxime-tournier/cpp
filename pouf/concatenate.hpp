@@ -19,7 +19,7 @@ static void concatenate(rmat& res, const rmat& src) {
   res.reserve(estimated_nnz);
   
   std::fill(mask.begin(), mask.end(), false);
-
+  
   for(unsigned i = 0, n = src.rows(); i < n; ++i) {
     unsigned nnz = 0;
 	
