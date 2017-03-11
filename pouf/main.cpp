@@ -133,33 +133,33 @@ int main(int, char**) {
   graph g;
 
   // independent dofs
-  auto point3 = g.add< dofs<vec3> >();
-  auto point2 = g.add< dofs<vec2> >();
+  auto point3 = g.add_shared< static_dofs<vec3> >();
+  auto point2 = g.add_shared< static_dofs<vec2> >();
 
-  auto mass3 = g.add< uniform<metric_kind::mass, vec3> >(2);
-  auto mass2 = g.add< uniform<metric_kind::mass, vec2> >();  
+  auto mass3 = g.add_shared< uniform<metric_kind::mass, vec3> >(2);
+  auto mass2 = g.add_shared< uniform<metric_kind::mass, vec2> >();  
   
   // mapped
-  auto map1 = g.add< sum<3, 2> >();
-  auto map2 = g.add< norm2<double> >();  
+  auto map1 = g.add_shared< sum<3, 2> >();
+  auto map2 = g.add_shared< norm2<double> >();  
   
-  auto ff1 = g.add< uniform<metric_kind::stiffness, double> >(3);
+  auto ff1 = g.add_shared< uniform<metric_kind::stiffness, double> >(3);
   
-  point3->pos = {1, 2, 3};
-  point2->pos = {4, 5};  
+  point3->pos[0] = {1, 2, 3};
+  point2->pos[0] = {4, 5};  
   
-  add_edge(map1->vertex, point3->vertex, g);
-  add_edge(map1->vertex, point2->vertex, g);
+  g.connect(map1, point3);
+  g.connect(map1, point2);
 
-  add_edge(map2->vertex, map1->vertex, g);  
-  
-  add_edge(mass3->vertex, point3->vertex, g);
-  add_edge(mass2->vertex, point2->vertex, g);
+  g.connect(map2, map1);
 
-  add_edge(ff1->vertex, map2->vertex, g);
+  g.connect(mass3, point3);
+  g.connect(mass2, point2);  
+
+  g.connect(ff1, map2);
   
   std::vector<unsigned> order;
-  g.sort(order);
+  g.sort( std::back_inserter(order) );
 
   for(unsigned v : order) {
     g[v].apply( typecheck(), v, g );

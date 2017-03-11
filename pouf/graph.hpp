@@ -19,27 +19,9 @@
 using vertex = variant<dofs_base, func_base, metric_base>;
 struct edge {};
 
-struct graph : dependency_graph<vertex, edge> {
+class graph : public dependency_graph<vertex, edge> {
 
   std::map< void*, unsigned > table;
-
-  
-  // template<class T, class ... Args>
-  // std::shared_ptr< T > add(Args&& ... args) {
-	
-  // 	auto ptr = std::make_shared<T>(std::forward<Args>(args)...);
-  // 	add(ptr);
-	
-  // 	return ptr;
-  // }
-
-
-  void add(const vertex& ptr) {
-	ptr.apply([&](void* addr) {
-		table[addr] = add_vertex(ptr, *this);
-	  });
-  }
-
 
   struct get_vertex {
 	graph* owner;
@@ -52,6 +34,25 @@ struct graph : dependency_graph<vertex, edge> {
 	
   };
   
+public:
+  
+  template<class T, class ... Args>
+  std::shared_ptr< T > add_shared(Args&& ... args) {
+	
+  	auto ptr = std::make_shared<T>(std::forward<Args>(args)...);
+  	add(ptr);
+	
+  	return ptr;
+  }
+
+
+  void add(const vertex& ptr) {
+	ptr.apply([&](void* addr) {
+		table[addr] = add_vertex(ptr, *this);
+	  });
+  }
+
+
 
   void connect(const vertex& src, const vertex& dst) {
 	unsigned s, d;

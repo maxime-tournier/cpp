@@ -33,7 +33,7 @@ struct push : dispatch<push> {
     // TODO static_assert G is pod ?
     
     // copy
-    *data = self->pos;
+	std::copy(self->pos.begin(), self->pos.end(), data);
   }
 
 

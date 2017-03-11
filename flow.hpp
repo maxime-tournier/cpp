@@ -38,11 +38,10 @@ struct dependency_graph : boost::adjacency_list<boost::vecS,
 	needed = 2
   };
 
-  
-  void sort(std::vector<unsigned>& out) {
-	out.clear();
-	topological_sort(*this, std::back_inserter(out), 
-					 color_map(get(&vertex_property<Vertex>::color, *this)));
+
+  template<class Iterator>
+  void sort(Iterator out) {
+	topological_sort(*this, out, color_map(get(&vertex_property<Vertex>::color, *this)));
   }
   
 
