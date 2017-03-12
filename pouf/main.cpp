@@ -107,14 +107,14 @@ int main(int, char**) {
   auto point3 = g.add_shared< static_dofs<vec3> >();
   auto point2 = g.add_shared< static_dofs<vec2> >();
 
-  auto mass3 = g.add_shared< uniform<metric_kind::mass, vec3> >(2);
-  auto mass2 = g.add_shared< uniform<metric_kind::mass, vec2> >();  
+  auto mass3 = g.add_shared< uniform_mass<vec3> >(2);
+  auto mass2 = g.add_shared< uniform_mass<vec2> >();  
   
   // // mapped
   // auto map1 = g.add_shared< sum<3, 2> >();
   // auto map2 = g.add_shared< norm2<double> >();  
   
-  auto ff1 = g.add_shared< uniform<metric_kind::stiffness, double> >(3);
+  auto ff1 = g.add_shared< uniform_stiffness<double> >(3);
   
   point3->pos[0] = {1, 2, 3};
   point2->pos[0] = {4, 5};  

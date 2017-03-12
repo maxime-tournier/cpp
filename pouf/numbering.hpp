@@ -43,13 +43,13 @@ struct numbering : dispatch<numbering> {
   
   template<class G>
   void operator()(metric<G>* self, unsigned v, const graph& g) const {
-	if( self->kind == metric_kind::compliance ) {
+	if(self->cast.type() == metric<G>::compliance_type)  {
 	  // compliant dofs get their slack dofs, with parent size
 	  const unsigned p = *adjacent_vertices(v, g).first;
 	  push<G>(v, pos.count(p));
 	}
   }
-  
+
   
   template<class G>
   void operator()(dofs<G>* self, unsigned v, const graph& g) const {

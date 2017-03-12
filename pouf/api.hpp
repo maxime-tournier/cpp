@@ -30,6 +30,8 @@ class api {
   }
   
 public:
+
+  index_type type() const { return index; }
   
   template<class C, class B>
   api(C* owner, const api (B::*member) )

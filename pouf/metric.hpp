@@ -9,17 +9,10 @@
 #include "sparse.hpp"
 #include "api.hpp"
 
+
 // metrics
 template<class G>
 struct metric;
-
-enum class metric_kind {
-  mass,
-  damping,
-  stiffness,
-  compliance
-};
-
 
 struct metric_base {
   virtual ~metric_base() { }
@@ -32,45 +25,105 @@ struct metric_base {
     metric<vec6>>;
 
   const cast_type cast;
-  const metric_kind kind;
   
 protected:
 
   template<class Derived>
-  metric_base(Derived* self, metric_kind kind)
-	: cast(self, &metric_base::cast),
-	  kind(kind) {
-	
+  metric_base(Derived* self)
+	: cast(self, &metric_base::cast) {
+	assert(self == this);
   };
 };
+
+template<class G> struct mass;
+template<class G> struct stiffness;
+template<class G> struct damping;
+template<class G> struct compliance;
 
 
 // a symmetric tensor ranging over a space
 template<class G>
-struct metric : metric_base, std::enable_shared_from_this< metric<G> > {
+struct metric : metric_base {
 
   using metric_base::metric_base;
+
+  using position_type = G;
   
-  typename metric::cast_type cast() { return this->shared_from_this(); }
-
   virtual void tensor(triplet_iterator out, slice<const G> at) const = 0;
+  
+  const api< mass<G>,
+			 stiffness<G>,
+			 damping<G>,
+			 compliance<G> > cast;
 
+  enum {
+	mass_type,
+	stiffness_type,
+	damping_type,
+	compliance_type
+  };
+
+  
+protected:
+  
+  template<class Derived>
+  metric(Derived* self)
+	: metric_base(this),
+	  cast(self, &metric::cast) {
+	assert(self == this);
+  }
+  
 };
 
 
 
-template<metric_kind kind, class G>
-struct uniform : metric<G> {
+template<class G>
+struct mass : metric<G> {
 
-  uniform(real value = 1.0)
-    : metric<G>(this, kind),
-    value(value) {
-	
-  }
+  mass() : metric<G>(this)  { }
+  
+  virtual void add_momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const = 0;
+  
+};
+
+
+template<class G>
+struct stiffness : metric<G> {
+
+  stiffness() : metric<G>(this)  { }
+  
+  virtual void add_gradient(slice< deriv<G> > out, slice<const G> pos) const = 0;
+  
+};
+
+
+template<class G>
+struct damping : metric<G> {
+
+  damping() : metric<G>(this)  { }
+
+  // TODO force ?
+};
+
+
+template<class G>
+struct compliance : metric<G> {
+  compliance() : metric<G>(this)  { }
+
+  // TODO error ?
+};
+
+
+
+template<class Base>
+struct uniform : Base {
+  
+  uniform(real value = 1.0) : value(value) { }
   
   real value;
-  
-  virtual void tensor(triplet_iterator out, slice<const G> at) const {
+
+  using G = typename Base::position_type;
+  void tensor(triplet_iterator out, slice<const G> at) const {
     for(int i = 0, n = at.size() * traits<G>::dim; i < n; ++i) {
       *out++ = {i, i, value};
     }
@@ -82,16 +135,40 @@ struct uniform : metric<G> {
 
 
 template<class G>
-using uniform_mass = uniform<metric_kind::mass, G>;
+struct uniform_mass : uniform< mass<G> > {
+  using uniform<mass<G>>::uniform;
+  
+  virtual void add_momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const {
+	for(unsigned i = 0, n = vel.size(); i < n; ++i) {
+	  out[i] += this->value * vel[i];
+	}
+  }
+};
+
 
 template<class G>
-using uniform_stiffness = uniform<metric_kind::stiffness, G>;
+struct uniform_stiffness : uniform< stiffness<G> > {
+  using uniform<stiffness<G>>::uniform;
+
+  // TODO compute logarithm for non-euclidean dofs?
+  virtual void add_gradient(slice< deriv<G> > out, slice<const G> pos) const {
+	for(unsigned i = 0, n = pos.size(); i < n; ++i) {
+	  out[i] += this->value * pos[i];
+	}
+  }
+};
+
 
 template<class G>
-using uniform_damping = uniform<metric_kind::damping, G>;
+struct uniform_damping : uniform< damping<G> > {
+  using uniform<damping<G>>::uniform;
+};
+
 
 template<class G>
-using uniform_compliance = uniform<metric_kind::compliance, G>;
+struct uniform_compliance : uniform< compliance<G> > {
+  using uniform<compliance<G>>::uniform;
+};
 
 
 

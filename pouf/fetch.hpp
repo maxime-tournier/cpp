@@ -61,11 +61,11 @@ struct fetch : dispatch<fetch> {
 
     real factor = 0;
 
-    switch(self->kind) {
-    case metric_kind::mass: factor = 1; break;
-    case metric_kind::damping: factor = dt; break;
-    case metric_kind::stiffness: factor = dt * dt; break;
-    case metric_kind::compliance: factor = -1.0 / (dt * dt); break;	        
+    switch( self->cast.type() ) {
+    case metric<G>::mass_type: factor = 1; break;
+    case metric<G>::damping_type: factor = dt; break;
+    case metric<G>::stiffness_type: factor = dt * dt; break;
+    case metric<G>::compliance_type: factor = -1.0 / (dt * dt); break;	        
     };
 
     const chunk& parent = chunks[p];
@@ -74,9 +74,9 @@ struct fetch : dispatch<fetch> {
 	const chunk* shift = &parent;
 	
 	// compliance get special treatment for slack dofs
-	if(self->kind == metric_kind::compliance) {
+	if(self->cast.type() == metric<G>::compliance_type) {
 	  const chunk& curr = chunks[v];
-
+	  
 	  auto it_jack = std::back_inserter(jacobian);
 	  
 	  for(unsigned i = 0, n = curr.size; i < n; ++i) {
