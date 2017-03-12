@@ -31,7 +31,13 @@ public:
 	std::copy(data.begin(), data.end(), begin());
 	return *this;
   }
-  
+
+  template<class U>
+  slice(slice<U> other)
+	: first(other.begin()),
+	  last(other.end()) {
+
+  }
 };
 
 

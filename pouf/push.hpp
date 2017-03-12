@@ -59,7 +59,7 @@ struct push : dispatch<push> {
     
     self->apply(to, pos.get<const From>(parents[I])...);
 
-    std::clog << "mapped: " << to[0] << std::endl;
+    std::clog << "mapped position: " << to[0] << std::endl;
   }
   
   

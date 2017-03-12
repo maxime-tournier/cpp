@@ -19,7 +19,24 @@ namespace impl {
 	  return total_size - (1 + sizeof...(T));
 	}
   
-};
+  };
+
+
+  template<std::size_t I, class ... T>
+  struct ith;
+
+  template<class H, class ... T>
+  struct ith<0, H, T...> {
+	using type = H;
+  };
+
+
+  template<std::size_t I, class H, class ... T>
+  struct ith<I, H, T...> : ith<I - 1, T...> {
+	
+  };
+  
+  
 }
 
 // a variant shared pointer type
@@ -43,6 +60,21 @@ class variant {
 
   
 public:
+
+  std::size_t type() const { return index; }
+  
+  template<std::size_t I>
+  typename impl::ith<I, T...>::type* get() {
+	assert(type() == I);
+	return (typename impl::ith<I, T...>::type*) ptr.get();
+  }
+
+  template<std::size_t I>
+  const typename impl::ith<I, T...>::type* get() const {
+	assert(type() == I);
+	return (const typename impl::ith<I, T...>::type*) ptr.get();
+  }
+
   
   variant() : ptr(nullptr), index(0) { }
 

@@ -21,6 +21,8 @@ struct edge {};
 
 class graph : public dependency_graph<vertex, edge> {
 
+
+  
   std::map< void*, unsigned > table;
 
   struct get_vertex {
@@ -35,6 +37,12 @@ class graph : public dependency_graph<vertex, edge> {
   };
   
 public:
+
+  enum {
+	dofs_type,
+	func_type,
+	metric_type,
+  };
   
   template<class T, class ... Args>
   std::shared_ptr< T > add_shared(Args&& ... args) {

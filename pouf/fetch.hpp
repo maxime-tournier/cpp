@@ -6,7 +6,7 @@
 #include "sparse.hpp"
 #include "numbering.hpp"
 
-// fetch jacobians w/ masking (bottom-up)
+// fetch jacobians w/ masking (bottom-up) and metric tensors
 struct fetch : dispatch<fetch> {
 
   using matrix_type = std::vector<triplet>;
@@ -42,7 +42,6 @@ struct fetch : dispatch<fetch> {
   
   using dispatch::operator();
 
-  
   // metrics
   template<class G>
   void operator()(metric<G>* self, unsigned v, const graph& g) const {

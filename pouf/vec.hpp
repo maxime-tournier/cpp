@@ -13,7 +13,7 @@ using vec2 = vector<2>;
 using vec3 = vector<3>;
 using vec4 = vector<4>;
 using vec6 = vector<6>;
-
+using vec = vector<>;
 
 
 template<int N, class U>

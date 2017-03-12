@@ -11,6 +11,7 @@
 #include "numbering.hpp"
 #include "push.hpp"
 #include "fetch.hpp"
+#include "pull.hpp"
 
 #include "concatenate.hpp"
 
@@ -68,7 +69,7 @@ struct simulation {
   
 	// fetch masks/jacobians
 	graph_data mask(n);
-  
+	
 	std::vector<triplet> jacobian, diagonal;
 	std::vector< std::vector<triplet> > elements;
 	
@@ -88,8 +89,35 @@ struct simulation {
 	// concatenate/assemble
 	rmat J(total_dim, total_dim), K(total_dim, total_dim);
 
-
 	J.setFromTriplets(jacobian.begin(), jacobian.end());
+
+	// pull gradients/geometric stiffness
+	vec gradient, momentum;
+	graph_data work(n);
+
+	std::vector<triplet> gs;
+	
+	with_auto_stack([&] {
+		
+		gradient = vec::Zero(total_dim);
+		momentum = vec::Zero(total_dim);
+		
+		gs.clear();
+		
+		pull vis(gradient, momentum, J, gs, work, pos, chunks);
+
+		for(unsigned v : reverse(order)) {
+		  g[v].apply(vis, v, g);
+		}
+		
+	  });
+	
+	std::cout << "gradient: " << gradient.transpose() << std::endl;
+	std::cout << "momentum: " << momentum.transpose() << std::endl;	
+	
+	// // add geometric stiffness TODO scale by dt
+	// std::copy(gs.begin(), gs.end(), std::back_inserter(diagonal));
+	
 	K.setFromTriplets(diagonal.begin(), diagonal.end());  
 	
 	std::cout << "diagonal: " << K << std::endl;

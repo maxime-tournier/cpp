@@ -82,7 +82,7 @@ struct mass : metric<G> {
 
   mass() : metric<G>(this)  { }
   
-  virtual void add_momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const = 0;
+  virtual void momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const = 0;
   
 };
 
@@ -92,7 +92,7 @@ struct stiffness : metric<G> {
 
   stiffness() : metric<G>(this)  { }
   
-  virtual void add_gradient(slice< deriv<G> > out, slice<const G> pos) const = 0;
+  virtual void gradient(slice< deriv<G> > out, slice<const G> pos) const = 0;
   
 };
 
@@ -138,9 +138,9 @@ template<class G>
 struct uniform_mass : uniform< mass<G> > {
   using uniform<mass<G>>::uniform;
   
-  virtual void add_momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const {
+  virtual void momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const {
 	for(unsigned i = 0, n = vel.size(); i < n; ++i) {
-	  out[i] += this->value * vel[i];
+	  out[i] = this->value * vel[i];
 	}
   }
 };
@@ -151,9 +151,9 @@ struct uniform_stiffness : uniform< stiffness<G> > {
   using uniform<stiffness<G>>::uniform;
 
   // TODO compute logarithm for non-euclidean dofs?
-  virtual void add_gradient(slice< deriv<G> > out, slice<const G> pos) const {
+  virtual void gradient(slice< deriv<G> > out, slice<const G> pos) const {
 	for(unsigned i = 0, n = pos.size(); i < n; ++i) {
-	  out[i] += this->value * pos[i];
+	  out[i] = this->value * pos[i];
 	}
   }
 };

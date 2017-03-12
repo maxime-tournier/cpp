@@ -27,6 +27,10 @@ namespace python {
 	
 	// TODO: put this in uniform.cpp
 	bind_uniform< uniform_mass<vec3> >("uniform_mass_vec3");
+
+	bind_uniform< uniform_stiffness<vec3> >("uniform_stiffness_vec3");
+	bind_uniform< uniform_stiffness<real> >("uniform_stiffness_real");
+	
 	bind_uniform< uniform_compliance<vec3> >("uniform_compliance_vec3");
 	bind_uniform< uniform_compliance<real> >("uniform_compliance_real");	
   }
