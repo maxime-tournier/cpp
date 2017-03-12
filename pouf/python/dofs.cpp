@@ -54,7 +54,7 @@ namespace python {
 	
 	// warning: replace class name
 	class_<static_dofs<vec3>, std::shared_ptr<static_dofs<vec3>>,
-		   bases<dofs<vec3>> >("dofs_vec3")
+		   bases<dofs<vec3>>, boost::noncopyable >("dofs_vec3")
 	  ;
 	
 	

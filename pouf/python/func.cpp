@@ -62,7 +62,8 @@ namespace python {
 	class_<func_base, std::shared_ptr<func_base>, boost::noncopyable >("func_base", no_init);
 
 	// TODO moar
-	class_<norm2<vec3>, std::shared_ptr<norm2<vec3>>, bases<func_base> >("norm2_vec3");
+	class_<norm2<vec3>, std::shared_ptr<norm2<vec3>>,
+		   bases<func_base>, boost::noncopyable >("norm2_vec3");
   }
 
 }

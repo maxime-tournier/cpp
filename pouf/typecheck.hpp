@@ -25,6 +25,8 @@ static std::string demangle(const char* name) {
   return (status==0) ? res.get() : name ;
 }
 
+
+// TODO use dispatch
 struct typecheck {
 
   void operator()(dofs_base* self, unsigned v, const graph& g) const {
@@ -41,7 +43,7 @@ struct typecheck {
 
 	// TODO in_degree == 0 ?
 	
-    self->cast().apply(*this, v, g);
+    self->cast.apply(*this, v, g);
   }
 
 
@@ -55,7 +57,7 @@ struct typecheck {
 
   // dispatch
   void operator()(func_base* self, unsigned v, const graph& g) const {
-    self->cast().apply(*this, v, g);
+    self->cast.apply(*this, v, g);
   }
 
 
@@ -79,11 +81,11 @@ struct typecheck {
 	
     // dispatch
     void operator()(dofs_base* self) const {
-      self->cast().apply(*this);
+      self->cast.apply(*this);
     }
 
     void operator()(func_base* self) const {
-      self->cast().apply(*this);
+      self->cast.apply(*this);
     }
 
     // ok cases

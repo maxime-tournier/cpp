@@ -10,7 +10,7 @@ namespace python {
   static void bind_uniform(const char* name) {
 	using namespace boost::python;	
 	class_< Metric, std::shared_ptr< Metric>,
-			bases< metric_base > >(name)
+			bases< metric_base >, boost::noncopyable >(name)
 	  .def_readwrite("value", &Metric::value)
 	  ;
   }

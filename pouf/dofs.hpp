@@ -6,7 +6,7 @@
 
 #include "slice.hpp"
 
-#include "../variant.hpp"
+#include "api.hpp"
 
 // dofs
 template<class G> struct dofs;
@@ -14,28 +14,31 @@ template<class G> struct dofs;
 struct dofs_base {
   virtual ~dofs_base() { }
 
-  using cast_type = variant< 
+  using cast_type = api< 
     dofs<real>,
     dofs<vec2>,
     dofs<vec3>,
     dofs<vec4>,
-    dofs<vec6>>;
+    dofs<vec6>
+	>;
   
-  virtual cast_type cast() = 0;
+  const cast_type cast;
 
   virtual std::size_t size() const = 0;
+
+protected:
+  template<class Derived>
+  dofs_base(Derived* self)
+	: cast(self, &dofs_base::cast) {
+	assert(self == this);
+  }
   
 };
 
 
 
 template<class G>
-struct dofs : public dofs_base,
-              public std::enable_shared_from_this< dofs<G> > {
-
-  dofs_base::cast_type cast() {
-    return this->shared_from_this();
-  }
+struct dofs : public dofs_base {
 
   using coord_slice = slice<G>;
   using deriv_slice = slice< deriv<G> >;
@@ -47,7 +50,8 @@ struct dofs : public dofs_base,
   dofs(coord_slice& pos,
 	   deriv_slice& vel,
 	   deriv_slice& mom)
-	: pos(pos),
+	: dofs_base(this),
+	  pos(pos),
 	  vel(vel),
 	  mom(mom) {
 
@@ -77,8 +81,6 @@ struct static_dofs : dofs<G> {
   }
   
   std::size_t size() const { return N; }
-  
-  
 };
 
 

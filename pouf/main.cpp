@@ -17,6 +17,12 @@
 #include "simulation.hpp"
 
 
+#include "api.hpp"
+
+
+
+
+
 // // use this for constraints
 // template<class U>
 // struct pairing : func< scalar<U>(U, U) > {
@@ -50,29 +56,51 @@
 // };
 
 
+template<class T>
+struct derived;
 
-
-
-template<class F>
-static void with_auto_stack( const F& f ) {
-  while (true) {
-    try{
-      f();
-      return;
-    } catch(stack::overflow& e) {
-      e.who.grow();
-	  // std::clog << "stack reserve: " << e.who.capacity()
-      //         << " -> " << e.size << std::endl;
-      e.who.reset();
-    }
+struct base {
+  virtual ~base() { }
+  
+  const api< derived<real>,
+			 derived<vec3> > cast;
+  
+  template<class Derived>
+  base(Derived* self)
+	: cast(self, &base::cast) {
+	
   }
-}
+  
+};
+
+template<class T>
+struct derived : base {
+
+  derived() : base(this) { }
+  
+};
+
+
+struct visit {
+
+  template<class T>
+  void operator()(T* self) const {
+	std::cout << typeid(T).name() << std::endl;
+	std::cout << self << std::endl;
+  }
+};
 
 
 
 
 int main(int, char**) {
+  
+  auto test = std::make_shared< derived<vec3> >();
 
+  test->cast.apply(visit());
+  std::cout << test.get() << std::endl;
+
+  
   graph g;
 
   // independent dofs

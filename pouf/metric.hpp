@@ -7,7 +7,7 @@
 #include "real.hpp"
 #include "slice.hpp"
 #include "sparse.hpp"
-#include "../variant.hpp"
+#include "api.hpp"
 
 // metrics
 template<class G>
@@ -24,29 +24,37 @@ enum class metric_kind {
 struct metric_base {
   virtual ~metric_base() { }
 
-  using cast_type = variant< 
+  using cast_type = api< 
     metric<real>,
     metric<vec2>,
     metric<vec3>,
     metric<vec4>,
     metric<vec6>>;
 
-  virtual cast_type cast() = 0;
-
+  const cast_type cast;
   const metric_kind kind;
   
-  metric_base(metric_kind kind) : kind(kind) { };
+protected:
+
+  template<class Derived>
+  metric_base(Derived* self, metric_kind kind)
+	: cast(self, &metric_base::cast),
+	  kind(kind) {
+	
+  };
 };
 
 
+// a symmetric tensor ranging over a space
 template<class G>
 struct metric : metric_base, std::enable_shared_from_this< metric<G> > {
 
   using metric_base::metric_base;
   
   typename metric::cast_type cast() { return this->shared_from_this(); }
+
   virtual void tensor(triplet_iterator out, slice<const G> at) const = 0;
-  
+
 };
 
 
@@ -55,7 +63,7 @@ template<metric_kind kind, class G>
 struct uniform : metric<G> {
 
   uniform(real value = 1.0)
-    : metric<G>(kind),
+    : metric<G>(this, kind),
     value(value) {
 	
   }
