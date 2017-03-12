@@ -12,6 +12,7 @@
 #include "push.hpp"
 #include "fetch.hpp"
 #include "pull.hpp"
+#include "select.hpp"
 
 #include "concatenate.hpp"
 
@@ -57,16 +58,41 @@ struct simulation {
 	// number dofs
 	std::vector<chunk> chunks(n);
 	std::size_t offset;
-  
+
+	std::vector<triplet> primal, dual;
+	std::size_t primal_offset, dual_offset;
+	
 	with_auto_stack([&] {
 		offset = 0;
+		primal_offset = 0;
+		dual_offset = 0;		
+		
+		primal.clear();
+		dual.clear();
+
+		
+		struct select vis{primal, dual, primal_offset, dual_offset, chunks};
+		
 		for(unsigned v : order) {
-		  g[v].apply( numbering(chunks, offset, pos), v, g);	
+		  g[v].apply( numbering(chunks, offset, pos), v, g);
+
+		  // TODO merge visitors?
+		  g[v].apply(vis , v);
 		}
 	  });
 
 	const std::size_t total_dim = offset;
-  
+
+	// primal dual selection matrices
+	cmat P, Q;
+
+	P.resize(total_dim, primal_offset);
+	P.setFromTriplets(primal.begin(), primal.end());
+
+	Q.resize(total_dim, dual_offset);	
+	Q.setFromTriplets(dual.begin(), dual.end());
+
+	
 	// fetch masks/jacobians
 	graph_data mask(n);
 	
@@ -87,9 +113,9 @@ struct simulation {
     });
 
 	// concatenate/assemble
-	rmat J(total_dim, total_dim), K(total_dim, total_dim);
+	rmat L(total_dim, total_dim), D(total_dim, total_dim);
 
-	J.setFromTriplets(jacobian.begin(), jacobian.end());
+	L.setFromTriplets(jacobian.begin(), jacobian.end());
 
 	// pull gradients/geometric stiffness
 	vec gradient, momentum;
@@ -104,7 +130,7 @@ struct simulation {
 		
 		gs.clear();
 		
-		pull vis(gradient, momentum, J, gs, work, pos, chunks);
+		pull vis(gradient, momentum, L, gs, work, pos, chunks);
 
 		for(unsigned v : reverse(order)) {
 		  g[v].apply(vis, v, g);
@@ -118,12 +144,12 @@ struct simulation {
 	// // add geometric stiffness TODO scale by dt
 	// std::copy(gs.begin(), gs.end(), std::back_inserter(diagonal));
 	
-	K.setFromTriplets(diagonal.begin(), diagonal.end());  
+	D.setFromTriplets(diagonal.begin(), diagonal.end());  
 	
-	std::cout << "diagonal: " << K << std::endl;
+	std::cout << "diagonal: " << D << std::endl;
 	
 	rmat concat;
-	concatenate(concat, J);
+	concatenate(concat, L);
 
 	// collapse matrix on source dofs only
 	// concat = concat * select;
@@ -137,10 +163,32 @@ struct simulation {
 	
 	std::cout << "mapping concatenation: " << std::endl;
 	std::cout << concat << std::endl;
+
+	const cmat LP = concat * P;
+	const cmat LQ = concat * Q;
 	
-	rmat H = concat.transpose() * K * concat;
+	const rmat H = LP.transpose() * D * LP;
 	std::cout << "H: " << H << std::endl;
 
+	vec rhs = vec::Zero(primal_offset + dual_offset);
+
+	rhs.head(primal_offset) += LP.transpose() * momentum;
+	rhs.head(primal_offset) -= dt * (LP.transpose() * gradient);
+
+	std::cout << "rhs: " << rhs.head(primal_offset).transpose() << std::endl;
+	
+	if( dual_offset ) {
+	  const rmat J = LQ.transpose() * D * LP;
+	  const rmat C = LQ.transpose() * D * LQ;
+	  
+	  rhs.tail(dual_offset) -= (LQ.transpose() * gradient) / dt;
+	  
+	  std::cout << "J: " << J << std::endl;
+	  std::cout << "C: " << C << std::endl;
+
+	  std::cout << "rhs: " << rhs.tail(dual_offset).transpose() << std::endl;
+	}
+	  
 	Eigen::SimplicialLDLT<cmat> inv;
 
 	inv.compute(H.transpose());

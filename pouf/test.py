@@ -24,14 +24,13 @@ norm2 = pouf.norm2_vec3()
 graph.add(norm2)
 graph.connect(norm2, dofs)
 
-# compliance = pouf.uniform_compliance_real()
-# graph.add(compliance)
-# graph.connect(compliance, norm2)
+compliance = pouf.uniform_compliance_real()
+graph.add(compliance)
+graph.connect(compliance, norm2)
 
-ff = pouf.uniform_stiffness_real()
-graph.add(ff)
-graph.connect(ff, norm2)
-
+# ff = pouf.uniform_stiffness_real()
+# graph.add(ff)
+# graph.connect(ff, norm2)
 
 simu = pouf.simulation()
 
