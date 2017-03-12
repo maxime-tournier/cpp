@@ -30,11 +30,17 @@ struct traits< vector<N, U> > {
   }
 
   static scalar& coord(std::size_t i, vector<N, U>& v) {
+	// TODO assert this is safe
     return reinterpret_cast<scalar*>(v.data())[i];
   }
 
   static const scalar& coord(std::size_t i, const vector<N, U>& v) {
-    return reinterpret_cast<scalar*>(v.data())[i];
+	// TODO assert this is safe
+    return reinterpret_cast<const scalar*>(v.data())[i];
+  }
+
+  static vector<N, U> zero() {
+	return vector<N, U>::Constant(traits<U>::zero());
   }
   
 };

@@ -133,9 +133,9 @@ struct fetch : dispatch<fetch> {
     const std::size_t count = pos.count(v);
     const std::size_t parent_count[] = { pos.count(parents[I])... };
       
-    const std::size_t rows = count * traits< deriv<To> >::dim;
-    const std::size_t cols[] = { parent_count[I] * traits< deriv<From> >::dim... };    
-    
+    // const std::size_t rows = count * traits< deriv<To> >::dim;
+    // const std::size_t cols[] = { parent_count[I] * traits< deriv<From> >::dim... };    
+
     // no child: allocate mask
     if( in_degree(v, g) == 0 ) {
       mask.allocate<char>(v, count);

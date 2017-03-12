@@ -16,7 +16,9 @@ struct traits<real> {
   static scalar dot(real x, real y) { return x * y; }
 
   static const scalar& coord(std::size_t, const real& value) { return value; }
-  static scalar& coord(std::size_t, real& value) { return value; }  
+  static scalar& coord(std::size_t, real& value) { return value; }
+
+  static scalar zero() { return 0; }
 };
 
 

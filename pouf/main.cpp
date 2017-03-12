@@ -17,41 +17,6 @@
 #include "simulation.hpp"
 
 
-template<class U>
-struct norm2 : func< scalar<U> ( U ) > {
-
-  using To = scalar<U>;
-  using From = U;
-
-  using dTo = deriv<To>;
-  using dFrom = deriv<From>;
-  
-  virtual std::size_t size( slice<const From> ) const {
-    return 1;
-  }
-  
-  virtual void apply( slice<To> to, slice<const From> from) const {
-    to[0] = traits<U>::dot(from, from) / 2.0;
-  }
-  
-
-  virtual void jacobian(triplet_iterator block, slice<const From> from) const {
-    for(int i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
-      *block++ = {0, i, traits<U>::coord(i, from)};
-    }
-  }
-
-
-  virtual void hessian(triplet_iterator block, 
-					   slice< const dTo > lambda, slice< const dFrom > from) const {
-    for(int i = 0, n = traits< deriv<U> >::dim; i < n; ++i) {
-      *block++ = {i, i, lambda};
-    }
-  }
-  
-};
-
-
 // // use this for constraints
 // template<class U>
 // struct pairing : func< scalar<U>(U, U) > {

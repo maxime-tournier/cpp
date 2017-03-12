@@ -5,6 +5,16 @@
 
 namespace python {
 
+
+  template<class Metric>
+  static void bind_uniform(const char* name) {
+	using namespace boost::python;	
+	class_< Metric, std::shared_ptr< Metric>,
+			bases< metric_base > >(name)
+	  .def_readwrite("value", &Metric::value)
+	  ;
+  }
+  
   void metric::module() {
 	using namespace boost::python;
 	using ::metric;
@@ -16,17 +26,8 @@ namespace python {
 	// 		bases<metric_base> >("mass_vec3", no_init);
 	
 	// TODO: put this in uniform.cpp
-	// metrics
-	class_< uniform_mass<vec3>, std::shared_ptr< uniform_mass<vec3>>,
-			bases< metric_base > >("uniform_mass_vec3")
-	  .def_readwrite("value", &uniform_mass<vec3>::value)
-	  ;
-
-	class_< uniform_compliance<vec3>, std::shared_ptr< uniform_compliance<vec3>>,
-			bases< metric_base > >("uniform_compliance_vec3")
-	  .def_readwrite("value", &uniform_compliance<vec3>::value)
-	  ;
-	
-	
+	bind_uniform< uniform_mass<vec3> >("uniform_mass_vec3");
+	bind_uniform< uniform_compliance<vec3> >("uniform_compliance_vec3");
+	bind_uniform< uniform_compliance<real> >("uniform_compliance_real");	
   }
 }

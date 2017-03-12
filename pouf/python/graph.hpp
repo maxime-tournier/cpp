@@ -2,12 +2,13 @@
 #define PYTHON_GRAPH_HPP
 
 #include "dofs.hpp"
-#include "node.hpp"
+#include "metric.hpp"
+#include "func.hpp"
 
 namespace python {
 
   
-  struct vertex : dofs, node, module<vertex> {
+  struct vertex : dofs, func, metric, module<vertex> {
 	static void module();
   };
   

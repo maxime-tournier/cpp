@@ -1,16 +1,18 @@
-#ifndef PYTHON_NODE_HPP
-#define PYTHON_NODE_HPP
+#ifndef PYTHON_FUNC_HPP
+#define PYTHON_FUNC_HPP
 
 #include "module.hpp"
 
 namespace python {
 
-  struct node : module<node> {
+  struct func : module<func> {
 	static void module();
   };
 
 
 }
+
+
 
 
 #endif

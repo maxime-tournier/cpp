@@ -26,7 +26,6 @@ struct metric_base {
 
   using cast_type = variant< 
     metric<real>,
-    metric<vec1>,
     metric<vec2>,
     metric<vec3>,
     metric<vec4>,
@@ -64,7 +63,6 @@ struct uniform : metric<G> {
   real value;
   
   virtual void tensor(triplet_iterator out, slice<const G> at) const {
-	std::clog << "uniform at size: " << at.size() << std::endl;
     for(int i = 0, n = at.size() * traits<G>::dim; i < n; ++i) {
       *out++ = {i, i, value};
     }

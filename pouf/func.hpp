@@ -17,7 +17,7 @@ struct func_base {
 
   using cast_type = variant< 
     func<real (real) >,
-    func<vec1 (vec3)>,
+    func<real (vec3)>,
     func<real (vec3, vec2)>
     >;
   

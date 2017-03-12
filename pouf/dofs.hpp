@@ -16,7 +16,6 @@ struct dofs_base {
 
   using cast_type = variant< 
     dofs<real>,
-    dofs<vec1>,
     dofs<vec2>,
     dofs<vec3>,
     dofs<vec4>,
