@@ -1,0 +1,4 @@
+[submodule "pouf/snap"]
+	path = pouf/snap
+	url = git@github.com:maxime-tournier/snap.py.git
+	branch = subtree
