@@ -20,7 +20,8 @@ class api {
 
   template<class Variant, class U, class Visitor, class ... Args>
   static void thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
-	std::forward<Visitor>(visitor)(self.ptr<U>(), std::forward<Args>(args)...);
+	std::forward<Visitor>(visitor)(self.template ptr<U>(),
+								   std::forward<Args>(args)...);
   }
   
   // now this is fucked up

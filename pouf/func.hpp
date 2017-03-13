@@ -57,7 +57,7 @@ struct func< To (From...) > : public func_base {
   
   // sparse hessian
   virtual void hessian(triplet_iterator out,
-                       slice< const deriv<To> >& dto,
+                       slice< const deriv<To> > dto,
                        slice< const From> ... from) const { }
 };
 
