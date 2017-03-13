@@ -1,4 +1,5 @@
 #include "module.hpp"
+#include <vector>
 
 namespace python {
 

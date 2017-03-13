@@ -2,7 +2,7 @@ project('pouf', 'cpp', default_options : ['cpp_std=c++11'])
 
 eigen = dependency('eigen3')
 python = dependency('python')
-boost = dependency('boost', modules : ['python', 'graph'])
+boost = dependency('boost', modules : ['python', 'graph'], version : '>=1.63')
 
 deps = [eigen, python, boost]
 

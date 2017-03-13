@@ -1,7 +1,6 @@
 #ifndef PYTHON_MODULE_HPP
 #define PYTHON_MODULE_HPP
 
-#include <vector>
 
 namespace python {
 
