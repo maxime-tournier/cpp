@@ -14,11 +14,13 @@
 #include "select.hpp"
 
 #include "concatenate.hpp"
+#include "integrate.hpp"
 
 #include <Eigen/SparseCholesky>
 
 struct simulation {
 
+  // TODO non-member, pass to step?
   vec3 gravity = {0, -9.81, 0};
   
   template<class F>
@@ -193,8 +195,15 @@ struct simulation {
 	Eigen::SimplicialLDLT<cmat> inv;
 
 	inv.compute(H.transpose());
-
 	std::cout << "ldlt: " << (inv.info() == Eigen::Success) << std::endl;
+
+	// compute velocities
+	const vec velocities = inv.solve(rhs.head(primal_offset));
+
+	for(unsigned v : order) {
+	  g[v].apply( integrate{chunks, velocities, dt}, v);
+	}
+	
 	
   }
   
