@@ -7,13 +7,18 @@ boost = dependency('boost', modules : ['python', 'graph'], version : '>=1.63')
 
 
 
-sources = ['python.cpp',	
+python_sources = ['python.cpp',	
 		'python/module.cpp',
 		'python/numpy.cpp',
 		'python/dofs.cpp',
 		'python/metric.cpp',
 		'python/func.cpp',
-		'python/graph.cpp']		
+		'python/graph.cpp',
+
+
+]		
+
+sources = [	'uniform.cpp' ]
 
 r = run_command('python', '-c', 'import numpy; print numpy.get_include()')
 
@@ -23,12 +28,13 @@ numpy = declare_dependency( include_directories : include_directories(numpy_incl
 
 deps = [eigen, python, boost, numpy]
 
-shared_module('pouf', sources, name_prefix : '', name_suffix : 'so',
+shared_module('pouf', sources + python_sources, name_prefix : '', name_suffix : 'so',
 			  dependencies : deps,
 			  install: true,
 			  install_dir: meson.source_root() )
 
-executable('pouf', 'main.cpp',
+
+executable('pouf', ['main.cpp'] + sources, 
 		   dependencies : [eigen],
 		   install: true,
 		   install_dir: meson.source_root() )

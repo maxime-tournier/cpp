@@ -20,7 +20,7 @@
 #include "api.hpp"
 
 
-
+#include "uniform.hpp"
 
 
 // // use this for constraints
@@ -108,7 +108,7 @@ int main(int, char**) {
   auto point2 = g.add_shared< static_dofs<vec2> >();
 
   auto mass3 = g.add_shared< uniform_mass<vec3> >(2);
-  auto mass2 = g.add_shared< uniform_mass<vec2> >();  
+  // auto mass2 = g.add_shared< uniform_mass<vec2> >();  
   
   // // mapped
   // auto map1 = g.add_shared< sum<3, 2> >();
@@ -125,7 +125,7 @@ int main(int, char**) {
   // g.connect(map2, map1);
 
   g.connect(mass3, point3);
-  g.connect(mass2, point2);  
+  // g.connect(mass2, point2);  
 
   // g.connect(ff1, map2);
   

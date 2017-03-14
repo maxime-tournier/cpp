@@ -1,8 +1,15 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
-#include <Eigen/Core>
-#warning obselete
+// struct func_base;
+// struct metric_base;
+// struct dofs_base;
+
+template<class F> struct func;
+template<class G> struct dofs;
+template<class G> struct metric;
+
+
 
 
 #endif

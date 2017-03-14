@@ -20,6 +20,8 @@
 
 struct simulation {
 
+  vec3 gravity = {0, -9.81, 0};
+  
   template<class F>
   static void with_auto_stack( const F& f ) {
 	while (true) {
@@ -122,7 +124,7 @@ struct simulation {
 	graph_data work(n);
 
 	std::vector<triplet> gs;
-	
+
 	with_auto_stack([&] {
 		
 		gradient = vec::Zero(total_dim);
@@ -130,7 +132,7 @@ struct simulation {
 		
 		gs.clear();
 		
-		pull vis(gradient, momentum, L, gs, work, pos, chunks);
+		pull vis(gradient, momentum, L, gs, work, pos, chunks, gravity);
 
 		for(unsigned v : reverse(order)) {
 		  g[v].apply(vis, v, g);

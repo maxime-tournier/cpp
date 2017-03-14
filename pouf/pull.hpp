@@ -17,7 +17,7 @@ struct pull {
   
   const graph_data& pos;
   const numbering::chunks_type& chunks;
-
+  const vec3& gravity;
 
   pull(vec& gradient,
 	   vec& momentum,	   
@@ -25,14 +25,16 @@ struct pull {
 	   matrix_type& gs,
 	   graph_data& work,
 	   const graph_data& pos,
-	   const numbering::chunks_type& chunks)
+	   const numbering::chunks_type& chunks,
+	   const vec3& gravity)
 	: gradient(gradient),
 	  momentum(momentum),
 	  jacobian(jacobian),
 	  gs(gs),
 	  work(work),
 	  pos(pos),
-	  chunks(chunks) {
+	  chunks(chunks),
+	  gravity(gravity) {
 
   }
 
@@ -57,16 +59,22 @@ struct pull {
 	  throw std::runtime_error("mapped masses are not supported");
 	}
 
-	// TODO 
 	const dofs<G>* parent = static_cast<const dofs<G>*>(g[p].get<graph::dofs_type>());
 	
 	const chunk& c = chunks[p];
 
 	slice<deriv<G>> mu = work.allocate<deriv<G>>(v, pos.count(p));
-	
-	self->momentum(mu, parent->pos, parent->vel);
-	momentum.segment(c.start, c.size) += Eigen::Map<vec>((real*) mu.begin(), c.size);
 
+	Eigen::Map<vec> view((real*) mu.begin(), c.size);
+	
+	// momentum
+	self->momentum(mu, parent->pos, parent->vel);
+	momentum.segment(c.start, c.size) += view;
+
+	// gravity
+	self->gravity(mu, parent->pos, gravity);
+	gradient.segment(c.start, c.size) -= view;
+	
 	// std::clog << "mass momentum: " << momentum.segment(c.start, c.size).transpose() << std::endl;
   }
 

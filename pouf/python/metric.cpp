@@ -1,6 +1,8 @@
 #include "metric.hpp"
 
 #include "../metric.hpp"
+#include "../uniform.hpp"
+
 #include <boost/python.hpp>
 
 namespace python {
