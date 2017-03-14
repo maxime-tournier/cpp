@@ -31,13 +31,11 @@ struct uniform_mass : uniform< mass<G> > {
 	}
   }
 
-  struct helper;
   virtual void gravity(slice< deriv<G> > out, slice<const G> pos, const vec3& g) const;
   
 };
 
 
-extern template class uniform_mass<vec3>;
 
 
 template<class G>
