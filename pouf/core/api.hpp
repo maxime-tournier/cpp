@@ -5,7 +5,7 @@
 #include <memory>
 
 #include <iostream>
-#include "../variant.hpp"
+#include <core/variant.hpp>
 
 
 // an embedded constant variant to ease double dispatch

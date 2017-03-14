@@ -1,7 +1,7 @@
 #ifndef UNIFORM_HPP
 #define UNIFORM_HPP
 
-#include "metric.hpp"
+#include <core/metric.hpp>
 
 template<class Base>
 struct uniform : Base {

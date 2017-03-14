@@ -1,6 +1,6 @@
 #include "graph.hpp"
 
-#include "../graph.hpp"
+#include <core/graph.hpp>
 #include <boost/python.hpp>
 
 namespace python {

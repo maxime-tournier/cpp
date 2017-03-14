@@ -1,7 +1,7 @@
 #ifndef CONCATENATE_HPP
 #define CONCATENATE_HPP
 
-#include "sparse.hpp"
+#include <core/sparse.hpp>
 
 // concatenate incremental mapping matrix onto complete mapping matrix
 // on source dofs

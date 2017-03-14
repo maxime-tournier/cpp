@@ -1,6 +1,6 @@
 #include "func.hpp"
 
-#include "../func.hpp"
+#include <core/func.hpp>
 
 #include <boost/python.hpp>
 

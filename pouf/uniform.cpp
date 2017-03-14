@@ -1,5 +1,5 @@
 #include "uniform.hpp"
-#include "func.hpp"
+#include <core/func.hpp>
 
 
 template<>

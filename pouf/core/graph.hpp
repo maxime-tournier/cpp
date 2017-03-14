@@ -1,26 +1,47 @@
-#ifndef GRAPH_HPP
-#define GRAPH_HPP
+#ifndef CORE_GRAPH_HPP
+#define CORE_GRAPH_HPP
 
 #include <map>
 #include <memory>
 
-#include "../flow.hpp"
-#include "../variant.hpp"
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/topological_sort.hpp>
 
-// struct dofs_base;
-// struct func_base;
-// struct metric_base;
+#include <core/variant.hpp>
+#include <core/range.hpp>
 
 #include "dofs.hpp"
 #include "func.hpp"
 #include "metric.hpp"
 
 
+
 using vertex = variant<dofs_base, func_base, metric_base>;
 struct edge {};
 
-class graph : public dependency_graph<vertex, edge> {
 
+template<class Vertex>
+struct vertex_property : Vertex {
+
+  using Vertex::Vertex;
+
+  vertex_property(const Vertex& vertex) : Vertex(vertex) { }
+  vertex_property() { }
+  
+  boost::default_color_type color;
+  unsigned char flags = 0;
+  
+  template<unsigned char c>
+  void set() { flags |= c; }
+  
+};
+
+
+class graph : public boost::adjacency_list<boost::vecS,
+										   boost::vecS,
+										   boost::bidirectionalS,
+										   vertex_property<vertex>,
+										   edge> {
 
   
   std::map< void*, unsigned > table;
@@ -43,6 +64,13 @@ public:
 	func_type,
 	metric_type,
   };
+
+
+  template<class Iterator>
+  void sort(Iterator out) {
+	topological_sort(*this, out, color_map(get(&vertex_property<vertex>::color, *this)));
+  }
+
   
   template<class T, class ... Args>
   std::shared_ptr< T > add_shared(Args&& ... args) {

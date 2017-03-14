@@ -1,8 +1,9 @@
-#ifndef SLICE_HPP
-#define SLICE_HPP
+#ifndef CORE_SLICE_HPP
+#define CORE_SLICE_HPP
 
 #include <cassert>
 
+// an array slice
 template<class G>
 class slice {
 protected:

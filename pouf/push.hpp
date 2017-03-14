@@ -3,8 +3,9 @@
 
 
 #include "dispatch.hpp"
-#include "graph_data.hpp"
-#include "../indices.hpp"
+
+#include <core/graph_data.hpp>
+#include <core/indices.hpp>
 
 // push positions (top-down)
 struct push : dispatch<push> {

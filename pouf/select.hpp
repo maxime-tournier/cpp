@@ -1,7 +1,8 @@
 #ifndef POUF_SELECT_HPP
 #define POUF_SELECT_HPP
 
-#include "sparse.hpp"
+#include <core/sparse.hpp>
+
 #include "numbering.hpp"
 
 

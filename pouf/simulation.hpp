@@ -1,10 +1,9 @@
 #ifndef SIMULATION_HPP
 #define SIMULATION_HPP
 
-#include "graph.hpp"
-#include "stack.hpp"
-
-#include "graph_data.hpp"
+#include <core/graph.hpp>
+#include <core/stack.hpp>
+#include <core/graph_data.hpp>
 
 // TODO move these guys to visitor?
 #include "typecheck.hpp"

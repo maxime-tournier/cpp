@@ -5,11 +5,11 @@
 #include <stdexcept>
 #include <cxxabi.h>
 
-#include "graph.hpp"
+#include <core/graph.hpp>
 
-#include "metric.hpp"
-#include "dofs.hpp"
-#include "func.hpp"
+#include <core/metric.hpp>
+#include <core/dofs.hpp>
+#include <core/func.hpp>
 
 
 static std::string demangle(const char* name) {

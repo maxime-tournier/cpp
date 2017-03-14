@@ -1,7 +1,7 @@
 #include "dofs.hpp"
 #include "numpy.hpp"
 
-#include "../dofs.hpp"
+#include <core/dofs.hpp>
 
 #include <boost/python.hpp>
 

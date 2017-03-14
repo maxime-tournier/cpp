@@ -1,6 +1,6 @@
 #include "metric.hpp"
 
-#include "../metric.hpp"
+#include <core/metric.hpp>
 #include "../uniform.hpp"
 
 #include <boost/python.hpp>

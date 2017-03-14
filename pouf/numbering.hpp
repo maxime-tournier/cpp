@@ -2,9 +2,9 @@
 #define NUMBERING_HPP
 
 #include "dispatch.hpp"
-#include "graph.hpp"
 
-#include "graph_data.hpp"
+#include <core/graph.hpp>
+#include <core/graph_data.hpp>
 
 // deriv data numbering
 struct chunk {

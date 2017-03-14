@@ -1,12 +1,12 @@
 
-#include "stack.hpp"
-#include "graph.hpp"
+#include <core/stack.hpp>
+#include <core/graph.hpp>
 
-#include "func.hpp"
-#include "metric.hpp"
-#include "dofs.hpp"
+#include <core/func.hpp>
+#include <core/metric.hpp>
+#include <core/dofs.hpp>
 
-#include "graph_data.hpp"
+#include <core/graph_data.hpp>
 
 #include "typecheck.hpp"
 #include "numbering.hpp"
@@ -15,10 +15,6 @@
 #include "concatenate.hpp"
 
 #include "simulation.hpp"
-
-
-#include "api.hpp"
-
 
 #include "uniform.hpp"
 

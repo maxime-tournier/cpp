@@ -1,9 +1,10 @@
 #ifndef FETCH_HPP
 #define FETCH_HPP
 
+#include <core/graph_data.hpp>
+#include <core/sparse.hpp>
+
 #include "dispatch.hpp"
-#include "graph_data.hpp"
-#include "sparse.hpp"
 #include "numbering.hpp"
 
 // fetch jacobians w/ masking (bottom-up) and metric tensors
