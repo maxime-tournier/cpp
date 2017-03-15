@@ -1,6 +1,4 @@
 
-from snap import viewer
-from snap.gl import *
 
 import pouf
 
@@ -34,7 +32,7 @@ dt = 0.1
 
 
 
-
+from snap import viewer
 class Viewer(viewer.Viewer):
 	def draw(self):
 		glPointSize(5)
@@ -47,9 +45,13 @@ class Viewer(viewer.Viewer):
 
 	def animate(self):
 		simu.step(graph, dt)
-		
-with viewer.app():
-	w = Viewer()
-	w.show()
 
-	
+from snap import qt
+
+from snap.gl import *
+
+import sys
+app = qt.QApplication(sys.argv)
+w = Viewer()
+w.show()
+app.exec_()
