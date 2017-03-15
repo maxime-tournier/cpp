@@ -26,7 +26,7 @@ compliance = pouf.uniform_compliance_real()
 graph.add(compliance)
 graph.connect(compliance, norm2)
 
-simu = pouf.simulation()
+sim = pouf.simulation()
 
 dt = 0.1
 
@@ -34,6 +34,11 @@ dt = 0.1
 
 from snap import viewer
 class Viewer(viewer.Viewer):
+
+	def init(self):
+		sim.init(graph)
+		
+	
 	def draw(self):
 		glPointSize(5)
 		glDisable(GL_LIGHTING)
@@ -44,8 +49,13 @@ class Viewer(viewer.Viewer):
 		glEnable(GL_LIGHTING)
 
 	def animate(self):
-		simu.step(graph, dt)
+		sim.step(graph, dt)
 
+	def on_keypress(self, key):
+		if key == 'r':
+			print('reset')
+			sim.reset(graph)
+			
 from snap import qt
 
 from snap.gl import *

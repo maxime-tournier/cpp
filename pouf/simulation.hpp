@@ -16,6 +16,9 @@
 #include "concatenate.hpp"
 #include "integrate.hpp"
 
+#include "init.hpp"
+#include "reset.hpp"
+
 #include <Eigen/SparseCholesky>
 
 struct simulation {
@@ -38,8 +41,43 @@ struct simulation {
 	}
   }
 
+  graph_data init_pos, init_vel;
+  
 
-  void step(graph& g, real dt) {
+  void init(graph& g) {
+	const std::size_t n = num_vertices(g);
+	
+	init_pos = graph_data(n);
+	init_vel = graph_data(n);
+
+
+	// TODO with_auto_stack should reference which graph_data
+	
+	// save init pos/vel
+	with_auto_stack([&] {
+		init_pos.reset();
+		init_vel.reset();		
+		
+		struct init vis{init_pos, init_vel};
+		for(unsigned v : g.vertices() ) {
+		  g[v].apply( vis, v);
+		}
+	  });
+	
+  }
+
+  void reset(graph& g) const {
+
+	struct reset vis{init_pos, init_vel};
+	
+	for(unsigned v : g.vertices() ) {
+	  g[v].apply( vis, v);
+	}
+	
+  }
+  
+
+  void step(graph& g, real dt) const {
 
 	std::vector<unsigned> order;
 	g.sort( std::back_inserter(order) );

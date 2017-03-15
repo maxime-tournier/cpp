@@ -14,6 +14,8 @@ class graph_data {
   stack storage;
   std::vector<stack::frame> frame;
 public:
+
+  graph_data() { }
   
   graph_data(std::size_t num_vertices,
              std::size_t capacity = 0)

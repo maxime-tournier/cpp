@@ -12,6 +12,7 @@
 
 namespace python {
 
+  // TODO move ?where ?!
   struct simulation : graph, module<simulation> {
 	static void module() {
 	  using namespace boost::python;
@@ -19,6 +20,8 @@ namespace python {
 	  
 	  class_<simulation, std::shared_ptr<simulation> > ("simulation")
 		.def("step", &simulation::step)
+		.def("init", &simulation::init)
+		.def("reset", &simulation::reset)                
 		;
 	  
 	}
