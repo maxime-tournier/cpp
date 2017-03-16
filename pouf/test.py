@@ -35,27 +35,29 @@ dt = 0.1
 from snap import viewer
 class Viewer(viewer.Viewer):
 
-	def init(self):
-		sim.init(graph)
-		
+    def init(self):
+	sim.init(graph)
 	
-	def draw(self):
-		glPointSize(5)
-		glDisable(GL_LIGHTING)
-		glColor(1, 1, 1)
-		glBegin(GL_POINTS)
-		glVertex(dofs.pos[0])
-		glEnd()
-		glEnable(GL_LIGHTING)
+    def draw(self):
+        glPointSize(5)
+        glDisable(GL_LIGHTING)
+        glColor(1, 1, 1)
+        glBegin(GL_POINTS)
+        glVertex(dofs.pos[0])
+        glEnd()
+        glEnable(GL_LIGHTING)
 
-	def animate(self):
-		sim.step(graph, dt)
+    def animate(self):
+        sim.step(graph, dt)
 
-	def on_keypress(self, key):
-		if key == 'r':
-			print('reset')
-			sim.reset(graph)
-			
+    def on_keypress(self, key):
+        if key == 'r':
+            print('reset')
+            sim.reset(graph)
+        if key == ' ':
+            self.animate()
+            self.updateGL()
+            
 from snap import qt
 
 from snap.gl import *
