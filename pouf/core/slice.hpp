@@ -28,7 +28,6 @@ public:
 
   std::size_t size() const { return last - first; }
 
-  
   G& operator[](std::size_t index) { return first[index]; }
   const G& operator[](std::size_t index) const { return first[index]; }  
 
@@ -40,19 +39,44 @@ public:
   }
 
 
-  slice& operator=(const slice<const G>& other) {
+  template<class U>
+  slice& operator=(const slice<U>& other) {
 	assert(size() == other.size());
 	std::copy(other.begin(), other.end(), begin());
 	return *this;
   }
 
-				   
+  template<class U>
+  slice& operator=(slice<U>& other) {
+	assert(size() == other.size());
+	std::copy(other.begin(), other.end(), begin());
+	return *this;
+  }
+  
+
+
+  
   template<class U>
   slice(slice<U> other)
 	: first(other.begin()),
 	  last(other.end()) {
 
   }
+
+  template<class U>
+  slice<const U> cast() const {
+    return {reinterpret_cast<const U*>(begin()),
+        reinterpret_cast<const U*>(end())};
+        
+  }
+
+  template<class U>
+  slice<U> cast() {
+    return {reinterpret_cast<U*>(begin()),
+        reinterpret_cast<U*>(end())};
+  }
+
+  
 };
 
 

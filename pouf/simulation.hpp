@@ -27,7 +27,7 @@ struct simulation {
   vec3 gravity = {0, -9.81, 0};
   
   template<class F>
-  static void with_auto_stack( const F& f ) {
+  static void with_auto_resize( const F& f ) {
 	while (true) {
 	  try{
 		f();
@@ -36,7 +36,7 @@ struct simulation {
 		e.who.grow();
 		// std::clog << "stack reserve: " << e.who.capacity()
 		//         << " -> " << e.size << std::endl;
-		e.who.reset();
+        // std::clog << "overflow" << std::endl;
 	  }
 	}
   }
@@ -47,27 +47,24 @@ struct simulation {
   void init(graph& g) {
 	const std::size_t n = num_vertices(g);
 	
-	init_pos = graph_data(n);
-	init_vel = graph_data(n);
-
-
-	// TODO with_auto_stack should reference which graph_data
-	
 	// save init pos/vel
-	with_auto_stack([&] {
-		init_pos.reset();
-		init_vel.reset();		
-		
+	with_auto_resize([&] {
+		init_pos.reset(n);
+		init_vel.reset(n);		
+
 		struct init vis{init_pos, init_vel};
 		for(unsigned v : g.vertices() ) {
 		  g[v].apply( vis, v);
 		}
+
 	  });
+
+
 	
   }
 
   void reset(graph& g) const {
-
+    
 	struct reset vis{init_pos, init_vel};
 	
 	for(unsigned v : g.vertices() ) {
@@ -85,8 +82,10 @@ struct simulation {
 	const std::size_t n = num_vertices(g);
 	
 	// propagate positions
-	graph_data pos(n);
-	with_auto_stack([&] {
+	graph_data pos; 
+	with_auto_resize([&] {
+        pos.reset(n);
+        
 		for(unsigned v : order) {
 		  g[v].apply( typecheck(), v, g);
 		  g[v].apply( push(pos), v, g);
@@ -98,29 +97,19 @@ struct simulation {
 	
 	// number dofs
 	std::vector<chunk> chunks(n);
-	std::size_t offset;
+	std::size_t offset = 0;
 
 	std::vector<triplet> primal, dual;
-	std::size_t primal_offset, dual_offset;
+	std::size_t primal_offset = 0, dual_offset = 0;
 	
-	with_auto_stack([&] {
-		offset = 0;
-		primal_offset = 0;
-		dual_offset = 0;		
-		
-		primal.clear();
-		dual.clear();
+    struct select vis{primal, dual, primal_offset, dual_offset, chunks};
+	
+    for(unsigned v : order) {
+      g[v].apply( numbering(chunks, offset, pos), v, g);
 
-		
-		struct select vis{primal, dual, primal_offset, dual_offset, chunks};
-		
-		for(unsigned v : order) {
-		  g[v].apply( numbering(chunks, offset, pos), v, g);
-
-		  // TODO merge visitors?
-		  g[v].apply(vis , v);
-		}
-	  });
+      // TODO merge visitors?
+      g[v].apply(vis , v);
+    }
 
 	const std::size_t total_dim = offset;
 
@@ -135,12 +124,13 @@ struct simulation {
 
 	
 	// fetch masks/jacobians
-	graph_data mask(n);
+	graph_data mask; 
 	
 	std::vector<triplet> jacobian, diagonal;
 	std::vector< std::vector<triplet> > elements;
 	
-	with_auto_stack([&] {
+	with_auto_resize([&] {
+        mask.reset(n);
 		jacobian.clear();
 		diagonal.clear();
 		
@@ -160,12 +150,13 @@ struct simulation {
 
 	// pull gradients/geometric stiffness
 	vec gradient, momentum;
-	graph_data work(n);
+	graph_data work;
 
 	std::vector<triplet> gs;
 
-	with_auto_stack([&] {
-		
+	with_auto_resize([&] {
+		work.reset(n);
+        
 		gradient = vec::Zero(total_dim);
 		momentum = vec::Zero(total_dim);
 		

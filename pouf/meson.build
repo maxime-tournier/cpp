@@ -34,7 +34,7 @@ shared_module('pouf', sources + python_sources, name_prefix : '', name_suffix : 
 			  install_dir: meson.source_root() )
 
 
-executable('pouf', ['main.cpp'] + sources, 
-		   dependencies : [eigen],
-		   install: true,
-		   install_dir: meson.source_root() )
+# executable('pouf', ['main.cpp'] + sources, 
+# 		   dependencies : [eigen],
+# 		   install: true,
+# 		   install_dir: meson.source_root() )

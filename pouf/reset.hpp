@@ -28,7 +28,6 @@ struct reset {
 	assert(self->size() == init_pos.count(v));
 	assert(self->size() == init_vel.count(v));
 
-    std::clog << "init pos: " << init_pos.get<G>(v)[0] << std::endl;
 	self->pos = init_pos.get<G>(v);
 	self->vel = init_vel.get< deriv<G> >(v);	
   }

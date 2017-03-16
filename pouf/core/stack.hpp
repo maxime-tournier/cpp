@@ -109,6 +109,15 @@ public:
     const std::size_t min = std::max(required, c+1);
     reserve( std::max(min, c + c / 2) );
   }
+
+  slice<const char> peek() const {
+    return {storage.data(), storage.data() + size() };
+  }
+
+  slice<char> peek() {
+    return {storage.data(), storage.data() + size() };
+  }
+  
 };
 
 
