@@ -19,29 +19,42 @@ using vec = vector<>;
 template<int N, class U>
 struct traits< vector<N, U> > {
 
-  using scalar = typename traits<U>::scalar;
-  using deriv = vector<N, typename traits<U>::deriv>;
+  using scalar_type = scalar<U>;
+  using deriv_type = vector<N, deriv<U> >;
   
   static const std::size_t dim = N * traits<U>::dim;
 
-  static scalar dot(const vector<N, U>& x,
-                    const vector<N, U>& y) {
+  static scalar_type dot(const vector<N, U>& x,
+                         const vector<N, U>& y) {
     return x.dot(y);
   }
 
-  static scalar& coord(std::size_t i, vector<N, U>& v) {
+  static scalar_type& coord(std::size_t i, vector<N, U>& v) {
 	// TODO assert this is safe
-    return reinterpret_cast<scalar*>(v.data())[i];
+    return reinterpret_cast<scalar_type*>(v.data())[i];
   }
 
-  static const scalar& coord(std::size_t i, const vector<N, U>& v) {
+  static const scalar_type& coord(std::size_t i, const vector<N, U>& v) {
 	// TODO assert this is safe
-    return reinterpret_cast<const scalar*>(v.data())[i];
+    return reinterpret_cast<const scalar_type*>(v.data())[i];
   }
 
   static vector<N, U> zero() {
 	return vector<N, U>::Constant(traits<U>::zero());
   }
+
+
+  // additive lie group structure
+  // TODO multiplicative as well?
+  using group_type = vector<N, U>;
+  
+  static group_type id() { return zero(); }
+  static group_type inv(const group_type& x) { return -x; }
+  static group_type prod(const group_type& x, const group_type& y) { return x + y; }
+
+  static group_type exp(const deriv_type& x) { return x; }
+  
+
   
 };
 

@@ -8,17 +8,28 @@ using real = double;
 template<>
 struct traits<real> {
   
-  using deriv = real;
-  using scalar = real;
+  using deriv_type = real;
+  using scalar_type = real;
 
   static const std::size_t dim = 1;
 
-  static scalar dot(real x, real y) { return x * y; }
+  static scalar_type dot(real x, real y) { return x * y; }
 
-  static const scalar& coord(std::size_t, const real& value) { return value; }
-  static scalar& coord(std::size_t, real& value) { return value; }
+  static const scalar_type& coord(std::size_t, const real& value) { return value; }
+  static scalar_type& coord(std::size_t, real& value) { return value; }
 
-  static scalar zero() { return 0; }
+  static scalar_type zero() { return 0; }
+
+
+  // additive lie group structure
+  using group_type = real;
+  
+  static group_type id() { return zero(); }
+  static group_type inv(const group_type& x) { return -x; }
+  static group_type prod(const group_type& x, const group_type& y) { return x + y; }
+
+  static group_type exp(const deriv_type& x) { return x; }
+  
 };
 
 

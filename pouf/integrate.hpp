@@ -40,7 +40,7 @@ struct integrate {
 
 	  std::clog << self->vel[i] << std::endl;
 	  
-	  self->pos[i] += dt * self->vel[i];
+	  self->pos[i] = prod(self->pos[i], traits<G>::exp(dt * self->vel[i]));
 	}
 	
   }

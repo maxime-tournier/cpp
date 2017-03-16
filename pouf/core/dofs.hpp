@@ -3,6 +3,7 @@
 
 #include "vec.hpp"
 #include "real.hpp"
+#include "rigid.hpp"
 
 #include "slice.hpp"
 
@@ -19,7 +20,8 @@ struct dofs_base {
     dofs<vec2>,
     dofs<vec3>,
     dofs<vec4>,
-    dofs<vec6>
+    dofs<vec6>,
+    dofs<rigid>
 	>;
   
   const cast_type cast;

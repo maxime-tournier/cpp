@@ -17,7 +17,7 @@
 #include "simulation.hpp"
 
 #include "uniform.hpp"
-
+#include <core/rigid.hpp>
 
 // // use this for constraints
 // template<class U>
@@ -52,84 +52,17 @@
 // };
 
 
-template<class T>
-struct derived;
-
-struct base {
-  virtual ~base() { }
-  
-  const api< derived<real>,
-			 derived<vec3> > cast;
-  
-  template<class Derived>
-  base(Derived* self)
-	: cast(self, &base::cast) {
-	
-  }
-  
-};
-
-template<class T>
-struct derived : base {
-
-  derived() : base(this) { }
-  
-};
-
-
-struct visit {
-
-  template<class T>
-  void operator()(T* self) const {
-	std::cout << typeid(T).name() << std::endl;
-	std::cout << self << std::endl;
-  }
-};
 
 
 
 
 int main(int, char**) {
-  
-  auto test = std::make_shared< derived<vec3> >();
+  rigid g;
 
-  test->cast.apply(visit());
-  std::cout << test.get() << std::endl;
-
+  g.orient.setIdentity();
   
-  graph g;
-
-  // independent dofs
-  auto point3 = g.add_shared< static_dofs<vec3> >();
-  auto point2 = g.add_shared< static_dofs<vec2> >();
-
-  auto mass3 = g.add_shared< uniform_mass<vec3> >(2);
-  // auto mass2 = g.add_shared< uniform_mass<vec2> >();  
+  std::cout << g.inv().coeffs() << std::endl;
   
-  // // mapped
-  // auto map1 = g.add_shared< sum<3, 2> >();
-  // auto map2 = g.add_shared< norm2<double> >();  
-  
-  auto ff1 = g.add_shared< uniform_stiffness<double> >(3);
-  
-  point3->pos[0] = {1, 2, 3};
-  point2->pos[0] = {4, 5};  
-  
-  // g.connect(map1, point3);
-  // g.connect(map1, point2);
-
-  // g.connect(map2, map1);
-
-  g.connect(mass3, point3);
-  // g.connect(mass2, point2);  
-
-  // g.connect(ff1, map2);
-  
-  simulation sim;
-
-  const real dt = 0.1;
-  
-  sim.step(g, dt);
   
   return 0;
 }
