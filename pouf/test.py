@@ -1,6 +1,7 @@
 
 
 import pouf
+from snap.math import *
 
 graph = pouf.graph()
 
@@ -30,6 +31,7 @@ sim = pouf.simulation()
 
 dt = 0.1
 
+g = pouf.dofs_rigid()
 
 
 from snap import viewer
@@ -52,8 +54,8 @@ class Viewer(viewer.Viewer):
 
     def on_keypress(self, key):
         if key == 'r':
-            print('reset')
             sim.reset(graph)
+            self.updateGL()
         if key == ' ':
             self.animate()
             self.updateGL()

@@ -54,8 +54,10 @@ struct traits< vector<N, U> > {
 
   static group_type exp(const deriv_type& x) { return x; }
   
-
-  
+  static const char* name() {
+    static std::string value = "vec" + ((N > 0) ? std::to_string(N) : std::string());
+    return value.c_str();
+  }
 };
 
 

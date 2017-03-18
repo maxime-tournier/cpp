@@ -83,7 +83,12 @@ struct traits< rigid_transform<U> > {
     return group_type(dg.template head<3>(),
                       quaternion<U>::exp(dg.template tail<3>()));
   }
+
+
+  static const char* name() { return "rigid"; }
   
 };
+
+
 
 #endif

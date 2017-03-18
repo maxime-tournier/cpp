@@ -19,7 +19,6 @@ struct dofs_base {
     dofs<real>,
     dofs<vec2>,
     dofs<vec3>,
-    dofs<vec4>,
     dofs<vec6>,
     dofs<rigid>
 	>;

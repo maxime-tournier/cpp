@@ -14,9 +14,7 @@ namespace python {
   }
 
   void init_module() {
-	for(auto cb : *callbacks) {
-	  cb();
-	}
+	for(auto cb : *callbacks) { cb(); }
   }
 
 }

@@ -29,7 +29,8 @@ struct traits<real> {
   static group_type prod(const group_type& x, const group_type& y) { return x + y; }
 
   static group_type exp(const deriv_type& x) { return x; }
-  
+
+  static const char* name() { return "real"; }
 };
 
 
