@@ -90,7 +90,9 @@ namespace python {
 	class_<dofs_base, std::shared_ptr<dofs_base>, boost::noncopyable >("dofs_base", no_init);	
 
     bind_dofs<real, vec3, rigid>();
-	
+
+
+    dynamic_dofs<vec3> test;
   }
 
 }

@@ -33,7 +33,6 @@ dt = 0.1
 
 g = pouf.dofs_rigid()
 
-
 from snap import viewer
 class Viewer(viewer.Viewer):
 
