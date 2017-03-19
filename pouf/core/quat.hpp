@@ -10,7 +10,7 @@ class quaternion : public Eigen::Quaternion<U, Eigen::DontAlign> {
   using base = typename quaternion::Quaternion;
 public:
 
-  using base::Quaternion;
+  using base::Quaternion::Quaternion;
   
   quaternion() {
     base::setIdentity();

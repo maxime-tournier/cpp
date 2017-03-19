@@ -128,11 +128,11 @@ struct dynamic_dofs : dofs<G> {
     if(s == 1 && n > 1) {
       // fixed -> dynamic
       storage.fixed.~fixed_type();
-      new (&storage.dynamic) storage_type::dynamic_type(n);
+      new (&storage.dynamic) typename storage_type::dynamic_type(n);
     } else if(s > 1 && n == 1) {
       // dynamic -> fixed
       storage.dynamic.~dynamic_type();
-      new (&storage.fixed) storage_type::fixed_type;
+      new (&storage.fixed) typename storage_type::fixed_type;
     } else if (s > 1 && n > 1) {
       // dynamic -> dynamic 
       storage.dynamic.resize(n);
