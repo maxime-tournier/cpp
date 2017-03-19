@@ -2,6 +2,7 @@
 #include "numpy.hpp"
 
 #include <core/dofs.hpp>
+#include <core/small_vector.hpp>
 
 #include <boost/python.hpp>
 
@@ -60,14 +61,22 @@ namespace python {
              bases<dofs_base>, boost::noncopyable >(name.c_str(), no_init)
         .add_property("pos", pos<U>, set<U, pos<U> >)
         .add_property("vel", vel<U>, set<U, vel<U> >)
-        .add_property("mom", mom<U>, set<U, mom<U> >)	  	  
+        .add_property("mom", mom<U>, set<U, mom<U> >)
+        .def("size", &dofs<U>::size)
+
         ;
+
+      // // warning: replace class name    
+      // class_<static_dofs<U>, std::shared_ptr<static_dofs<U>>,
+      //        bases<dofs<U>>, boost::noncopyable >_(name.c_str()) // most vexing parse
+      //   ;
 
       // warning: replace class name    
-      class_<static_dofs<U>, std::shared_ptr<static_dofs<U>>,
-             bases<dofs<U>>, boost::noncopyable >_(name.c_str()) // most vexing parse
+      class_<dynamic_dofs<U>, std::shared_ptr<dynamic_dofs<U>>,
+             bases<dofs<U>>, boost::noncopyable >(name.c_str())
+        .def("resize", &dynamic_dofs<U>::resize)
         ;
-
+      
     
     }
 
@@ -91,8 +100,6 @@ namespace python {
 
     bind_dofs<real, vec3, rigid>();
 
-
-    dynamic_dofs<vec3> test;
   }
 
 }

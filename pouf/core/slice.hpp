@@ -9,6 +9,8 @@ class slice {
 protected:
   G* first;
   G* last;
+
+  slice() {  }
 public:
 
   slice(G* first, G* last)
@@ -40,20 +42,11 @@ public:
 
 
   template<class U>
-  slice& operator=(const slice<U>& other) {
+  slice& copy(const slice<U>& other) {
 	assert(size() == other.size());
 	std::copy(other.begin(), other.end(), begin());
 	return *this;
   }
-
-  template<class U>
-  slice& operator=(slice<U>& other) {
-	assert(size() == other.size());
-	std::copy(other.begin(), other.end(), begin());
-	return *this;
-  }
-  
-
 
   
   template<class U>

@@ -1,14 +1,15 @@
-#ifndef DOFS_HPP
-#define DOFS_HPP
+#ifndef CORE_DOFS_HPP
+#define CORE_DOFS_HPP
 
 #include "vec.hpp"
 #include "real.hpp"
 #include "rigid.hpp"
 
 #include "slice.hpp"
+#include "small_vector.hpp"
 
 #include "api.hpp"
-#include <vector>
+
 
 // dofs
 template<class G> struct dofs;
@@ -45,14 +46,13 @@ struct dofs : public dofs_base {
   using coord_slice = slice<G>;
   using deriv_slice = slice< deriv<G> >;
 
-  // TODO do we want refs instead?
-  coord_slice pos;
-  deriv_slice vel;
-  deriv_slice mom;
+  coord_slice& pos;
+  deriv_slice& vel;
+  deriv_slice& mom;
   
-  dofs(coord_slice pos,
-	   deriv_slice vel,
-	   deriv_slice mom)
+  dofs(coord_slice& pos,
+	   deriv_slice& vel,
+	   deriv_slice& mom)
 	: dofs_base(this),
 	  pos(pos),
 	  vel(vel),
@@ -73,10 +73,15 @@ struct static_dofs : dofs<G> {
 	std::array<deriv<G>, N> vel, mom;
   } storage;
 
+  slice<G> pos;
+  slice<deriv<G> > vel, mom;
+  
   static_dofs()
-	: dofs<G>({storage.pos.begin(), storage.pos.end()},
-              {storage.vel.begin(), storage.vel.end()},
-              {storage.mom.begin(), storage.mom.end()}) {
+	: dofs<G>(pos, vel, mom),
+    pos(&storage.pos, &storage.pos + 1),
+    vel(&storage.vel, &storage.vel + 1),
+    mom(&storage.mom, &storage.mom + 1)    
+  {
     
   }
   
@@ -86,63 +91,23 @@ struct static_dofs : dofs<G> {
 template<class G>
 struct dynamic_dofs : dofs<G> {
   
-  union storage_type {
-    struct fixed_type {
-      G pos;
-      deriv<G> vel, mom;
-    } fixed;
-
-    struct dynamic_type {
-      std::vector<G> pos;
-      std::vector< deriv<G> > vel, mom;
-    } dynamic;
-
-    storage_type() : fixed () { }
-    ~storage_type() { }
-    
-  } storage;
-
+  small_vector<G> pos;
+  small_vector<deriv<G>> vel, mom;
+  
   std::size_t size() const { return dofs<G>::pos.size(); }
 
-  dynamic_dofs() :
-    dofs<G>({&storage.fixed.pos, &storage.fixed.pos + 1},
-            {&storage.fixed.vel, &storage.fixed.vel + 1},
-            {&storage.fixed.mom, &storage.fixed.mom + 1}),
-    
-    storage() { }
-
-  ~dynamic_dofs() {
-    if(size() > 1) {
-      storage.dynamic.~dynamic_type();
-    } else {
-      storage.fixed.~fixed_type();
-    }
-  }
-
-
   void resize(std::size_t n) {
-    assert(n > 0);
-    
-    const std::size_t s = size();
+    pos.resize(n);
+    vel.resize(n);
+    mom.resize(n);
+  }
 
-    if(s == 1 && n > 1) {
-      // fixed -> dynamic
-      storage.fixed.~fixed_type();
-      new (&storage.dynamic) typename storage_type::dynamic_type(n);
-    } else if(s > 1 && n == 1) {
-      // dynamic -> fixed
-      storage.dynamic.~dynamic_type();
-      new (&storage.fixed) typename storage_type::fixed_type;
-    } else if (s > 1 && n > 1) {
-      // dynamic -> dynamic 
-      storage.dynamic.resize(n);
-    } else {
-      // static -> static
-      assert( s == 1 && n == 1 );
-    }
+  
+  dynamic_dofs()
+    : dofs<G>(pos, vel, mom) {
     
   }
-  
+ 
 };
 
 

@@ -28,8 +28,8 @@ struct reset {
 	assert(self->size() == init_pos.count(v));
 	assert(self->size() == init_vel.count(v));
 
-	self->pos = init_pos.get<G>(v);
-	self->vel = init_vel.get< deriv<G> >(v);	
+	self->pos.copy( init_pos.get<G>(v) );
+	self->vel.copy( init_vel.get< deriv<G> >(v) );	
   }
 	
 };

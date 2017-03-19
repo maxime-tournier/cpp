@@ -29,9 +29,8 @@ struct init {
 	slice<G> pos = init_pos.allocate<G>(v, self->size());
 	slice<deriv<G>> vel = init_vel.allocate< deriv<G> >(v, self->size());	
 
-	pos = self->pos;
-	vel = self->vel;
-    
+	pos.copy( self->pos );
+	vel.copy( self->vel );
   }
 	
 };
