@@ -6,6 +6,8 @@
 #include "types.hpp"
 #include "vec.hpp"
 #include "real.hpp"
+#include "rigid.hpp"
+
 #include "slice.hpp"
 #include "sparse.hpp"
 #include "api.hpp"
@@ -20,10 +22,8 @@ struct metric_base {
 
   using cast_type = api< 
     metric<real>,
-    metric<vec2>,
     metric<vec3>,
-    metric<vec4>,
-    metric<vec6>>;
+    metric<rigid>>;
 
   const cast_type cast;
   

@@ -1,9 +1,13 @@
 #include "metric.hpp"
 
 #include <core/metric.hpp>
-#include "../uniform.hpp"
 
 #include <boost/python.hpp>
+
+#include "../uniform.hpp"
+#include "../rigid_mass.hpp"
+
+#include "numpy.hpp"
 
 namespace python {
 
@@ -38,6 +42,19 @@ namespace python {
 	bind_uniform< uniform_stiffness<real> >("uniform_stiffness_real");
 	
 	bind_uniform< uniform_compliance<vec3> >("uniform_compliance_vec3");
-	bind_uniform< uniform_compliance<real> >("uniform_compliance_real");	
+	bind_uniform< uniform_compliance<real> >("uniform_compliance_real");
+
+
+    static auto get = +[](rigid_mass<real>* self) {
+      return numpy::ndarray(self->mass.begin(), { (npy_intp)self->size() } );
+    };
+    
+    class_< rigid_mass<real>, std::shared_ptr< rigid_mass<real> >,
+            boost::noncopyable > ("rigid_mass")
+      .add_property("mass", get, +[](rigid_mass<real>* self, object obj) {
+          get(self)[boost::python::slice()] = obj;
+        })
+      ;
+    
   }
 }

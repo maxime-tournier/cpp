@@ -22,7 +22,6 @@ public:
   }
 
   
-  
   rigid_transform() {
     orient.setIdentity();
     center.setZero();

@@ -20,12 +20,9 @@ public:
   rigid_mass(std::size_t n = 1) {
     resize(n);
   }
-  
-  slice<real> mass() { return storage.mass; }
-  slice<vec3> inertia() { return storage.inertia; }
 
-  slice<const real> mass() const { return storage.mass; }
-  slice<const vec3> inertia() const { return storage.inertia; }
+  slice<real>& mass = storage.mass;
+  slice<vec3>& inertia = storage.inertia;
   
   std::size_t size() const { return storage.mass.size(); }
 
@@ -57,17 +54,26 @@ public:
   }
   
 
-  virtual void momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const {
+  // write spatial momentum based on body-fixed velocity
+  virtual void momentum(slice< deriv<G> > out,
+                        slice<const G> pos, slice<const deriv<G> > vel) const {
     assert(pos.size() == size());
     
 	for(unsigned i = 0, n = size(); i < n; ++i) {
-	  out[i] = this->value * vel[i];
+	  out[i].template head<3>() = mass[i] * vel[i].template head<3>();
+      out[i].template tail<3>() = pos[i].orient * (inertia[i].array() * vel[i].template tail<3>().array());
 	}
+    
   }
 
   
-  virtual void gravity(slice< deriv<G> > out, slice<const G> pos, const vec3& g) const {
-
+  virtual void gravity(slice< deriv<G> > out,
+                       slice<const G> pos, const vec3& g) const {
+    assert(pos.size() == size());
+    
+    for(unsigned i = 0, n = size(); i < n; ++i) {
+      out[i].template head<3>() = mass[i] * g;
+    }
 
   }
 
