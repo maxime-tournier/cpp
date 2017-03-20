@@ -47,8 +47,8 @@ struct dofs : public dofs_base {
   using deriv_slice = slice< deriv<G> >;
 
   coord_slice& pos;
-  deriv_slice& vel;
-  deriv_slice& mom;
+  deriv_slice& vel;             // body-fixed
+  deriv_slice& mom;             // spatial
   
   dofs(coord_slice& pos,
 	   deriv_slice& vel,

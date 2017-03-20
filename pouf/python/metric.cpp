@@ -16,6 +16,10 @@ namespace python {
 	  .def_readwrite("value", &Metric::value)
 	  ;
   }
+
+
+
+  
   
   void metric::module() {
 	using namespace boost::python;
