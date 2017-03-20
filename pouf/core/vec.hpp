@@ -58,6 +58,10 @@ struct traits< vector<N, U> > {
     static std::string value = "vec" + ((N > 0) ? std::to_string(N) : std::string());
     return value.c_str();
   }
+
+
+  static deriv_type AdT(const group_type&, const deriv_type& x) { return x; }
+  
 };
 
 

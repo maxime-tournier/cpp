@@ -41,13 +41,12 @@ public:
   }
 
 
-  template<class U>
-  slice& copy(const slice<U>& other) {
-	assert(size() == other.size());
-	std::copy(other.begin(), other.end(), begin());
-	return *this;
-  }
 
+  slice& operator<<(const slice<const G>& other) {
+    assert(size() == other.size());
+    std::copy(other.begin(), other.end(), begin());
+    return *this;
+  }
   
   template<class U>
   slice(slice<U> other)

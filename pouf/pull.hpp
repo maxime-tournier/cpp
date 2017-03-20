@@ -38,6 +38,34 @@ struct pull {
 
   }
 
+
+  // dofs
+  void operator()(dofs_base* self, unsigned v, const graph& g) const {
+    self->cast.apply(*this, v, g);
+  }
+
+
+  template<class G>
+  void operator()(dofs<G>* self, unsigned v, const graph& g) const {
+    const std::size_t n = pos.count(v);
+
+    slice<deriv<G>> mu = work.allocate<deriv<G>>(v, n);
+    slice<const G> at = pos.get<G>(v);
+    
+    // body-fixed
+    for(unsigned i = 0; i < n; ++i) {
+      mu[i] = traits<G>::AdT(at[i], self->mom[i]);
+    }
+
+    const chunk& c = chunks[v];
+    Eigen::Map<vec> view((real*) mu.begin(), c.size);
+    
+	momentum.segment(c.start, c.size) += view;
+
+    std::clog << "momentum: " << view.transpose() << std::endl;
+  }
+  
+  
   
   // metric
   void operator()(metric_base* self, unsigned v, const graph& g) const {
@@ -68,8 +96,8 @@ struct pull {
 	Eigen::Map<vec> view((real*) mu.begin(), c.size);
 	
 	// momentum
-	self->momentum(mu, parent->pos, parent->vel);
-	momentum.segment(c.start, c.size) += view;
+	// self->momentum(mu, parent->pos, parent->vel);
+	// momentum.segment(c.start, c.size) += view;
 
 	// gravity
 	self->gravity(mu, parent->pos, gravity);

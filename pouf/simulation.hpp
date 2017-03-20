@@ -54,7 +54,7 @@ struct simulation {
 
 		struct init vis{init_pos, init_vel};
 		for(unsigned v : g.vertices() ) {
-		  g[v].apply( vis, v);
+		  g[v].apply( vis, v, g);
 		}
 
 	  });

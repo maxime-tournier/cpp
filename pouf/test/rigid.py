@@ -6,6 +6,9 @@ from snap.math import *
 dofs = pouf.dofs_rigid()
 mass = pouf.mass_rigid()
 
+mass.inertia[0] = [1, 2, 3]
+
+
 graph = pouf.graph()
 
 graph.add(dofs)
@@ -15,7 +18,7 @@ graph.connect(mass, dofs)
 
 sim = pouf.simulation()
 
-dofs.vel[0][4] = 1
+dofs.vel[0][3:] = [1, 1, 1]
 sim.gravity = 0
 dt = 0.01
 

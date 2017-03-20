@@ -20,6 +20,7 @@ public:
 
 
   static constexpr U epsilon = std::numeric_limits<U>::epsilon();
+
   
   static quaternion exp(const vector<3, U>& omega) {
     const U theta = omega.norm();

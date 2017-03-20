@@ -82,6 +82,12 @@ public:
   }
 
 
+  unsigned parent(unsigned v) const {
+    auto it = adjacent_vertices(v, g);
+    return *it.first;           // TODO check this is the only parent
+  }
+  
+
   void add(const vertex& ptr) {
 	ptr.apply([&](void* addr) {
 		table[addr] = add_vertex(ptr, *this);

@@ -52,15 +52,27 @@ namespace python {
 	bind_uniform< uniform_compliance<real> >("uniform_compliance_real");
 
 
-    static auto get = +[](rigid_mass<real>* self) {
+    static auto get_mass = +[](rigid_mass<real>* self) {
       return numpy::ndarray(self->mass.begin(), { (npy_intp)self->size() } );
     };
+
+    static auto set_mass = +[](rigid_mass<real>* self, object obj) {
+      get_mass(self) = obj;
+    };
+
+    static auto get_inertia = +[](rigid_mass<real>* self) {
+      return numpy::ndarray(self->inertia.begin()->data(), { (npy_intp)self->size(), 3 } );
+    };
+
+    static auto set_inertia = +[](rigid_mass<real>* self, object obj) {
+      get_inertia(self) = obj;
+    };
+
     
     class_< rigid_mass<real>, std::shared_ptr< rigid_mass<real> >,
             boost::noncopyable, bases< mass<rigid> > > ("mass_rigid")
-      .add_property("mass", get, +[](rigid_mass<real>* self, object obj) {
-          get(self)[boost::python::slice()] = obj;
-        })
+      .add_property("mass", get_mass, set_mass)
+      .add_property("inertia", get_inertia, set_inertia)      
       ;
     
   }

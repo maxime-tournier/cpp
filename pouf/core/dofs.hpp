@@ -63,6 +63,7 @@ struct dofs : public dofs_base {
 };
 
 
+// TODO move outside core
 
 // TODO use small vectors + resizable instead ?
 template<class G, std::size_t N = 1>

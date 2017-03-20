@@ -31,6 +31,8 @@ struct traits<real> {
   static group_type exp(const deriv_type& x) { return x; }
 
   static const char* name() { return "real"; }
+
+  static deriv_type AdT(const group_type&, const deriv_type& x) { return x; }
 };
 
 

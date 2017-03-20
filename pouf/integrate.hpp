@@ -12,23 +12,50 @@ struct integrate {
   const vec& velocities;
   const real dt;
 
+
+  template<class T>
+  void operator()(T* self, unsigned v, graph& g) const {
+
+  }
   
-  void operator()(dofs_base* self, unsigned v) const {
-	self->cast.apply(*this, v);
+  void operator()(dofs_base* self, unsigned v, graph& g) const {
+	self->cast.apply(*this, v, g);
   }
 
-  void operator()(metric_base* self, unsigned v) const {
+  void operator()(metric_base* self, unsigned v, graph& g) const {
+    self->cast.apply(*this, v, g);
+  }
+  
 
+  template<class G>
+  void operator()(metric<G>* self, unsigned v, graph& g) const {
+    self->cast.apply(*this, v, g);
   }
 
 
-  void operator()(func_base* self, unsigned v) const {
+  template<class G>
+  void operator()(mass<G>* self, unsigned v, graph& g) const {
+
+    const unsigned p = g.parent(v);
+
+    assert(g[p].type() == graph::dofs_type);
+    
+    auto d = g[p].get<graph::dofs_type>();
+    auto dg = static_cast<dofs<G>*>(d);
+
+    // TODO save spatial momentum
+    
+    self->momentum(dg->mom, dg->pos, dg->vel);
+  }
+  
+
+  void operator()(func_base* self, unsigned v, graph& g) const {
 
   }
   
   
   template<class G>
-  void operator()(dofs<G>* self, unsigned v) const {
+  void operator()(dofs<G>* self, unsigned v, graph& g) const {
 
 	const chunk& c = chunks[v];
 	auto segment = velocities.segment(c.start, c.size);

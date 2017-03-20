@@ -24,5 +24,10 @@ template<class G>
 static G exp(const deriv<G>& v) { return traits<G>::exp(v); }
 
 
+template<class G>
+static deriv<G> AdT(const G& g, const deriv<G>& x) {
+  return traits<G>::AdT(g, x);
+}
+
 
 #endif
