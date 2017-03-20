@@ -103,9 +103,14 @@ struct dynamic_dofs : dofs<G> {
   }
 
   
-  dynamic_dofs()
+  dynamic_dofs(bool init = true)
     : dofs<G>(pos, vel, mom) {
+
+    if(!init) return;
     
+    std::fill(pos.begin(), pos.end(), traits<G>::id());
+    std::fill(vel.begin(), vel.end(), traits< deriv<G> >::zero());
+    std::fill(mom.begin(), mom.end(), traits< deriv<G> >::zero());                        
   }
  
 };

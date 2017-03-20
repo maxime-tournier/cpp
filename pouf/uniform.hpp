@@ -12,7 +12,7 @@ struct uniform : Base {
 
   using G = typename Base::position_type;
   void tensor(triplet_iterator out, slice<const G> at) const {
-    for(int i = 0, n = at.size() * traits<G>::dim; i < n; ++i) {
+    for(int i = 0, n = at.size() * traits< deriv<G> >::dim; i < n; ++i) {
       *out++ = {i, i, value};
     }
   }

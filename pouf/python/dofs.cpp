@@ -73,7 +73,7 @@ namespace python {
 
       // warning: replace class name    
       class_<dynamic_dofs<U>, std::shared_ptr<dynamic_dofs<U>>,
-             bases<dofs<U>>, boost::noncopyable >(name.c_str())
+             bases<dofs<U>>, boost::noncopyable >(name.c_str() )
         .def("resize", &dynamic_dofs<U>::resize)
         ;
       

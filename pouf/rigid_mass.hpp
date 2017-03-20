@@ -7,7 +7,7 @@
 
 
 template<class U>
-class rigid_mass : mass< rigid_transform<U> > {
+class rigid_mass : public mass< rigid_transform<U> > {
 
   struct {
     small_vector<real> mass;
@@ -17,8 +17,13 @@ class rigid_mass : mass< rigid_transform<U> > {
 public:
 
 
-  rigid_mass(std::size_t n = 1) {
+  rigid_mass(std::size_t n = 1, bool init = true) {
     resize(n);
+
+    if(!init) return;
+    
+    std::fill(mass.begin(), mass.end(), 1.0);
+    std::fill(inertia.begin(), inertia.end(), vec3::Ones());
   }
 
   slice<real>& mass = storage.mass;
@@ -73,6 +78,7 @@ public:
     
     for(unsigned i = 0, n = size(); i < n; ++i) {
       out[i].template head<3>() = mass[i] * g;
+      out[i].template tail<3>().setZero();
     }
 
   }

@@ -38,7 +38,7 @@ struct integrate {
 		traits<deriv<G>>::coord(j, self->vel[i]) = segment(i * n + j);
 	  }
 
-	  std::clog << self->vel[i] << std::endl;
+	  // std::clog << "integration: " << self->vel[i].transpose() << std::endl;
 	  
 	  self->pos[i] = prod(self->pos[i], traits<G>::exp(dt * self->vel[i]));
 	}
