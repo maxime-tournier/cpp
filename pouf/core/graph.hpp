@@ -38,84 +38,84 @@ struct vertex_property : Vertex {
 
 
 class graph : public boost::adjacency_list<boost::vecS,
-										   boost::vecS,
-										   boost::bidirectionalS,
-										   vertex_property<vertex>,
-										   edge> {
+                                           boost::vecS,
+                                           boost::bidirectionalS,
+                                           vertex_property<vertex>,
+                                           edge> {
 
   
   std::map< void*, unsigned > table;
 
   struct get_vertex {
-	graph* owner;
+    graph* owner;
 
-	void operator()(void* ptr, unsigned& res) const {
-	  auto it = owner->table.find(ptr);
-	  if(it == owner->table.end()) throw std::runtime_error("unknown vertex");
-	  res = it->second;
-	}
+    void operator()(void* ptr, unsigned& res) const {
+      auto it = owner->table.find(ptr);
+      if(it == owner->table.end()) throw std::runtime_error("unknown vertex");
+      res = it->second;
+    }
 	
   };
   
 public:
 
   enum {
-	dofs_type,
-	func_type,
-	metric_type,
+    dofs_type,
+    func_type,
+    metric_type,
   };
 
 
   template<class Iterator>
   void sort(Iterator out) {
-	topological_sort(*this, out, color_map(get(&vertex_property<vertex>::color, *this)));
+    topological_sort(*this, out, color_map(get(&vertex_property<vertex>::color, *this)));
   }
 
   
   template<class T, class ... Args>
   std::shared_ptr< T > add_shared(Args&& ... args) {
 	
-  	auto ptr = std::make_shared<T>(std::forward<Args>(args)...);
-  	add(ptr);
+    auto ptr = std::make_shared<T>(std::forward<Args>(args)...);
+    add(ptr);
 	
-  	return ptr;
+    return ptr;
   }
 
 
   unsigned parent(unsigned v) const {
-    auto it = adjacent_vertices(v, g);
+    auto it = adjacent_vertices(v, *this);
     return *it.first;           // TODO check this is the only parent
   }
   
 
   void add(const vertex& ptr) {
-	ptr.apply([&](void* addr) {
-		table[addr] = add_vertex(ptr, *this);
-	  });
+    ptr.apply([&](void* addr) {
+        table[addr] = add_vertex(ptr, *this);
+      });
   }
 
 
 
   void connect(const vertex& src, const vertex& dst) {
-	unsigned s, d;
+    unsigned s, d;
 	
-	src.apply(get_vertex{this}, s);
-	dst.apply(get_vertex{this}, d);
+    src.apply(get_vertex{this}, s);
+    dst.apply(get_vertex{this}, d);
 
-	add_edge(s, d, *this);
+    add_edge(s, d, *this);
   }
 
 
   void disconnect(const vertex& src, const vertex& dst) {
-	unsigned s, d;
+    unsigned s, d;
 	
-	src.apply(get_vertex{this}, s);
-	dst.apply(get_vertex{this}, d);
-	auto e = boost::edge(s, d, *this);
+    src.apply(get_vertex{this}, s);
+    dst.apply(get_vertex{this}, d);
+    auto e = boost::edge(s, d, *this);
 
-	if(!e.second) throw std::runtime_error("unknown edge");
+    if(!e.second) throw std::runtime_error("unknown edge");
 	
-	remove_edge(e.first);
+    remove_edge(e.first);
   }
   
   
