@@ -61,6 +61,7 @@ struct traits< vector<N, U> > {
 
 
   static deriv_type AdT(const group_type&, const deriv_type& x) { return x; }
+  static deriv_type Ad(const group_type&, const deriv_type& x) { return x; }  
   
 };
 

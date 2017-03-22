@@ -30,4 +30,10 @@ static deriv<G> AdT(const G& g, const deriv<G>& x) {
 }
 
 
+template<class G>
+static deriv<G> Ad(const G& g, const deriv<G>& x) {
+  return traits<G>::Ad(g, x);
+}
+
+
 #endif

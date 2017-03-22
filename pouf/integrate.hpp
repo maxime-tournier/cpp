@@ -17,40 +17,12 @@ struct integrate {
   void operator()(T* self, unsigned v, graph& g) const {
 
   }
+
+  void operator()(metric_base* self, unsigned v, graph& g) const { }
+  void operator()(func_base* self, unsigned v, graph& g) const { }
   
   void operator()(dofs_base* self, unsigned v, graph& g) const {
 	self->cast.apply(*this, v, g);
-  }
-
-  void operator()(metric_base* self, unsigned v, graph& g) const {
-    self->cast.apply(*this, v, g);
-  }
-  
-
-  template<class G>
-  void operator()(metric<G>* self, unsigned v, graph& g) const {
-    self->cast.apply(*this, v, g);
-  }
-
-
-  template<class G>
-  void operator()(mass<G>* self, unsigned v, graph& g) const {
-
-    const unsigned p = g.parent(v);
-
-    assert(g[p].type() == graph::dofs_type);
-    
-    auto d = g[p].get<graph::dofs_type>();
-    auto dg = static_cast<dofs<G>*>(d);
-
-    // TODO save spatial momentum
-    
-    self->momentum(dg->mom, dg->pos, dg->vel);
-  }
-  
-
-  void operator()(func_base* self, unsigned v, graph& g) const {
-
   }
   
   
@@ -64,10 +36,9 @@ struct integrate {
 	  for(unsigned j = 0; j < traits<deriv<G>>::dim; ++j) {
 		traits<deriv<G>>::coord(j, self->vel[i]) = segment(i * n + j);
 	  }
-
-	  // std::clog << "integration: " << self->vel[i].transpose() << std::endl;
-	  
-	  self->pos[i] = prod(self->pos[i], traits<G>::exp(dt * self->vel[i]));
+      
+      const G delta = exp<G>(dt * self->vel[i]);
+	  self->pos[i] = prod(self->pos[i], delta);
 	}
 	
   }

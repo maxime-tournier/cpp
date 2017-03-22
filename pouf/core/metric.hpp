@@ -85,7 +85,9 @@ struct mass : metric<G> {
   
   virtual void momentum(slice< deriv<G> > out, slice<const G> pos, slice<const deriv<G> > vel) const = 0;
 
-  virtual void gravity(slice< deriv<G> > out, slice<const G> pos, const vec3& g) const = 0;
+  virtual void force(slice< deriv<G> > out, 
+                     slice<const G> pos, slice<const deriv<G> > vel,
+                     const vec3& g) const = 0;
 };
 
 

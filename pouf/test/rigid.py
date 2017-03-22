@@ -22,7 +22,7 @@ graph.connect(mass, dofs)
 
 sim = pouf.simulation()
 
-dofs.vel[0][3:] = [1.0, 1.0, 1.0]
+dofs.vel[0][3:] = 3 * vec(1.0, 1.0, 1.0)
 sim.gravity = 0
 dt = 0.01
 
@@ -46,7 +46,8 @@ def draw():
 
         scale = np.sqrt( inv.dot(mass.inertia[0] / mass.mass * 5.0) )
 
-        am = dofs.mom[0].view(Rigid3.Deriv).angular
+        am = mass.inertia[0] * dofs.vel[0].view(Rigid3.Deriv).angular
+        
         with gl.lookat(am):
             gl.glColor(1, 1, 1)
             gl.arrow( height = norm(am) )

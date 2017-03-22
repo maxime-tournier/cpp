@@ -149,7 +149,7 @@ struct simulation {
     L.setFromTriplets(jacobian.begin(), jacobian.end());
 
     // pull gradients/geometric stiffness
-    vec gradient, momentum;
+    vec momentum, force;
     graph_data work;
 
     std::vector<triplet> gs;
@@ -157,12 +157,12 @@ struct simulation {
     with_auto_resize([&] {
         work.reset(n);
         
-        gradient = vec::Zero(total_dim);
+        force = vec::Zero(total_dim);
         momentum = vec::Zero(total_dim);
 		
         gs.clear();
 		
-        pull vis(gradient, momentum, L, gs, work, pos, chunks, gravity);
+        pull vis(force, momentum, L, gs, work, pos, chunks, gravity);
 
         for(unsigned v : reverse(order)) {
           g[v].apply(vis, v, g);
@@ -170,7 +170,7 @@ struct simulation {
 		
       });
 	
-    std::cout << "gradient: " << gradient.transpose() << std::endl;
+    std::cout << "force: " << force.transpose() << std::endl;
     std::cout << "momentum: " << momentum.transpose() << std::endl;	
 	
     // // add geometric stiffness TODO scale by dt
@@ -205,7 +205,7 @@ struct simulation {
     vec rhs = vec::Zero(primal_offset + dual_offset);
 
     rhs.head(primal_offset) += LP.transpose() * momentum;
-    rhs.head(primal_offset) -= dt * (LP.transpose() * gradient);
+    rhs.head(primal_offset) += dt * (LP.transpose() * force);
 
     std::cout << "rhs: " << rhs.head(primal_offset).transpose() << std::endl;
 	
@@ -213,7 +213,7 @@ struct simulation {
       const rmat J = LQ.transpose() * D * LP;
       const rmat C = LQ.transpose() * D * LQ;
 	  
-      rhs.tail(dual_offset) -= (LQ.transpose() * gradient) / dt;
+      rhs.tail(dual_offset) -= (LQ.transpose() * force) / dt;
 	  
       std::cout << "J: " << J << std::endl;
       std::cout << "C: " << C << std::endl;

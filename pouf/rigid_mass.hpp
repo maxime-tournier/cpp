@@ -66,19 +66,21 @@ public:
     
 	for(unsigned i = 0, n = size(); i < n; ++i) {
 	  out[i].template head<3>() = mass[i] * vel[i].template head<3>();
-      out[i].template tail<3>() = pos[i].orient * (inertia[i].array() * vel[i].template tail<3>().array());
+      out[i].template tail<3>() = inertia[i].array() * vel[i].template tail<3>().array();
 	}
     
   }
 
   
-  virtual void gravity(slice< deriv<G> > out,
-                       slice<const G> pos, const vec3& g) const {
+  virtual void force(slice< deriv<G> > out,
+                     slice<const G> pos, slice<const deriv<G> > vel,
+                     const vec3& g) const {
     assert(pos.size() == size());
     
     for(unsigned i = 0, n = size(); i < n; ++i) {
+      const auto omega = vel[i].template tail<3>();
       out[i].template head<3>() = mass[i] * g;
-      out[i].template tail<3>().setZero();
+      out[i].template tail<3>() = -omega.cross( inertia[i].cwiseProduct(omega) );
     }
 
   }

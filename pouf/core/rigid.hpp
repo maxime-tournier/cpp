@@ -93,6 +93,16 @@ struct traits< rigid_transform<U> > {
     return res;
   }
 
+
+  static deriv_type Ad(const group_type& g, const deriv_type& x) {
+    deriv_type res;
+    
+    res.template head<3>() = x.template head<3>();
+    res.template tail<3>() = g.orient * x.template tail<3>();    
+    
+    return res;
+  }
+  
   
 
   static const char* name() { return "rigid"; }

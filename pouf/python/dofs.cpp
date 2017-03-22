@@ -61,7 +61,6 @@ namespace python {
              bases<dofs_base>, boost::noncopyable >(name.c_str(), no_init)
         .add_property("pos", pos<U>, set<U, pos<U> >)
         .add_property("vel", vel<U>, set<U, vel<U> >)
-        .add_property("mom", mom<U>, set<U, mom<U> >)
         .def("size", &dofs<U>::size)
 
         ;

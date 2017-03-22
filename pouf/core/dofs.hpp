@@ -48,70 +48,63 @@ struct dofs : public dofs_base {
 
   coord_slice& pos;
   deriv_slice& vel;             // body-fixed
-  deriv_slice& mom;             // spatial
   
   dofs(coord_slice& pos,
-	   deriv_slice& vel,
-	   deriv_slice& mom)
+	   deriv_slice& vel)
 	: dofs_base(this),
 	  pos(pos),
-	  vel(vel),
-	  mom(mom) {
+	  vel(vel) {
 
   }
   
 };
 
 
-// TODO move outside core
-
+// TODO move outside core?
 // TODO use small vectors + resizable instead ?
 template<class G, std::size_t N = 1>
 struct static_dofs : dofs<G> {
 
   struct {
 	std::array<G, N> pos;
-	std::array<deriv<G>, N> vel, mom;
+	std::array<deriv<G>, N> vel;
   } storage;
 
   slice<G> pos;
-  slice<deriv<G> > vel, mom;
+  slice<deriv<G> > vel;
   
   static_dofs()
-	: dofs<G>(pos, vel, mom),
+	: dofs<G>(pos, vel),
     pos(&storage.pos, &storage.pos + 1),
-    vel(&storage.vel, &storage.vel + 1),
-    mom(&storage.mom, &storage.mom + 1)    
-  {
+    vel(&storage.vel, &storage.vel + 1) {
     
   }
   
   std::size_t size() const { return N; }
 };
 
+
 template<class G>
 struct dynamic_dofs : dofs<G> {
   
   small_vector<G> pos;
-  small_vector<deriv<G>> vel, mom;
+  small_vector<deriv<G>> vel;
   
   std::size_t size() const { return dofs<G>::pos.size(); }
 
   void resize(std::size_t n) {
     pos.resize(n);
     vel.resize(n);
-    mom.resize(n);
   }
 
   
   dynamic_dofs(bool init = true)
-    : dofs<G>(pos, vel, mom) {
+    : dofs<G>(pos, vel) {
 
     if(!init) return;
     
     std::fill(pos.begin(), pos.end(), traits<G>::id());
     std::fill(vel.begin(), vel.end(), traits< deriv<G> >::zero());
-    std::fill(mom.begin(), mom.end(), traits< deriv<G> >::zero());                        
   }
  
 };
