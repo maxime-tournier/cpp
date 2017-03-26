@@ -22,6 +22,59 @@ class Box(object):
         return self.frame(sign * self.size / 2)
 
 
+
+def anderson(n, m, **kwargs):
+
+    g = np.zeros( (n, m) )
+    f = np.zeros( (n, m) )
+    k = np.zeros( (m, m) )
+
+    metric = kwargs.get('metric', np.ones(n) )
+
+    old = np.zeros(n)
+    delta = np.zeros(n)
+
+    ones = np.ones(m)
+    alpha = np.zeros(m)
+    
+    i = [0]
+    
+    def res(x):
+        
+        if x is None:
+            g[:] = np.zeros( (n, m) )
+            f[:] = np.zeros( (n, m) )
+            k[:] = np.zeros( (m, m) )
+            old[:] = np.zeros(n)
+            delta[:] = np.zeros(n)
+            return
+        
+        if i[0] > 0:
+            delta[:] = x - old;
+
+            index = i[0] % m
+            
+            g[:, index] = x
+            f[:, index] = delta
+
+            # TODO metric
+            k[:, index] = f.transpose().dot( metric * f[:, index]  )
+            k[index, :] = k[:, index].transpose()
+
+            alpha = np.linalg.lstsq(k, ones)[0]
+
+            s = sum(alpha)
+            if s != 0:
+                alpha /= s
+                x[:] = g.dot(alpha)
+
+        old[:] = x
+        i[0] += 1
+
+    
+    return res
+
+    
 def pgs(M, q):
 
     n = q.size
@@ -53,10 +106,11 @@ def pgs_ls(A, b, p, omega = 1.0):
             old = x[i]
             x[i] -= omega * (A[i].dot(net) - b[i]) / A[i].dot(A[i])
             x[i] = max(x[i], 0.0)
-            net += A[i] * ( x[i] - old )
-            # net[:] = p + A.T.dot(x)
-            
-        yield net
+            # net += A[i] * ( x[i] - old )
+
+            net[:] = p + A.T.dot(x)
+
+        yield x, net
 
         
 
@@ -82,9 +136,11 @@ def pocs(A, b, p):
         
         q[:] = proj(i, p)
         I[i] = q - p
-        
+
         yield q
         n += 1
+
+
         
 def project_simplex(S, p):
 
@@ -93,7 +149,7 @@ def project_simplex(S, p):
     
     Q = np.zeros( (m, m) )
     
-    Q[:n] = S.T
+    Q[:n] = S.T 
     Q[-1] = 1
 
     Qinv = np.linalg.inv(Q)
@@ -101,16 +157,18 @@ def project_simplex(S, p):
     A = Qinv[:, :n]
     b = - Qinv[:, -1]
 
-    for it, x in itertools.izip(xrange(3 * n), pgs_ls(A, b, p) ):
-        pass
+    res = []
 
     
-    return x
+    for it, (x, net) in itertools.izip(xrange(n * n), pgs_ls(A, b, p) ):
+        res.append(np.copy(net))
+    return res
 
-    for it, x in itertools.izip(xrange(3 * n), pocs(A, b, p)):
-        pass
 
-    return x
+    for it, x in itertools.izip(xrange(2 * n * n), pocs(A, b, p)):
+        res.append(np.copy(x))
+
+    return res
 
 S = np.zeros( (4, 3) )
 S[1:] = np.identity(3)
@@ -123,11 +181,12 @@ def reset(): pass
 def init(): pass
 
 def keypress(key):
-    if key == ' ': 
+    if key == ' ':
+        
         S[1:] = 2 * np.random.rand( 3, 3 ) - 1
         p[:] = 2 * np.random.rand(3) - 1
         q[:] = project_simplex(S, p)
-    
+        
 def animate(): pass
 
     
@@ -139,7 +198,9 @@ def draw():
 
     glBegin(GL_POINTS)
     glVertex(p)
-    glVertex(q)
+
+    for qi in q:
+       glVertex(qi)    
 
     glEnd()
     
@@ -149,8 +210,13 @@ def draw():
         glVertex(S[i])
         glVertex(S[j])        
 
+    glEnd()
+
+    glBegin(GL_LINE_STRIP)
     glVertex(p)
-    glVertex(q)
+
+    for qi in q:
+        glVertex(qi)
         
     glEnd()
 
