@@ -23,58 +23,26 @@ class Box(object):
 
 
 
-def anderson(n, m, **kwargs):
 
-    g = np.zeros( (n, m) )
-    f = np.zeros( (n, m) )
-    k = np.zeros( (m, m) )
 
-    metric = kwargs.get('metric', np.ones(n) )
 
-    old = np.zeros(n)
-    delta = np.zeros(n)
-
-    ones = np.ones(m)
-    alpha = np.zeros(m)
+def barycentric_coordinates(S, p):
+    m, n = S.shape
     
-    i = [0]
+    A = np.zeros( (n + 1, m))
+    A[:n] = S.T
+    A[-1] = 1
+    b = np.zeros(m)
     
-    def res(x):
-        
-        if x is None:
-            g[:] = np.zeros( (n, m) )
-            f[:] = np.zeros( (n, m) )
-            k[:] = np.zeros( (m, m) )
-            old[:] = np.zeros(n)
-            delta[:] = np.zeros(n)
-            return
-        
-        if i[0] > 0:
-            delta[:] = x - old;
+    b[:n] = p
+    b[-1] = 1
 
-            index = i[0] % m
-            
-            g[:, index] = x
-            f[:, index] = delta
+    x = np.linalg.solve(A, b)
+    return x
 
-            # TODO metric
-            k[:, index] = f.transpose().dot( metric * f[:, index]  )
-            k[index, :] = k[:, index].transpose()
 
-            alpha = np.linalg.lstsq(k, ones)[0]
 
-            s = sum(alpha)
-            if s != 0:
-                alpha /= s
-                x[:] = g.dot(alpha)
 
-        old[:] = x
-        i[0] += 1
-
-    
-    return res
-
-    
 def pgs(M, q):
 
     n = q.size
@@ -141,6 +109,23 @@ def pocs(A, b, p):
         n += 1
 
 
+
+
+def proj_splx(x):
+    n = x.size
+    y = sorted(x)
+
+    s = 0
+    for k in range(n):
+        i = n - 1 - k
+        s += y[i]
+        t = (s - 1.0) / float(n - i)
+        if t > y[i - 1]:
+            break
+
+    return np.maximum(x - t, 0)
+        
+
         
 def project_simplex(S, p):
 
@@ -170,11 +155,16 @@ def project_simplex(S, p):
 
     return res
 
+
+
+    
+
+
 S = np.zeros( (4, 3) )
 S[1:] = np.identity(3)
 
 p = np.ones(3)
-q = project_simplex(S, p)
+q = proj_splx(p) #project_simplex(S, p)
 
 def reset(): pass
 
@@ -183,9 +173,11 @@ def init(): pass
 def keypress(key):
     if key == ' ':
         
-        S[1:] = 2 * np.random.rand( 3, 3 ) - 1
+        # S[1:] = 2 * np.random.rand( 3, 3 ) - 1
         p[:] = 2 * np.random.rand(3) - 1
-        q[:] = project_simplex(S, p)
+
+        q[:] = proj_splx(p)
+        # q[:] = project_simplex(S, p)
         
 def animate(): pass
 
@@ -198,12 +190,18 @@ def draw():
 
     glBegin(GL_POINTS)
     glVertex(p)
+    glVertex(q)
 
-    for qi in q:
-       glVertex(qi)    
-
-    glEnd()
+    for v in xrange(3):
+        col = np.zeros(3)
+        col[v] = 1
+        glColor(col)
+        glVertex(S[1 + v])
     
+    glEnd()
+
+    
+    glColor(1, 1, 1)
     glBegin(GL_LINES)
 
     for i, j in itertools.product(xrange(4), xrange(4)):
@@ -215,8 +213,7 @@ def draw():
     glBegin(GL_LINE_STRIP)
     glVertex(p)
 
-    for qi in q:
-        glVertex(qi)
+    glVertex(q)
         
     glEnd()
 
