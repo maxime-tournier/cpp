@@ -3,7 +3,7 @@
 INCLUDEPATH=$(shell pkg-config --cflags eigen3)
 CXXFLAGS=-std=c++11 $(INCLUDEPATH) # -g # -fuse-ld=gold #-Xlinker -icf=all
 
-ALL=parse rtti graph flow pouf pcg pouf
+ALL=parse rtti graph flow pouf pcg sparse
 
 
 first: all
@@ -23,7 +23,7 @@ release: CXXFLAGS += -O3 -DNDEBUG
 release: all
 
 
-pouf: FORCE
+pouf:
 	$(MAKE) -C $@
 
 

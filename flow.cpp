@@ -76,7 +76,7 @@ int main(int, char** ) {
   add_edge(v, x, g);    
   
   std::vector<unsigned> order;
-  g.sort(order);
+  g.sort(std::back_inserter(order));
 
   g[x].set<graph::dirty>();
   g[v].set<graph::needed>();
