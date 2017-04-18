@@ -87,10 +87,11 @@ namespace v2 {
   
   
   template<class Iterator>
-  static void set_from_sorted_unique_triplets(rmat& matrix, Iterator first, Iterator last) {
-
-    // reserve exact nnz count per outer index
-    rmat::IndexVector nnz; nnz.setZero(matrix.rows());
+  static void set_from_sorted_unique_triplets(rmat& matrix, Iterator first, Iterator last,
+                                              std::vector<rmat::StorageIndex>&& nnz = {}) {
+    
+    // reserve exactly nnz count per outer index
+    nnz.clear(); nnz.resize(matrix.rows(), 0);
     
     for(Iterator it = first; it != last; ++it) {
       ++nnz[it->row()];
@@ -122,7 +123,7 @@ namespace v2 {
 
 
 namespace v3 {
-  // counting sort + insertBack
+  // counting sort + insertBackUncompressed
 
   
   template<class Triplets, class F>
@@ -161,7 +162,7 @@ namespace v3 {
     sort_triplets(matrix.rows(), [](const triplet& t) { return t.row(); }, tmp, input, std::move(count) );    
     
     auto last = merge_sorted_triplets(input.begin(), input.end());
-    v2::set_from_sorted_unique_triplets(matrix, input.begin(), last);
+    v2::set_from_sorted_unique_triplets(matrix, input.begin(), last, std::move(count));
   }
   
 
@@ -169,7 +170,7 @@ namespace v3 {
 
 
 namespace v4 {
-  // counting sort + insertBackUncompressed
+  // counting sort + insertBack
   
   static void set_from_triplets(rmat& matrix, std::vector<triplet>& input) {
     std::vector<triplet> tmp;
@@ -239,7 +240,7 @@ namespace v5 {
       dest.m_data.value(pos) = it->value();
     }
     
-    dest.finalize();
+    // dest.finalize();
     dest.swap(matrix);
   }
 
@@ -265,8 +266,8 @@ namespace v5 {
 
 int main(int, char**) {
 
-  unsigned m = 50000, n = 10000;
-  unsigned nnz = (m * n) / 10; 
+  unsigned m = 5000, n = 1000;
+  unsigned nnz = (m * n) / 100; 
 
   std::vector<triplet> values;
 
