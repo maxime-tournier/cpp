@@ -112,6 +112,7 @@ def pocs(A, b, p):
 
 
 def proj_splx(x):
+    '''O(n log(n) )'''
     n = x.size
     y = sorted(x)
 
@@ -124,7 +125,30 @@ def proj_splx(x):
             break
 
     return np.maximum(x - t, 0)
+
+
+def proj_splx_alt(x, q):
+    '''O(n log(n) )'''
+    n = x.size
+
+    # sort
+    p = sorted(range(n), key=lambda k: x[k] / q[k])
+    
+    s = 0
+    z = 0
+    
+    for k in range(n):
+        i = n - 1 - k
+
+        s += x[p[i]]
+        z += q[p[i]]
         
+        t = (s - 1.0) / z
+        if t > x[ p[i - 1] ] / q[ p[i - 1] ]:
+            break
+
+    return np.maximum(x - q * t, 0)
+
 
         
 def project_simplex(S, p):
@@ -156,7 +180,70 @@ def project_simplex(S, p):
     return res
 
 
+def project_simplex(S, p):
 
+    m, n = S.shape
+    
+    A = S.dot(S.T)
+    b = S.dot(p)
+
+    x = np.ones(m) / float(n)
+
+    d = np.max(np.diag(A))
+    
+    for it in range(20):
+        
+        mask = x > 0
+
+        d = np.max(mask * np.diag(A))
+        
+        # cheap subspace optimization
+        grad = mask * (A.dot(x) - b)
+        
+        # print(alpha)
+        
+        old = x
+        x = proj_splx( x - grad / d )
+        print(it, norm(old - x))
+        
+    return S.T.dot(x)
+
+
+def project_simplex(S, p):
+
+    m, n = S.shape
+
+    bias = np.random.rand(n)
+    S = S + bias
+    
+    A = S.dot(S.T)
+    b = S.dot(p + bias)
+    
+    x = np.ones(m) / float(n)
+
+    # d = np.sum(A * A, axis = 0) / np.diag(A)
+    d = np.diag(A)
+
+    eps = 1e-5
+    
+    for it in range(20):
+        
+        # cheap subspace optimization
+        grad = (A.dot(x) - b)
+
+        # grad *= x > 0
+        
+        # print(alpha)
+        
+        old = x
+        x = proj_splx_alt( x - grad / d, 1 / d )
+
+        error = norm(old - x)
+        print(it, error)
+        if error < eps: break
+        
+    return S.T.dot(x) - bias
+    
     
 
 
@@ -164,7 +251,7 @@ S = np.zeros( (4, 3) )
 S[1:] = np.identity(3)
 
 p = np.ones(3)
-q = proj_splx(p) #project_simplex(S, p)
+q = project_simplex(S, p)
 
 def reset(): pass
 
@@ -173,11 +260,11 @@ def init(): pass
 def keypress(key):
     if key == ' ':
         
-        # S[1:] = 2 * np.random.rand( 3, 3 ) - 1
+        S[1:] = 2 * np.random.rand( 3, 3 ) - 1
         p[:] = 2 * np.random.rand(3) - 1
 
-        q[:] = proj_splx(p)
-        # q[:] = project_simplex(S, p)
+        # q[:] = proj_splx(p)
+        q[:] = project_simplex(S, p)
         
 def animate(): pass
 
