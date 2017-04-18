@@ -3,17 +3,18 @@
 INCLUDEPATH=$(shell pkg-config --cflags eigen3)
 CXXFLAGS=-std=c++11 $(INCLUDEPATH) # -g # -fuse-ld=gold #-Xlinker -icf=all
 
-ALL=parse rtti graph flow pouf pcg sparse
+ALL=parse rtti graph flow pcg sparse
+SUB=pouf
 
 LDFLAGS += -lstdc++ -lm
 
 first: all
 
-all: $(ALL) 
+all: $(ALL) $(SUB)
 
 
 clean:
-	rm $(ALL) *.o
+	rm -f $(ALL) *.o
 
 
 
