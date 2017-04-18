@@ -128,23 +128,24 @@ namespace v3 {
   template<class Triplets, class F>
   static void sort_triplets(std::size_t n, const F f,
                             const Triplets& input, Triplets& output,
-                            std::vector<std::size_t>&& count = {}) {
+                            std::vector<rmat::StorageIndex>&& count = {}) {
+    // TODO memset?
     count.clear(); count.resize(n, 0);
     
     for(const triplet& t : input) {
       ++count[ f(t) ];
     }
 
-    std::size_t total = 0;
-    for(std::size_t& c : count) {
-      std::size_t old = c;
+    rmat::StorageIndex total = 0;
+    for(rmat::StorageIndex& c : count) {
+      rmat::StorageIndex old = c;
       c = total;
       total += old;
     }
-
+    
     output.resize(input.size());
     for(const triplet& t : input ) {
-      std::size_t at = count[ f(t) ]++;
+      const rmat::StorageIndex at = count[ f(t) ]++;
       output[ at ] = t;
     }
   }
@@ -154,7 +155,7 @@ namespace v3 {
 
     std::vector<triplet> tmp;
 
-    std::vector<std::size_t> count( std::max(matrix.rows(), matrix.cols()) );
+    std::vector<rmat::StorageIndex> count( std::max(matrix.rows(), matrix.cols()) );
     
     sort_triplets(matrix.cols(), [](const triplet& t) { return t.col(); }, input, tmp, std::move(count) );
     sort_triplets(matrix.rows(), [](const triplet& t) { return t.row(); }, tmp, input, std::move(count) );    
@@ -171,10 +172,10 @@ namespace v4 {
   // counting sort + insertBackUncompressed
   
   static void set_from_triplets(rmat& matrix, std::vector<triplet>& input) {
-
     std::vector<triplet> tmp;
 
-    std::vector<std::size_t> count( std::max(matrix.rows(), matrix.cols()) );    
+    std::vector<rmat::StorageIndex> count( std::max(matrix.rows(), matrix.cols()) );
+    
     v3::sort_triplets(matrix.cols(), [](const triplet& t) { return t.col(); }, input, tmp, std::move(count) );
     v3::sort_triplets(matrix.rows(), [](const triplet& t) { return t.row(); }, tmp, input, std::move(count) );    
     
@@ -191,7 +192,7 @@ namespace v5 {
   
   template<class Iterator>
   static void set_from_sorted_unique_triplets(rmat& matrix, Iterator first, Iterator last,
-                                              std::vector<std::size_t>&& positions = {}) {
+                                              std::vector<rmat::StorageIndex>&& positions = {}) {
     
     struct stealer : rmat {
       using rmat::rmat;
@@ -203,33 +204,37 @@ namespace v5 {
     
     // reset non-zeros
     const std::size_t n = dest.outerSize();
+
+    // TODO use Eigen map to exploit alignment?
     std::fill(dest.m_outerIndex, dest.m_outerIndex + n, 0);
     
-    // histogram
+    // build histogram
     for(Iterator it = first; it != last; ++it) {
       ++dest.m_outerIndex[it->row()];
     }
 
 
     // prefix sum    
-    std::size_t count = 0;
+    rmat::StorageIndex count = 0;
     for(std::size_t i = 0; i < n; ++i) {
-      const std::size_t old = dest.m_outerIndex[i];
+      const rmat::StorageIndex old = dest.m_outerIndex[i];
       dest.m_outerIndex[i] = count;
       count += old;
     }
-
+    
     // sentinel?
     dest.m_outerIndex[n] = count;
 
     // alloc
-    positions.resize(n); 
-    std::copy(dest.m_outerIndex, dest.m_outerIndex + n, positions.begin());
+    positions.resize(n);
 
+    // TODO exploit alignment ?
+    std::copy(dest.m_outerIndex, dest.m_outerIndex + n, positions.begin());
+    
     // fill data
     dest.m_data.resize( count ); 
     for(Iterator it = first; it != last; ++it) {
-      const std::size_t pos = positions[it->row()]++;
+      const rmat::StorageIndex pos = positions[it->row()]++;
       dest.m_data.index(pos) = it->col();
       dest.m_data.value(pos) = it->value();
     }
@@ -243,7 +248,7 @@ namespace v5 {
 
     std::vector<triplet> tmp;
 
-    std::vector<std::size_t> count( std::max(matrix.rows(), matrix.cols()) );
+    std::vector<rmat::StorageIndex> count( std::max(matrix.rows(), matrix.cols()) );
     
     v3::sort_triplets(matrix.cols(), [](const triplet& t) { return t.col(); }, input, tmp, std::move(count) );
     v3::sort_triplets(matrix.rows(), [](const triplet& t) { return t.row(); }, tmp, input, std::move(count) );    
@@ -261,7 +266,7 @@ namespace v5 {
 int main(int, char**) {
 
   unsigned m = 50000, n = 10000;
-  unsigned nnz = (m * n) / 100; 
+  unsigned nnz = (m * n) / 10; 
 
   std::vector<triplet> values;
 
@@ -348,7 +353,7 @@ int main(int, char**) {
   };
 
 
-  auto v5 = [&] {
+  static const auto v5 = [&] {
     const real t5 = timer([&] {
         rmat A(m, n);
         std::vector<triplet> triplets = values;
@@ -364,7 +369,12 @@ int main(int, char**) {
   
   warm();
 
-  ref(); v1(); v2();  v3(); v4(); v5();
+  ref();
+  v1();
+  v2();
+  v3();
+  v4();
+  v5();
 
   
   
