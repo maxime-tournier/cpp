@@ -14,38 +14,39 @@ int main(int, char** ) {
   auto space = chr([](char c) { return std::isspace(c); });
     
   auto endl = chr('\n');
+  auto comment = (chr(';'), *!endl, endl);
 
   auto real = lit<double>();
   auto integer = lit<int>();
     
   auto identifier = no_skip( (alpha, *alnum) );
 
-  struct list_tag;
-  rec<list_tag> list;
+  auto atom = identifier | real | integer;
   
-  auto atom = identifier | list;
+  struct expr_tag;
+  rec<expr_tag> expr;
+  
+  auto list = no_skip( (chr('('),
+                        *space,
+                        ~( expr, *(+space, expr) ),
+                        *space,
+                        chr(')' )) );
     
-  list = no_skip( (chr('('),
-				   *space,
-				   ~( atom,
-					  *(+space, atom),
-					  *space),
-				   chr(')')) );
-    
-  auto comment = (chr(';'), *!endl, endl);
-    
+  expr = atom | list;
+
   auto parser = list;
 
   while(std::cin) {
 	std::string line;
+    
+    std::cout << "> ";
 	std::getline(std::cin, line);
 	
 	std::stringstream ss(line);
 	if(ss >> parser) {
 	  std::cout << "parse succeded" << std::endl;
-	} else {
+	} else if(!std::cin.eof()) {
 	  std::cerr << "parse error" << std::endl;
-	  std::clog << char(ss.peek()) << std::endl;
 	}
   }
   
