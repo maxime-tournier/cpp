@@ -5,43 +5,52 @@
 #include <iostream>
 #include <sstream>
 
+
+
 int main(int, char** ) {
 
   using namespace parse;
     
-  auto alpha = chr([](char c) { return std::isalpha(c); });
-  auto alnum = chr([](char c) { return std::isalnum(c); });
-  auto space = chr([](char c) { return std::isspace(c); });
+  auto alpha = chr<std::isalpha>();
+  auto alnum = chr<std::isalnum>();
+  auto space = chr<std::isspace>();
     
   auto endl = chr('\n');
   auto comment = (chr(';'), *!endl, endl);
 
   auto real = lit<double>();
   auto integer = lit<int>();
-    
+
+  auto dquote = chr('"');
+
+  // TODO escaped strings
+  auto string = no_skip( (dquote,
+                          *!dquote,
+                          dquote));
+  
   auto identifier = no_skip( (alpha, *alnum) );
 
-  auto atom = identifier | real | integer;
+  auto atom = identifier | string | real | integer;
   
   struct expr_tag;
-  rec<expr_tag> expr;
+  any<expr_tag> expr;
   
   auto list = no_skip( (chr('('),
                         *space,
                         ~( expr, *(+space, expr) ),
                         *space,
                         chr(')' )) );
-    
+     
   expr = atom | list;
-
-  auto parser = list;
-
+                      
+  auto parser = expr;
+   
   while(std::cin) {
 	std::string line;
     
     std::cout << "> ";
 	std::getline(std::cin, line);
-	
+	 
 	std::stringstream ss(line);
 	if(ss >> parser) {
 	  std::cout << "parse succeded" << std::endl;
@@ -50,11 +59,6 @@ int main(int, char** ) {
 	}
   }
   
-  // std::clog << "peek: " << char(ss.peek()) << std::endl;
-
-  // // literal<std::string> rest;
-  // // ss >> no_skip( rest );
-  // std::string rest;
-  // std::getline(ss, rest);
-  // std::clog << "rest: " << rest << std::endl;
 }
+ 
+ 

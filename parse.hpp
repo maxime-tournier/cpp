@@ -137,6 +137,13 @@ namespace parse {
   template<class Pred>
   static character<Pred> chr(const Pred& pred) { return {pred}; }
 
+  // convenience for using std::isalpha and friends
+  template<int (*pred)(int) > struct predicate_adaptor {
+    bool operator()(char c) const { return pred(c); }
+  };
+
+  template<int (*pred)(int)> static character<predicate_adaptor<pred>> chr() { return {}; }
+  
   
   // kleene star
   template<class Parser>
@@ -268,16 +275,6 @@ namespace parse {
   }
 
 
-  // template<class Parser>
-  // static std::istream& operator>>(std::istream& in, no_skip_ws<Parser>&& self) {
-  // 	if(in.flags() & std::ios::skipws) {
-  // 	  return in >> std::noskipws >> self.parser >> std::skipws;
-  // 	}
-	    
-  // 	return in >> self.parser;
-  // }
-  
-  
   template<class Parser>
   static no_skip_ws< Parser > no_skip( const Parser& parser) {
 	return {parser};
@@ -285,35 +282,72 @@ namespace parse {
   
 
   // recursive parsers with a given tag all share the same implementation
+
+  template<class A>
+  struct tag {
+    friend constexpr int adl_flag(tag);
+  };
+  
+  template<class A>
+  struct declare_flag : tag<A> { };
+  
+  template <class A>
+  struct set_flag {
+    friend constexpr int adl_flag(tag<A>) {
+      return 0;
+    }
+  };
+
+  template<class A, int = adl_flag( tag<A>() )>
+  constexpr bool is_set(int) {
+    return true;
+  }
+  
+  template<class A>
+  constexpr bool is_set (...) {
+    return false;
+  }
+
+  
+  
   template<class Tag>
-  struct rec {
-	using impl_type = std::function< std::istream& (std::istream&) >;
+  class any {
 
-	static impl_type& impl() {
-	  static impl_type impl;
-	  return impl;
-	}
+    using impl_type = std::istream& (*)(std::istream& in);
+    static impl_type impl;
 
-	rec() { }
-	
-	template<class Parser>
-	rec& operator=(Parser&& parser) {
-	  impl() = [parser](std::istream& in) mutable -> std::istream& {
-		return in >> parser;
-	  };
+    using trigger = declare_flag<any>;
+    
+  public:
+
+
+    
+    template<class Parser>
+	any& operator=(Parser&& parser) {
+      static_assert(!is_set< any >(0), "redefined parser");
+      sizeof(set_flag<any>);
+      
+      static typename std::decay<Parser>::type upvalue = std::forward<Parser>(parser);
+      impl = [](std::istream& in) -> std::istream& { 
+        return in >> upvalue;
+      };
+      
 	  return *this;
 	}
+    
+    
 
-	friend std::istream& operator>>(std::istream& in, rec& self) {
-	  if(!impl()) {
-		throw std::runtime_error("empty parser");
-	  }
-	  return impl()(in);
+	friend std::istream& operator>>(std::istream& in, any& self) {
+      static_assert( is_set<any>(0), "undefined parser" );
+      
+	  return impl(in);
 	}
 
   };
 
-
+  template<class Tag>
+  typename any<Tag>::impl_type any<Tag>::impl = nullptr;
+  
     
 }
 
