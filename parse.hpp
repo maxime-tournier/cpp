@@ -265,6 +265,8 @@ namespace parse {
   };
 
 
+
+
   template<class Parser>
   static std::istream& operator>>(std::istream& in, no_skip_ws<Parser>& self) {
 	if(in.flags() & std::ios::skipws) {
@@ -348,7 +350,34 @@ namespace parse {
   template<class Tag>
   typename any<Tag>::impl_type any<Tag>::impl = nullptr;
   
-    
+
+
+  template<class Parser>
+  struct to_string {
+    Parser parser;
+    std::string value;
+  };
+
+  template<class Parser>
+  static to_string<Parser> tos(const Parser& parser) {
+    return {{parser}, {}};
+  }
+  
+  template<class Parser>
+  static std::istream& operator>>(std::istream& in, to_string<Parser>& self) {
+    const std::ios::pos_type start = in.tellg();
+
+    if(in >> self.parser) {
+      const std::size_t size = in.tellg() - start;
+      self.value.resize(size);
+
+      // rewind and read to string
+      in.seekg(start);
+      in.read(&self.value[0], size);
+	}  
+
+    return in;
+  }
 }
 
 
