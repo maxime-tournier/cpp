@@ -104,6 +104,20 @@ public:
     if( select_type::index(res) != index ) throw bad_cast();
     return res;
   }
+  
+  struct copy {
+    template<class U>
+    void operator()(U& self, const variant& other) const {
+      new (&self) U(other.template get<U>());
+    }
+  };
+
+  struct move {
+    template<class U>
+    void operator()(U& self, variant&& other) const {
+      new (&self) U(std::move(other.template get<U>()));
+    }
+  };
 
   template<class U>
   const U& get() const {
@@ -153,6 +167,12 @@ public:
     // const int expand[] = { ((std::clog << typeid(T).name() << " " << sizeof() << std::endl), 0)... };
   }
 
+  
+  template<class U>
+  variant(U&& value)
+    : index( select_type::index(value) ) {
+    construct( select_type::cast(value) );
+  }
 
   variant& operator=(const variant& other) {
     if(type() == other.type()) {
@@ -177,6 +197,9 @@ public:
     return *this;
   }
   
+  ~variant() {
+    apply( destruct() );
+  }
   
   
   // TODO move constructors from values ?
