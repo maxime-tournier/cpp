@@ -9,6 +9,7 @@
 #include <set>
 #include <memory>
 #include <vector>
+#include <cassert>
 
 
 namespace impl {
@@ -206,7 +207,7 @@ namespace monad {
 
   // monadic return
   template<class T>
-  struct result_type {
+  struct pure_type {
     using value_type = T;
 
     const value_type value;
@@ -218,7 +219,7 @@ namespace monad {
   };
 
   template<class T>
-  static result_type<T> result(T value) { return {value}; }
+  static pure_type<T> pure(T value) { return {value}; }
 
 
   // lazy result
@@ -256,19 +257,19 @@ namespace monad {
     const Parser parser;
     const F f;
 
-    using source_type = typename Parser::value_type;
+    using domain_type = typename Parser::value_type;
     
-    using result_type = typename std::result_of< F(source_type) >::type;
-    using value_type = typename result_type::value_type;
+    using range_type = typename std::result_of< F(domain_type) >::type;
+    using value_type = typename range_type::value_type;
 
     maybe<value_type> operator()(std::istream& in) const {
       parse::point pos(in);
       
-      maybe<source_type> value = parser(in);
+      maybe<domain_type> value = parser(in);
 
       if(!value) return none();
 
-      const maybe<value_type> res = f( std::move(value.template get<source_type>() ) )(in);
+      const maybe<value_type> res = f( std::move(value.template get<domain_type>() ) )(in);
       if(res) return res;
 
       // backtrack 
@@ -322,7 +323,9 @@ namespace monad {
     const LHS lhs;
     const RHS rhs;
 
-    static_assert( std::is_same< typename LHS::value_type, typename RHS::value_type>::value );
+    static_assert( std::is_same< typename LHS::value_type,
+                   typename RHS::value_type>::value,
+                   "types must be the same" );
     
     using value_type = typename LHS::value_type;
     
@@ -375,9 +378,6 @@ namespace monad {
   static kleene_type<Parser> operator*(Parser parser) {
     return {parser};
   }
-
-
-
 
 
 
@@ -473,20 +473,40 @@ namespace monad {
         return parser(in);
       }
     }
-
       
   };
 
-  template<class Parser>
-  static no_skip_type< Parser > no_skip(Parser parser) {
-	return {parser};
-  }
+  // template<class Parser>
+  // static no_skip_type< Parser > no_skip(Parser parser) {
+  //   return {parser};
+  // }
+
+  static struct {
+
+    template<class Parser>
+    no_skip_type<Parser> operator[](Parser parser) const {
+      return {parser};
+    }
+  } no_skip;
   
+  // TODO use value
   template<class T>
-  struct any : std::function< maybe<T>(std::istream& in) > {
-    using std::function< maybe<T>(std::istream&) >::function;
+  struct any {
+    using impl_type = std::function< maybe<T>(std::istream& in) >;
+    impl_type impl;
 
     using value_type = T;
+
+    maybe<T> operator()(std::istream& in) const {
+      assert( impl );
+      return impl(in);
+    }
+    
+    template<class F>
+    any& operator=(const F& f) {
+      impl = f;
+      return *this;
+    }
     
   };
 
@@ -506,16 +526,17 @@ namespace monad {
   template<class Parser>
   static ref_type<Parser> ref(const Parser& parser) { return { parser }; }
 
-  template<class Parser>
-  static ref_type<Parser> operator&(const Parser& parser) { return { parser }; }
+  // note: this does not compile with libc++
+  // template<class Parser>
+  // static ref_type<Parser> operator&(const Parser& parser) { return { parser }; }
   
   
   template<class T>
   struct cast {
     
     template<class U>
-    result_type<T> operator()(U u) const {
-      return result<T>(u);
+    pure_type<T> operator()(U u) const {
+      return pure<T>(u);
     }
     
   };
@@ -531,9 +552,9 @@ namespace monad {
     maybe<value_type> operator()(std::istream& in) const {
 
       const auto impl = parser >> [&](source_type&& first) {
-        return *parser >> [first](value_type&& value) {
+        return kleene(parser) >> [first](value_type&& value) {
           value.emplace(value.begin(), std::move(first));
-          return result(value);
+          return pure(value);
         };
       };
 
@@ -563,9 +584,9 @@ namespace monad {
       const auto impl = parser >> [&](source_type first) {
         return *(separator, parser) >> [first](value_type&& value) {
           value.emplace(value.begin(), std::move(first));
-          return result(value);
+          return pure(value);
         };
-        } | result( value_type() );
+        } | pure( value_type() );
 
       return impl(in);    
     }
@@ -581,7 +602,7 @@ namespace monad {
   static list_type<Parser, Separator> operator%(Parser parser, Separator separator) {
     return {parser, separator};
   }
-
+  
   
 }
 
@@ -602,7 +623,7 @@ public:
 
 
 
-int test() {
+void test() {
 
   struct cell;
   using list = std::shared_ptr<cell>;
@@ -650,6 +671,9 @@ struct value : variant<long, double, symbol, std::vector<value> > {
 };
 
 
+
+
+
 int main(int, char** ) {
 
   {
@@ -660,31 +684,32 @@ int main(int, char** ) {
     auto space = chr<std::isspace>(); 
 
     auto endl = chr('\n');
-    auto comment = (chr(';'), *!endl, endl);
+    auto comment = (chr(';'), kleene(!endl), endl);
 
     auto real = lit<double>();
     auto integer = lit<long>();
     auto dquote = chr('"');
 
-    // auto symbol = no_skip( alpha >> *alnum) ) );
+    auto symbol = no_skip[ (alpha, *alnum) ];
     
-    auto string = no_skip( (dquote,
-                            (*!dquote) >> [dquote](std::vector<char>&& value) {
-                              return dquote, result(std::move(value));
-                            }));
+    auto string = no_skip[ (dquote, *!dquote)
+                           >> [dquote](std::vector<char>&& value) {
+        return dquote, pure(std::move(value));
+      }];
     
     auto atom = real >> cast<value>() | integer >> cast<value>();
-
+    
     any<value> expr;
-
-    auto list = no_skip( (chr('('), *space, (&expr % +space) >> [space](std::vector<value>&& x) {
-          return *space, chr(')'), result(x);
-        }) );
-
+    
+    auto list = no_skip[ (chr('('), *space, ref(expr) % +space)
+                         >> [space](std::vector<value>&& x) {
+        return *space, chr(')'), pure(x);
+      }];
+    
 
     expr = atom | list >> cast<value>();
-    
-    auto parser = list;
+
+    auto parser = expr;
     
     repl([&](std::istream& in) {
         return bool(parser(in));
@@ -693,45 +718,45 @@ int main(int, char** ) {
     return 0;
   }
   
-  using namespace parse;
+  // using namespace parse;
     
-  auto alpha = chr<std::isalpha>();
-  auto alnum = chr<std::isalnum>();
-  auto space = chr<std::isspace>(); 
+  // auto alpha = chr<std::isalpha>();
+  // auto alnum = chr<std::isalnum>();
+  // auto space = chr<std::isspace>(); 
     
-  auto endl = chr('\n');
-  auto comment = (chr(';'), *!endl, endl);
+  // auto endl = chr('\n');
+  // auto comment = (chr(';'), *!endl, endl);
 
-  auto real = lit<double>();
-  auto integer = lit<int>();
+  // auto real = lit<double>();
+  // auto integer = lit<int>();
 
-  auto dquote = chr('"');
+  // auto dquote = chr('"');
 
-  // TODO escaped strings
-  auto string = tos( no_skip( (dquote,
-                               *!dquote,
-                               dquote)) );
+  // // TODO escaped strings
+  // auto string = tos( no_skip( (dquote,
+  //                              *!dquote,
+  //                              dquote)) );
   
-  auto symbol = tos( no_skip( (alpha, *alnum) ) );
+  // auto symbol = tos( no_skip( (alpha, *alnum) ) );
 
-  auto atom = symbol | string | real | integer;
+  // auto atom = symbol | string | real | integer;
   
-  struct expr_tag;
-  any<expr_tag> expr;
+  // struct expr_tag;
+  // any<expr_tag> expr;
   
-  auto list = no_skip( (chr('('),
-                        *space,
-                        ~( expr, *(+space, expr) ),
-                        *space,
-                        chr(')' )) );
+  // auto list = no_skip( (chr('('),
+  //                       *space,
+  //                       ~( expr, *(+space, expr) ),
+  //                       *space,
+  //                       chr(')' )) );
      
-  expr = atom | list;
+  // expr = atom | list;
                       
-  auto parser = expr;
+  // auto parser = expr;
 
-  repl([&](std::istream& in) {
-      return bool(in >> parser);
-    });
+  // repl([&](std::istream& in) {
+  //     return bool(in >> parser);
+  //   });
   
 }
  
