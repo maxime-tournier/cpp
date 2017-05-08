@@ -621,24 +621,9 @@ public:
   
 };
 
+symbol::table_type symbol::table;
 
 
-void test() {
-
-  struct cell;
-  using list = std::shared_ptr<cell>;
-
-  using string = std::string;
-  using value = variant<long, double, symbol, string, list >;
-
-  struct cell {
-    value head;
-    list tail = 0;
-  };
-  
-  value x = 1.0f;
-  
-}
 
 
 template<class F>
@@ -663,13 +648,53 @@ static void repl(const F& f) {
 };
 
 
-using string = std::string;
-struct value;
+// struct value;
+struct cell;
+using list = std::shared_ptr<cell>;
 
-struct value : variant<long, double, symbol, std::vector<value> > {
+// struct string : std::string {
+//   string(const std::string& other) : std::string(other) {}
+// };
+
+using string = std::string;
+
+struct value : variant<long, double, symbol, string, list > {
   using value::variant::variant;
+
+
+  list operator>>=(list tail) const {
+    return std::make_shared<cell>(*this, tail);
+  }
+  
 };
 
+template<class Container>
+static list make_list(const Container& container) {
+  list res;
+
+  for(auto it = container.rbegin(), end = container.rend();
+      it != end; ++it) {
+    res = *it >>= res;
+  }
+  
+  return res;
+}
+
+
+struct cell {
+
+  cell(const value& head,
+       const list& tail)
+    : head(head),
+      tail(tail) {
+
+  }
+  
+  value head;
+  list tail = 0;
+};
+
+// value x = "test";
 
 
 
@@ -690,23 +715,29 @@ int main(int, char** ) {
     auto integer = lit<long>();
     auto dquote = chr('"');
 
-    auto symbol = no_skip[ (alpha, *alnum) ];
+    auto symbol = no_skip[ (alpha, *alnum) ] >> [](std::vector<char>&& str) {
+      return pure<value>( ::symbol(str.data()) );
+    };
     
     auto string = no_skip[ (dquote, *!dquote)
-                           >> [dquote](std::vector<char>&& value) {
-        return dquote, pure(std::move(value));
+                           >> [dquote](std::vector<char>&& x) {
+        std::string str(x.data());
+        return dquote, pure<value>(::string(str));
       }];
     
-    auto atom = real >> cast<value>() | integer >> cast<value>();
+    auto atom = string | symbol | integer >> cast<value>();
     
     any<value> expr;
     
     auto list = no_skip[ (chr('('), *space, ref(expr) % +space)
                          >> [space](std::vector<value>&& x) {
-        return *space, chr(')'), pure(x);
+        
+        return *space, chr(')'), pure(make_list(x));
       }];
     
 
+    value test = 1l;
+    
     expr = atom | list >> cast<value>();
 
     auto parser = expr;
