@@ -9,6 +9,7 @@
 #include <set>
 #include <memory>
 #include <vector>
+#include <deque>
 #include <cassert>
 
 
@@ -354,7 +355,7 @@ namespace monad {
     const Parser parser;
 
     using source_type = typename Parser::value_type;
-    using value_type = std::vector< source_type >;
+    using value_type = std::deque< source_type >;
 
     maybe<value_type> operator()(std::istream& in) const {
       value_type res;
@@ -476,11 +477,8 @@ namespace monad {
       
   };
 
-  // template<class Parser>
-  // static no_skip_type< Parser > no_skip(Parser parser) {
-  //   return {parser};
-  // }
 
+  // boost::spirit style
   static struct {
 
     template<class Parser>
@@ -488,7 +486,8 @@ namespace monad {
       return {parser};
     }
   } no_skip;
-  
+
+
   // TODO use value
   template<class T>
   struct any {
@@ -526,11 +525,6 @@ namespace monad {
   template<class Parser>
   static ref_type<Parser> ref(const Parser& parser) { return { parser }; }
 
-  // note: this does not compile with libc++
-  // template<class Parser>
-  // static ref_type<Parser> operator&(const Parser& parser) { return { parser }; }
-  
-  
   template<class T>
   struct cast {
     
@@ -583,10 +577,10 @@ namespace monad {
 
       const auto impl = parser >> [&](source_type first) {
         return *(separator, parser) >> [first](value_type&& value) {
-          value.emplace(value.begin(), std::move(first));
+          value.emplace_front(std::move(first));
           return pure(value);
         };
-        } | pure( value_type() );
+      } | pure( value_type() );
 
       return impl(in);    
     }
@@ -608,27 +602,11 @@ namespace monad {
 
 
 
-class symbol {
-  using table_type = std::set<std::string>;
-  static table_type table;
-
-  using iterator_type = table_type::iterator;
-  iterator_type iterator;
-public:
-
-  symbol(const std::string& value) 
-    : iterator(table.insert(value).first) { }  
-  
-};
-
-symbol::table_type symbol::table;
-
-
 
 
 template<class F>
-static void repl(const F& f) {
-
+static void read_loop(const F& f) {
+  
   while(std::cin) {
 	std::string line;
     
@@ -649,146 +627,130 @@ static void repl(const F& f) {
 
 
 // struct value;
-struct cell;
-using list = std::shared_ptr<cell>;
 
-// struct string : std::string {
-//   string(const std::string& other) : std::string(other) {}
-// };
-
-using string = std::string;
-
-struct value : variant<long, double, symbol, string, list > {
-  using value::variant::variant;
-
-
-  list operator>>=(list tail) const {
-    return std::make_shared<cell>(*this, tail);
-  }
+namespace sexpr {
   
-};
+  struct cell;
+  using list = std::shared_ptr<cell>;
 
-template<class Container>
-static list make_list(const Container& container) {
-  list res;
+  using string = std::string;
+  using integer = long;
+  using real = double;
 
-  for(auto it = container.rbegin(), end = container.rend();
-      it != end; ++it) {
-    res = *it >>= res;
-  }
+  class symbol {
+    using table_type = std::set<std::string>;
+    static table_type table;
+
+    using iterator_type = table_type::iterator;
+    iterator_type iterator;
+  public:
+
+    symbol(const std::string& value) 
+      : iterator(table.insert(value).first) { }  
   
-  return res;
+  };
+
+  symbol::table_type symbol::table;
+
+
+
+  
+  struct value : variant<list, integer, real, symbol, string > {
+    using value::variant::variant;
+    
+    list operator>>=(list tail) const {
+      return std::make_shared<cell>(*this, tail);
+    }
+    
+  };
+
+  template<class Container>
+  static list make_list(const Container& container) {
+    list res;
+    
+    for(auto it = container.rbegin(), end = container.rend();
+        it != end; ++it) {
+      res = *it >>= res;
+    }
+    
+    return res;
+  }
+
+  
+  struct cell {
+
+    cell(const value& head,
+         const list& tail)
+      : head(head),
+        tail(tail) {
+
+    }
+  
+    value head;
+    list tail = 0;
+  };
+  
 }
 
 
-struct cell {
 
-  cell(const value& head,
-       const list& tail)
-    : head(head),
-      tail(tail) {
-
-  }
+static monad::any<sexpr::value> sexpr_parser() {
   
-  value head;
-  list tail = 0;
-};
+  using namespace monad;
 
-// value x = "test";
+  const auto alpha = chr<std::isalpha>();
+  const auto alnum = chr<std::isalnum>();
+  const auto space = chr<std::isspace>(); 
+
+  const auto endl = chr('\n');
+  const auto dquote = chr('"');
+  
+  auto comment = (chr(';'), kleene(!endl), endl);
+
+  auto as_value = cast<sexpr::value>();
+  
+  auto real = lit<sexpr::real>() >> as_value;
+  auto integer = lit<sexpr::integer>() >> as_value;
+  
+  auto symbol = no_skip[ (alpha, *alnum) ] >> [](std::deque<char>&& chars) {
+    sexpr::string str(chars.begin(), chars.end());
+    return pure<sexpr::value>( sexpr::symbol(str) );
+  };
+    
+  auto string = no_skip[ (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
+      sexpr::string str(chars.begin(), chars.end());
+      return dquote, pure<sexpr::value>(str);
+    }];
+    
+  auto atom = string | symbol | real | integer;
+    
+  any<sexpr::value> expr;
+    
+  auto list = no_skip[ (chr('('), *space, ref(expr) % +space)
+                       >> [space](std::deque<sexpr::value>&& terms) {
+      return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
+    }];
+  
+  expr = atom | list;
+
+  return expr;
+}
+
+
 
 
 
 
 int main(int, char** ) {
 
-  {
-    using namespace monad;
-
-    auto alpha = chr<std::isalpha>();
-    auto alnum = chr<std::isalnum>();
-    auto space = chr<std::isspace>(); 
-
-    auto endl = chr('\n');
-    auto comment = (chr(';'), kleene(!endl), endl);
-
-    auto real = lit<double>();
-    auto integer = lit<long>();
-    auto dquote = chr('"');
-
-    auto symbol = no_skip[ (alpha, *alnum) ] >> [](std::vector<char>&& str) {
-      return pure<value>( ::symbol(str.data()) );
-    };
-    
-    auto string = no_skip[ (dquote, *!dquote)
-                           >> [dquote](std::vector<char>&& x) {
-        std::string str(x.data());
-        return dquote, pure<value>(::string(str));
-      }];
-    
-    auto atom = string | symbol | integer >> cast<value>();
-    
-    any<value> expr;
-    
-    auto list = no_skip[ (chr('('), *space, ref(expr) % +space)
-                         >> [space](std::vector<value>&& x) {
-        
-        return *space, chr(')'), pure(make_list(x));
-      }];
-    
-
-    value test = 1l;
-    
-    expr = atom | list >> cast<value>();
-
-    auto parser = expr;
-    
-    repl([&](std::istream& in) {
-        return bool(parser(in));
-      });
-
-    return 0;
-  }
+  const auto parser = sexpr_parser();
   
-  // using namespace parse;
-    
-  // auto alpha = chr<std::isalpha>();
-  // auto alnum = chr<std::isalnum>();
-  // auto space = chr<std::isspace>(); 
-    
-  // auto endl = chr('\n');
-  // auto comment = (chr(';'), *!endl, endl);
-
-  // auto real = lit<double>();
-  // auto integer = lit<int>();
-
-  // auto dquote = chr('"');
-
-  // // TODO escaped strings
-  // auto string = tos( no_skip( (dquote,
-  //                              *!dquote,
-  //                              dquote)) );
+  read_loop([parser](std::istream& in) {
+      maybe<sexpr::value> expr = parser(in);
+      return bool(expr);
+    });
   
-  // auto symbol = tos( no_skip( (alpha, *alnum) ) );
-
-  // auto atom = symbol | string | real | integer;
-  
-  // struct expr_tag;
-  // any<expr_tag> expr;
-  
-  // auto list = no_skip( (chr('('),
-  //                       *space,
-  //                       ~( expr, *(+space, expr) ),
-  //                       *space,
-  //                       chr(')' )) );
-     
-  // expr = atom | list;
-                      
-  // auto parser = expr;
-
-  // repl([&](std::istream& in) {
-  //     return bool(in >> parser);
-  //   });
-  
+  return 0;
 }
  
  
