@@ -264,7 +264,7 @@ namespace monad {
     using value_type = typename range_type::value_type;
 
     maybe<value_type> operator()(std::istream& in) const {
-      parse::point pos(in);
+      const auto pos = in.tellg();
       
       maybe<domain_type> value = parser(in);
 
@@ -273,9 +273,10 @@ namespace monad {
       const maybe<value_type> res = f( std::move(value.template get<domain_type>() ) )(in);
       if(res) return res;
 
-      // backtrack 
-      pos.reset(in);
-      // in.setstate(std::ios::failbit);
+      // backtrack
+      in.seekg(pos);
+      in.clear();      
+
       return none();
     }
   
@@ -440,14 +441,15 @@ namespace monad {
     using value_type = T;
     
     maybe<value_type> operator()(std::istream& in) const {
-      parse::point pos(in);
+      const auto pos = in.tellg();
       
       value_type value;
       if( in >> value ) {
         return value;
       }
-	
-      pos.reset(in);
+      
+      in.seekg(pos);
+      in.clear();
       // in.setstate(std::ios::failbit);
       return none();
     }
@@ -488,26 +490,6 @@ namespace monad {
   } no_skip;
 
 
-  // TODO use value
-  template<class T>
-  struct any {
-    using impl_type = std::function< maybe<T>(std::istream& in) >;
-    impl_type impl;
-
-    using value_type = T;
-
-    maybe<T> operator()(std::istream& in) const {
-      assert( impl );
-      return impl(in);
-    }
-    
-    template<class F>
-    any& operator=(const F& f) {
-      impl = f;
-      return *this;
-    }
-    
-  };
 
   template<class Parser>
   struct ref_type {
@@ -524,14 +506,30 @@ namespace monad {
 
   template<class Parser>
   static ref_type<Parser> ref(const Parser& parser) { return { parser }; }
+  
 
+  template<class T>
+  struct any : std::function< maybe<T>(std::istream& in) >{
+    using value_type = T;
+    
+    using any::function::function;
+  };
+
+  // hides std::ref
+  template<class T>
+  static ref_type<any<T>> ref(any<T>& self) { return {self}; }
+
+  template<class T>
+  static ref_type<any<T>> ref(const any<T>& self) { return {self}; }    
+  
+  
   template<class T>
   struct cast {
     
     template<class U>
     pure_type<T> operator()(U u) const {
       return pure<T>(u);
-    }
+    } 
     
   };
 
@@ -626,8 +624,6 @@ static void read_loop(const F& f) {
 };
 
 
-// struct value;
-
 namespace sexpr {
   
   struct cell;
@@ -638,31 +634,22 @@ namespace sexpr {
   using real = double;
 
   class symbol {
-    using table_type = std::set<std::string>;
+    using table_type = std::set<string>;
     static table_type table;
 
     using iterator_type = table_type::iterator;
     iterator_type iterator;
   public:
 
-    symbol(const std::string& value) 
+    symbol(const string& value) 
       : iterator(table.insert(value).first) { }  
-  
+
+    const std::string& name() const { return *iterator; }
+    
   };
 
   symbol::table_type symbol::table;
 
-
-
-  
-  struct value : variant<list, integer, real, symbol, string > {
-    using value::variant::variant;
-    
-    list operator>>=(list tail) const {
-      return std::make_shared<cell>(*this, tail);
-    }
-    
-  };
 
   template<class Container>
   static list make_list(const Container& container) {
@@ -677,7 +664,22 @@ namespace sexpr {
   }
 
   
+  struct value : variant<list, integer, real, symbol, string > {
+    using value::variant::variant;
+    
+    list operator>>=(list tail) const {
+      return std::make_shared<cell>(*this, tail);
+    }
+
+    struct ostream;
+  };
+
+  static std::ostream& operator<<(std::ostream& out, const value& self);  
+
   struct cell {
+
+    value head;
+    list tail = 0;
 
     cell(const value& head,
          const list& tail)
@@ -685,10 +687,55 @@ namespace sexpr {
         tail(tail) {
 
     }
-  
-    value head;
-    list tail = 0;
+    
+    struct iterator {
+      cell* ptr;
+
+      value& operator*() const { return ptr->head; }
+      bool operator!=(iterator other) const { return ptr != other.ptr; }
+      iterator& operator++() { ptr = ptr->tail.get(); return *this; }
+    };
+
   };
+  
+  static cell::iterator begin(const list& self) { return { self.get() }; }
+  static cell::iterator end(const list& self) { return { nullptr }; }
+  
+  struct value::ostream {
+
+    void operator()(const list& self, std::ostream& out) const {
+      bool first = true;
+      out << '(';
+      for(const value& x : self) {
+        if(first) first = false;
+        else out << ' ';
+        out << x;
+      }
+      out << ')';
+    }
+
+    void operator()(const symbol& self, std::ostream& out) const {
+      out << self.name();
+    }
+
+    void operator()(const string& self, std::ostream& out) const {
+      out << '"' << self << '"';
+    }
+
+      
+    template<class T>
+    void operator()(const T& self, std::ostream& out) const {
+      out << self;
+    }
+    
+  };
+
+  static std::ostream& operator<<(std::ostream& out, const value& self) {
+    self.apply( value::ostream(), out );
+    return out;
+  }
+  
+  
   
 }
 
@@ -712,10 +759,14 @@ static monad::any<sexpr::value> sexpr_parser() {
   auto real = lit<sexpr::real>() >> as_value;
   auto integer = lit<sexpr::integer>() >> as_value;
   
-  auto symbol = no_skip[ (alpha, *alnum) ] >> [](std::deque<char>&& chars) {
-    sexpr::string str(chars.begin(), chars.end());
-    return pure<sexpr::value>( sexpr::symbol(str) );
-  };
+  auto symbol = no_skip[ alpha >> [alnum](char first) {
+      return *alnum >> [first](std::deque<char>&& chars) {
+        chars.emplace_front(first);
+        const sexpr::string str(chars.begin(), chars.end());
+        return pure<sexpr::value>( sexpr::symbol(str) );
+      };
+    }];
+  
     
   auto string = no_skip[ (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
       sexpr::string str(chars.begin(), chars.end());
@@ -747,7 +798,10 @@ int main(int, char** ) {
   
   read_loop([parser](std::istream& in) {
       maybe<sexpr::value> expr = parser(in);
-      return bool(expr);
+
+      if(!expr) return false;
+      std::cout << expr.get<sexpr::value>() << std::endl;
+      return true;
     });
   
   return 0;
