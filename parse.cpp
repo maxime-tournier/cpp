@@ -12,6 +12,8 @@
 #include <deque>
 #include <cassert>
 
+// #include <unordered_map>
+#include <map>
 
 namespace impl {
   template<std::size_t start, class ... T>
@@ -47,11 +49,10 @@ class variant {
   
   using select_type = impl::select<0, T...>;
 
-  template<class U, class Variant, class Visitor, class ... Args>
-  static void apply_thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
-    std::forward<Visitor>(visitor)(self.template get<U>(), std::forward<Args>(args)...);
+  template<class U, class Ret, class Variant, class Visitor, class ... Args>
+  static Ret call_thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
+    return std::forward<Visitor>(visitor)(self.template get<U>(), std::forward<Args>(args)...);
   }
-
 
   template<class U>
   void construct(U&& value) {
@@ -97,6 +98,7 @@ class variant {
       self.~U();
     }
   };
+
 
 
 public:
@@ -160,7 +162,7 @@ public:
   
   // TODO move constructors from values ?
   template<class U>
-  variant(const U& value)
+  variant(const U& value, decltype( select_type::index( std::declval<const U&>() ) )* = 0)
     : index( select_type::index(value) ) {
     construct( select_type::cast(value) );
   }
@@ -171,7 +173,7 @@ public:
     using thunk_type = void (*)(variant& self, Visitor&& visitor, Args&& ... args);
 
     static constexpr thunk_type thunk[] = {
-      apply_thunk<T, variant, Visitor, Args...>...
+      call_thunk<T, void, variant, Visitor, Args...>...
     };
     
     thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
@@ -182,10 +184,22 @@ public:
     using thunk_type = void (*)(const variant& self, Visitor&& visitor, Args&& ... args);
 
     static constexpr thunk_type thunk[] = {
-      apply_thunk<T, const variant, Visitor, Args...>...
+      call_thunk<T, void, const variant, Visitor, Args...>...
     };
     
     thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
+  }
+
+
+  template<class Visitor, class ... Args>
+  variant map(Visitor&& visitor, Args&& ... args) const {
+    using thunk_type = variant (*)(const variant& self, Visitor&& visitor, Args&& ... args);
+
+    static constexpr thunk_type thunk[] = {
+      call_thunk<T, variant, const variant, Visitor, Args...>...
+    };
+    
+    return thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
   }
 
   
@@ -390,24 +404,19 @@ namespace monad {
 	struct negate {
 	  const Pred pred;
 
-	  bool operator()(char c) const {
-		return !pred(c);
-	  }
-
+	  bool operator()(char c) const { return !pred(c); }
 	};
 
-	character<negate> operator!() const {
-	  return {pred};
-	}
-
+	character<negate> operator!() const { return {pred}; }
+    
     using value_type = char;
-
+    
     maybe<value_type> operator()(std::istream& in) const {
       char c;
+
       if(in >> c) {
         if( pred(c) ) return c;
         in.putback(c);
-        // in.setstate(std::ios::failbit);
       }
       
       return none();
@@ -418,10 +427,7 @@ namespace monad {
   struct equals {
 	const char expected;
 
-	bool operator()(char c) const {
-      // std::clog << "got: '" << c << "', expecting: '" << expected << "'" << std::endl;
-	  return c == expected;
-	}
+	bool operator()(char c) const { return c == expected; }
   };
   
   static character<equals> chr(char c) { return {{c}}; }
@@ -450,7 +456,7 @@ namespace monad {
       
       in.seekg(pos);
       in.clear();
-      // in.setstate(std::ios::failbit);
+
       return none();
     }
    
@@ -614,7 +620,7 @@ static void read_loop(const F& f) {
 	std::stringstream ss(line);
 
 	if( f(ss) ) {
-	  std::cout << "parse succeded" << std::endl;
+      
 	} else if(!std::cin.eof()) {
 	  std::cerr << "parse error" << std::endl;
 	}
@@ -625,10 +631,16 @@ static void read_loop(const F& f) {
 
 
 namespace sexpr {
+
+  template<class T>
+  using ref = std::shared_ptr<T>;
   
   struct cell;
-  using list = std::shared_ptr<cell>;
+  using list = ref<cell>;
 
+  struct context;
+  struct lambda;
+  
   using string = std::string;
   using integer = long;
   using real = double;
@@ -645,6 +657,10 @@ namespace sexpr {
       : iterator(table.insert(value).first) { }  
 
     const std::string& name() const { return *iterator; }
+
+    bool operator<(const symbol& other) const {
+      return &(*iterator) < &(*other.iterator);
+    }
     
   };
 
@@ -664,7 +680,8 @@ namespace sexpr {
   }
 
   
-  struct value : variant<list, integer, real, symbol, string > {
+  struct value : variant<list, integer, real, symbol, string,
+                         ref<lambda> > {
     using value::variant::variant;
     
     list operator>>=(list tail) const {
@@ -734,10 +751,102 @@ namespace sexpr {
     self.apply( value::ostream(), out );
     return out;
   }
+
+
+  struct error : std::runtime_error {
+    using std::runtime_error::runtime_error;
+  };
   
+  struct unbound_variable : error {
+    unbound_variable(const symbol& s)
+      : error("unbound variable: " + s.name()) { }
+    
+  };
+
+  
+  struct context : std::enable_shared_from_this<context> {
+    
+    ref<context> parent;
+
+    using locals_type = std::map< symbol, value >;
+    locals_type locals;
+
+    value& find(const symbol& name) {
+      auto it = locals.find(name);
+      if(it != locals.end()) return it->second;
+      if(parent) return parent->find(name);
+      throw unbound_variable(name);
+    }
+
+    template<class Iterator>
+    context extend(Iterator first, Iterator last) {
+      context res;
+      res.parent = shared_from_this();
+      res.locals.insert(first, last);
+
+      return res;
+    }
+    
+  };
+
+
+  struct lambda {
+    ref<context> ctx;
+    std::vector<symbol> args;
+    value body;
+  };
+
+
+  static value eval(context& ctx, const value& expr);
+  static value apply(const value& app, const value* first, const value* last);
+  
+  
+  struct eval_type {
+
+    value operator()(const symbol& self, context& ctx) const {
+      return ctx.find(self);
+    }
+
+    value operator()(const list& self, context& ctx) const {
+      if(!self) throw error("empty list in application");
+
+      const value& first = self->head;
+
+      // TODO special forms
+      
+
+      // applicatives
+      const value app = eval(ctx, first);
+      
+      // TODO eval args to call stack ?
+      std::vector<value> args;      
+      for(const value& x : self->tail) {
+        args.push_back( eval(ctx, x) );
+      }
+
+      return apply(app, args.data(), args.data() + args.size());
+    }
+    
+    
+    template<class T>
+    value operator()(const T& self, context& ctx) const {
+      return self;
+    }
+    
+  };
+  
+  static value eval(context& ctx, const value& expr) {
+    return expr.map( eval_type(), ctx );
+  }
+
+  static value apply(const value& app, const value* first, const value* last) {
+    throw error("not implemented");
+  }
   
   
 }
+
+
 
 
 
@@ -794,14 +903,20 @@ static monad::any<sexpr::value> sexpr_parser() {
 
 int main(int, char** ) {
 
-  const auto parser = sexpr_parser();
+  using namespace sexpr;
+  context ctx;
+
+  const auto parser = sexpr_parser() >> [&](value&& expr) {
+    try{
+      std::cout << eval(ctx, expr) << std::endl;
+    } catch( error& e ) {
+      std::cerr << "error: " << e.what() << std::endl;
+    }
+    return monad::pure(expr);
+  };
   
   read_loop([parser](std::istream& in) {
-      maybe<sexpr::value> expr = parser(in);
-
-      if(!expr) return false;
-      std::cout << expr.get<sexpr::value>() << std::endl;
-      return true;
+      return bool( parser(in) );
     });
   
   return 0;
