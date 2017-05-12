@@ -326,7 +326,7 @@ namespace parse {
     template<class Parser>
 	any& operator=(Parser&& parser) {
       static_assert(!is_set< any >(0), "redefined parser");
-      sizeof(set_flag<any>);
+      (void) sizeof(set_flag<any>);
       
       static typename std::decay<Parser>::type upvalue = std::forward<Parser>(parser);
       impl = [](std::istream& in) -> std::istream& { 

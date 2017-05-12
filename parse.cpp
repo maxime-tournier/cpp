@@ -632,6 +632,8 @@ namespace sexpr {
 
   template<class T>
   using ref = std::shared_ptr<T>;
+
+  struct value;
   
   struct cell;
   using list = ref<cell>;
@@ -643,6 +645,10 @@ namespace sexpr {
   using integer = long;
   using real = double;
 
+  // TODO maybe not const ?
+  // TODO pass ctx ?
+  using builtin = value (*)(const value* first, const value* last);
+  
   class symbol {
     using table_type = std::set<string>;
     static table_type table;
@@ -677,9 +683,10 @@ namespace sexpr {
     return res;
   }
 
-  
+
+  // TODO ref<string> ?
   struct value : variant<list, integer, real, symbol, string,
-                         ref<lambda> > {
+                         ref<lambda>, builtin > {
     using value::variant::variant;
 
     value(value::variant&& other)
@@ -784,10 +791,11 @@ namespace sexpr {
     }
 
     template<class Iterator>
-    context extend(Iterator first, Iterator last) {
-      context res;
-      res.parent = shared_from_this();
-      res.locals.insert(first, last);
+    ref<context> extend(Iterator first, Iterator last) {
+      ref<context> res = std::make_shared<context>();
+
+      res->parent = shared_from_this();
+      res->locals.insert(first, last);
 
       return res;
     }
@@ -797,7 +805,8 @@ namespace sexpr {
 
   struct lambda {
     ref<context> ctx;
-    std::vector<symbol> args;
+    using args_type = std::vector<symbol>;
+    args_type args;
     value body;
   };
 
@@ -806,7 +815,7 @@ namespace sexpr {
   static value apply(const value& app, const value* first, const value* last);
   
   
-  struct eval_type {
+  struct eval_visitor {
 
     value operator()(const symbol& self, context& ctx) const {
       return ctx.find(self);
@@ -839,13 +848,59 @@ namespace sexpr {
     }
     
   };
+
   
   static value eval(context& ctx, const value& expr) {
-    return expr.map( eval_type(), ctx );
+    return expr.map( eval_visitor(), ctx );
   }
 
 
+  struct apply_visitor {
 
+    value operator()(const ref<lambda>& self, const value* first, const value* last) {
+
+      struct iterator {
+        lambda::args_type::iterator it_name;
+        const value* it_arg;
+
+        iterator& operator++() {
+          ++it_name, ++it_arg;
+          return *this;
+        }
+
+        std::pair<symbol, const value&> operator*() const {
+          return {*it_name, *it_arg};
+        }
+        
+        bool operator!=(const iterator& other) const {
+          const bool cond_name = it_name != other.it_name;
+          const bool cond_arg = it_arg != other.it_arg;
+
+          if(cond_name ^ cond_arg) throw error("arg count");
+
+          return cond_name || cond_arg;
+        }
+        
+      };
+
+      iterator pair_first = {self->args.begin(), first};
+      iterator pair_last = {self->args.end(), last};
+
+      ref<context> sub = self->ctx->extend(pair_first, pair_last);
+      return eval(*sub, self->body);
+    }
+
+    value operator()(const builtin& self, const value* first, const value* last) {
+      return self(first, last);      
+    }
+    
+
+    template<class T>
+    value operator()(const T& self, const value* first, const value* last) {
+      throw error("cannot apply");
+    }
+    
+  };
 
   
   static value apply(const value& app, const value* first, const value* last) {
