@@ -115,7 +115,10 @@ public:
   template<class U>
   const U& get() const {
     const U& res = reinterpret_cast<const U&>(storage);
-    if( select_type::index(res) != index ) throw std::runtime_error("bad cast");
+    if( select_type::index(res) != index ) {
+      std::clog << select_type::index(res) << " vs. " << index << std::endl;
+      throw std::runtime_error("bad cast");
+    }
     return res;
   }
 
@@ -660,6 +663,10 @@ namespace sexpr {
     symbol(const string& value) 
       : iterator(table.insert(value).first) { }  
 
+    symbol(const char* value) 
+      : iterator(table.insert(value).first) { }  
+
+    
     const std::string& name() const { return *iterator; }
 
     bool operator<(const symbol& other) const {
@@ -751,6 +758,14 @@ namespace sexpr {
       out << '"' << self << '"';
     }
 
+    void operator()(const builtin& self, std::ostream& out) const {
+      out << "#<builtin>";
+    }
+
+    void operator()(const ref<lambda>& self, std::ostream& out) const {
+      out << "#<lambda>";
+    }
+    
       
     template<class T>
     void operator()(const T& self, std::ostream& out) const {
@@ -799,6 +814,11 @@ namespace sexpr {
 
       return res;
     }
+
+    context& operator()(const symbol& name, const value& expr) {
+      locals.emplace( std::make_pair(name, expr) );
+      return *this;
+    }
     
   };
 
@@ -835,7 +855,7 @@ namespace sexpr {
       // TODO eval args to call stack ?
       std::vector<value> args;      
       for(const value& x : self->tail) {
-        args.push_back( eval(ctx, x) );
+        args.emplace_back( eval(ctx, x) );
       }
 
       return apply(app, args.data(), args.data() + args.size());
@@ -904,7 +924,7 @@ namespace sexpr {
 
   
   static value apply(const value& app, const value* first, const value* last) {
-    throw error("not implemented");
+    return app.map(apply_visitor(), first, last);
   }
   
   
@@ -946,7 +966,7 @@ static monad::any<sexpr::value> sexpr_parser() {
       return dquote, pure<sexpr::value>(str);
     }];
     
-  auto atom = string | symbol | real | integer;
+  auto atom = string | symbol | integer | real;
     
   any<sexpr::value> expr;
     
@@ -970,6 +990,16 @@ int main(int, char** ) {
   using namespace sexpr;
   context ctx;
 
+  ctx
+    ("add", [](const value* first, const value* last) -> value {
+      integer res = 0;
+      while(first != last) {
+        res += (first++)->get<integer>();
+      };
+      return res;
+    });
+  
+  
   const auto parser = sexpr_parser() >> [&](value&& expr) {
     try{
       std::cout << eval(ctx, expr) << std::endl;
