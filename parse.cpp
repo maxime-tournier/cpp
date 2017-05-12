@@ -9,7 +9,7 @@
 #include <deque>
 #include <cassert>
 
-// #include <unordered_map>
+#include <unordered_map>
 #include <map>
 
 #include <readline/readline.h>
@@ -122,7 +122,11 @@ public:
     return res;
   }
 
-
+  template<class U, int R = select_type::index( *(U*)0 )>
+  bool is() const {
+    return R == index;
+  }
+  
   
   variant(const variant& other)
     : index(other.index) {
@@ -790,6 +794,12 @@ namespace sexpr {
     
   };
 
+  struct syntax_error : error {
+    syntax_error(const std::string& s)
+      : error("syntax error: " + s) { }
+    
+  };
+  
   
   struct context : std::enable_shared_from_this<context> {
     
@@ -834,6 +844,26 @@ namespace sexpr {
   static value eval(context& ctx, const value& expr);
   static value apply(const value& app, const value* first, const value* last);
   
+
+  namespace special {
+    using type = value (*)(context&, const list& args);
+    
+    static value lambda(context& ctx, const list& args) {
+      throw error("lambda");
+    }
+
+    static value def(context& ctx, const list& args) {
+      if(args && args->head.is<symbol>() && args->tail && !args->tail->tail) {
+        const value& expr = args->tail->head;
+        auto res = ctx.locals.emplace( std::make_pair(args->head.get<symbol>(), expr) );
+        if(!res.second) res.first->second = expr;
+        return list();
+      } else {
+        throw syntax_error("def");
+      }
+    }
+
+  }
   
   struct eval_visitor {
 
@@ -847,6 +877,15 @@ namespace sexpr {
       const value& first = self->head;
 
       // TODO special forms
+      static const std::map<symbol, special::type> table = {
+        {"lambda", special::lambda},
+        {"def", special::def}
+      };
+
+      if(first.is<symbol>()) {
+        auto it = table.find(first.get<symbol>());
+        if(it != table.end()) return it->second(ctx, self->tail);
+      }
       
 
       // applicatives
