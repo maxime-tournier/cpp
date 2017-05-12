@@ -1,7 +1,6 @@
 #include <iostream>
 #include "parse.hpp"
 
-
 #include <sstream>
 
 #include <set>
@@ -12,6 +11,10 @@
 
 // #include <unordered_map>
 #include <map>
+
+#include <readline/readline.h>
+#include <readline/history.h>
+
 
 namespace impl {
   template<std::size_t start, class ... T>
@@ -608,23 +611,20 @@ namespace monad {
 
 template<class F>
 static void read_loop(const F& f) {
-  
-  while(std::cin) {
-	std::string line;
-    
-    std::cout << "> ";
-	std::getline(std::cin, line);
+
+  while( const char* line = readline("> ") ) {
+    add_history(line);
 
 	std::stringstream ss(line);
 
 	if( f(ss) ) {
-      
+      // success
 	} else if(!std::cin.eof()) {
 	  std::cerr << "parse error" << std::endl;
 	}
     
   }
-
+  
 };
 
 
@@ -844,6 +844,10 @@ namespace sexpr {
     return expr.map( eval_type(), ctx );
   }
 
+
+
+
+  
   static value apply(const value& app, const value* first, const value* last) {
     throw error("not implemented");
   }
