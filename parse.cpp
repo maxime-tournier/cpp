@@ -1,5 +1,3 @@
-// -*- compile-command: "c++ -std=c++11 parse.cpp -o parse" -*-
-
 #include <iostream>
 #include "parse.hpp"
 
@@ -161,8 +159,8 @@ public:
   
   
   // TODO move constructors from values ?
-  template<class U>
-  variant(const U& value, decltype( select_type::index( std::declval<const U&>() ) )* = 0)
+  template<class U, class = decltype( select_type::index( std::declval<const U&>() ) ) >
+  variant(const U& value)
     : index( select_type::index(value) ) {
     construct( select_type::cast(value) );
   }
@@ -683,6 +681,13 @@ namespace sexpr {
   struct value : variant<list, integer, real, symbol, string,
                          ref<lambda> > {
     using value::variant::variant;
+
+    value(value::variant&& other)
+      : value::variant( std::move(other))  { }
+
+    value(const value::variant& other)
+      : value::variant(other) { }
+
     
     list operator>>=(list tail) const {
       return std::make_shared<cell>(*this, tail);
