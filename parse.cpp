@@ -104,11 +104,15 @@ class variant {
 
 public:
   std::size_t type() const { return index; }
+
+  struct bad_cast : std::runtime_error {
+    bad_cast() : std::runtime_error("bad_cast") { }
+  };
   
   template<class U>
   U& get() {
     U& res = reinterpret_cast<U&>(storage);
-    if( select_type::index(res) != index ) throw std::runtime_error("bad cast");
+    if( select_type::index(res) != index ) throw bad_cast();
     return res;
   }
 
@@ -834,29 +838,60 @@ namespace sexpr {
 
 
   struct lambda {
+
     ref<context> ctx;
     using args_type = std::vector<symbol>;
     args_type args;
     value body;
+
+
+    lambda(const ref<context>& ctx,
+           args_type&& args,
+           const value& body)
+      : ctx(ctx),
+        args(std::move(args)),
+        body(body) {
+
+    }
+    
+    
   };
 
 
-  static value eval(context& ctx, const value& expr);
+  static value eval(const ref<context>& ctx, const value& expr);
   static value apply(const value& app, const value* first, const value* last);
-  
+
 
   namespace special {
-    using type = value (*)(context&, const list& args);
+    using type = value (*)(const ref<context>&, const list& args);
     
-    static value lambda(context& ctx, const list& args) {
-      throw error("lambda");
+    static value lambda(const ref<context>& ctx, const list& args) {
+      auto fail = [] { throw syntax_error("lambda"); };
+
+      try {
+        if(!args) fail();
+        if(!args->tail) fail();
+        
+        const value& body = args->tail->head;
+
+        std::vector<symbol> vars;
+        for(const value& v : args->head.get<list>() ) {
+          vars.push_back(v.get<symbol>());
+        }
+        
+        return std::make_shared<sexpr::lambda>(ctx, std::move(vars), body);
+        
+      } catch(value::bad_cast& e) {
+        fail();
+      }
+      throw;
     }
 
-    static value def(context& ctx, const list& args) {
+    static value def(const ref<context>& ctx, const list& args) {
       if(args && args->head.is<symbol>() && args->tail && !args->tail->tail) {
-        const value& expr = args->tail->head;
-        auto res = ctx.locals.emplace( std::make_pair(args->head.get<symbol>(), expr) );
-        if(!res.second) res.first->second = expr;
+        const value& val = eval(ctx, args->tail->head);
+        auto res = ctx->locals.emplace( std::make_pair(args->head.get<symbol>(), val) );
+        if(!res.second) res.first->second = val;
         return list();
       } else {
         throw syntax_error("def");
@@ -867,16 +902,16 @@ namespace sexpr {
   
   struct eval_visitor {
 
-    value operator()(const symbol& self, context& ctx) const {
-      return ctx.find(self);
+    value operator()(const symbol& self, const ref<context>& ctx) const {
+      return ctx->find(self);
     }
 
-    value operator()(const list& self, context& ctx) const {
+    value operator()(const list& self, const ref<context>& ctx) const {
       if(!self) throw error("empty list in application");
 
       const value& first = self->head;
 
-      // TODO special forms
+      // special forms
       static const std::map<symbol, special::type> table = {
         {"lambda", special::lambda},
         {"def", special::def}
@@ -902,14 +937,14 @@ namespace sexpr {
     
     
     template<class T>
-    value operator()(const T& self, context& ctx) const {
+    value operator()(const T& self, const ref<context>& ctx) const {
       return self;
     }
     
   };
 
   
-  static value eval(context& ctx, const value& expr) {
+  static value eval(const ref<context>& ctx, const value& expr) {
     return expr.map( eval_visitor(), ctx );
   }
 
@@ -946,7 +981,7 @@ namespace sexpr {
       iterator pair_last = {self->args.end(), last};
 
       ref<context> sub = self->ctx->extend(pair_first, pair_last);
-      return eval(*sub, self->body);
+      return eval(sub, self->body);
     }
 
     value operator()(const builtin& self, const value* first, const value* last) {
@@ -1027,9 +1062,9 @@ static monad::any<sexpr::value> sexpr_parser() {
 int main(int, char** ) {
 
   using namespace sexpr;
-  context ctx;
+  ref<context> ctx = std::make_shared<context>();
 
-  ctx
+  (*ctx)
     ("add", [](const value* first, const value* last) -> value {
       integer res = 0;
       while(first != last) {
