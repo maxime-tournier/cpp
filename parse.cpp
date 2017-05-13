@@ -1055,8 +1055,30 @@ static monad::any<sexpr::value> sexpr_parser() {
 }
 
 
+namespace sexpr {
+  
+  template<class F, class Ret, class ... Args>
+  static builtin wrap(const F& f, Ret (*)(Args... args)) {
+    static Ret(*ptr)(Args...) = f;
+    
+    return [](const value* first, const value* last) -> value {
+      if((last - first) != sizeof...(Args)) {
+        throw error("argc");
+      }
 
+      const value expand[] = { (first++)->get<Args>() ... };
 
+      return list();
+      // return list( expand[I]... );
+    };
+  }
+
+  template<class F>
+  static builtin wrap(const F& f) {
+    return wrap(f, +f);
+  }
+  
+}
 
 
 int main(int, char** ) {
@@ -1064,6 +1086,10 @@ int main(int, char** ) {
   using namespace sexpr;
   ref<context> ctx = std::make_shared<context>();
 
+  builtin test = wrap( [](integer a, integer b) {
+      return a + b;
+    });
+  
   (*ctx)
     ("add", [](const value* first, const value* last) -> value {
       integer res = 0;
