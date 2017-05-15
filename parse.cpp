@@ -15,6 +15,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include "indices.hpp"
 
 namespace impl {
   template<std::size_t start, class ... T>
@@ -1057,8 +1058,8 @@ static monad::any<sexpr::value> sexpr_parser() {
 
 namespace sexpr {
   
-  template<class F, class Ret, class ... Args>
-  static builtin wrap(const F& f, Ret (*)(Args... args)) {
+  template<class F, class Ret, class ... Args, std::size_t ... I>
+  static builtin wrap(const F& f, Ret (*)(Args... args), indices<I...> indices) {
     static Ret(*ptr)(Args...) = f;
     
     return [](const value* first, const value* last) -> value {
@@ -1066,13 +1067,15 @@ namespace sexpr {
         throw error("argc");
       }
 
-      const value expand[] = { (first++)->get<Args>() ... };
-
-      return list();
-      // return list( expand[I]... );
+      return ptr( first[I].template get<Args>() ... );
     };
   }
 
+  template<class F, class Ret, class ... Args, std::size_t ... I>
+  static builtin wrap(const F& f, Ret (*ptr)(Args... args)) {
+    return wrap(f, ptr, typename tuple_indices<Args...>::type() );
+  }
+  
   template<class F>
   static builtin wrap(const F& f) {
     return wrap(f, +f);
@@ -1097,7 +1100,9 @@ int main(int, char** ) {
         res += (first++)->get<integer>();
       };
       return res;
-    });
+    })
+    ("sub", wrap([](integer x, integer y) -> integer { return x - y; }))
+    ;
   
   
   const auto parser = sexpr_parser() >> [&](value&& expr) {
