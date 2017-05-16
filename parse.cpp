@@ -669,6 +669,9 @@ namespace sexpr {
     iterator_type iterator;
   public:
 
+    // TODO do we want this ?
+    symbol() : iterator(table.end()) { }
+    
     symbol(const string& value) 
       : iterator(table.insert(value).first) { }  
 
@@ -745,6 +748,26 @@ namespace sexpr {
   
   static cell::iterator begin(const list& self) { return { self.get() }; }
   static cell::iterator end(const list& self) { return { nullptr }; }
+
+  struct error : std::runtime_error {
+    using std::runtime_error::runtime_error;
+  };
+
+  
+  struct empty_list : error {
+    empty_list() : error("empty list") { } 
+  };
+
+  static list unpack(const list& from) { return from; }
+  
+  template<class H, class ... Args>
+  static list unpack(const list& from, H& to, Args&... args) {
+    if(!from) throw empty_list();
+    to = from->head.get<H>();
+    return unpack(from->tail, args...);
+  }
+
+
   
   struct value::ostream {
 
@@ -789,9 +812,6 @@ namespace sexpr {
   }
 
 
-  struct error : std::runtime_error {
-    using std::runtime_error::runtime_error;
-  };
   
   struct unbound_variable : error {
     unbound_variable(const symbol& s)
@@ -867,38 +887,77 @@ namespace sexpr {
     using type = value (*)(const ref<context>&, const list& args);
     
     static value lambda(const ref<context>& ctx, const list& args) {
-      auto fail = [] { throw syntax_error("lambda"); };
-
+      
       try {
-        if(!args) fail();
-        if(!args->tail) fail();
-        
-        const value& body = args->tail->head;
+        list params;
+        const list rest = unpack(args, params);
+        if(!rest) throw empty_list();
 
         std::vector<symbol> vars;
-        for(const value& v : args->head.get<list>() ) {
-          vars.push_back(v.get<symbol>());
+        
+        symbol s;
+        while(params) {
+          params = unpack(params, s);
+          vars.push_back(s);
         }
         
-        return std::make_shared<sexpr::lambda>(ctx, std::move(vars), body);
-        
+        return std::make_shared<sexpr::lambda>(ctx, std::move(vars), rest->head);
+      } catch(empty_list& e) {
+        throw syntax_error("lambda");        
       } catch(value::bad_cast& e) {
-        fail();
-      }
-      throw;
+        throw syntax_error("symbol list expected for function parameters");
+      } 
+
     }
 
     static value def(const ref<context>& ctx, const list& args) {
-      if(args && args->head.is<symbol>() && args->tail && !args->tail->tail) {
-        const value& val = eval(ctx, args->tail->head);
-        auto res = ctx->locals.emplace( std::make_pair(args->head.get<symbol>(), val) );
+      
+      struct fail { };
+      
+      try{
+        symbol name;
+        list rest = unpack(args, name);
+        if(!rest) throw empty_list();
+        
+        const value& val = eval(ctx, rest->head);
+        auto res = ctx->locals.emplace( std::make_pair(name, val) );
         if(!res.second) res.first->second = val;
+
+        // TODO nil?
         return list();
-      } else {
+      } catch( value::bad_cast& e) {
+        throw syntax_error("symbol expected");
+      } catch( empty_list& e) {
         throw syntax_error("def");
       }
+      
     }
 
+
+    static value cond(const ref<context>& ctx, const list& args) {
+      try {
+        for(const value& x : args) {
+          const list& term = x.get<list>();
+
+          if(!term) throw empty_list();
+          const value test = eval(ctx, term->head);
+
+          if(test.is<list>() && !test.get<list>()) {
+            // test fails on nil
+          } else {
+            if(!term->tail) throw empty_list();
+            return eval(ctx, term->tail->head);
+          }
+        }
+      } catch(value::bad_cast& e) {
+        throw syntax_error("list of pairs expected");
+      } catch( empty_list& e ){
+        throw syntax_error("cond");
+      } 
+      
+      return list();
+    }
+    
   }
   
   struct eval_visitor {
@@ -915,7 +974,8 @@ namespace sexpr {
       // special forms
       static const std::map<symbol, special::type> table = {
         {"lambda", special::lambda},
-        {"def", special::def}
+        {"def", special::def},
+        {"cond", special::cond}
       };
 
       if(first.is<symbol>()) {
@@ -1080,6 +1140,19 @@ namespace sexpr {
   static builtin wrap(const F& f) {
     return wrap(f, +f);
   }
+
+
+  static value list_ctor(const value* first, const value* last) {
+    list res;
+    list* curr = &res;
+    
+    for(const value* it = first; it != last; ++it) {
+      *curr = std::make_shared<cell>(*it, list());
+      curr = &(*curr)->tail;
+    }
+                                                 
+    return res;
+  }
   
 }
 
@@ -1102,6 +1175,7 @@ int main(int, char** ) {
       return res;
     })
     ("sub", wrap([](integer x, integer y) -> integer { return x - y; }))
+    ("list", list_ctor)
     ;
   
   
