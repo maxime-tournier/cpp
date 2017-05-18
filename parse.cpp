@@ -758,16 +758,27 @@ namespace sexpr {
     empty_list() : error("empty list") { } 
   };
 
-  static list unpack(const list& from) { return from; }
+  static const list& unpack(const list& from) { return from; }
   
   template<class H, class ... Args>
-  static list unpack(const list& from, H& to, Args&... args) {
+  static const list& unpack(const list& from, H* to, Args*... args) {
     if(!from) throw empty_list();
-    to = from->head.get<H>();
+    *to = from->head.get<H>();
     return unpack(from->tail, args...);
   }
 
 
+  static value& head(const list& x) {
+    if(!x) throw empty_list();
+    return x->head;
+  }
+
+  static const list& tail(const list& x) {
+    if(!x) throw empty_list();
+    return x->tail;
+  }
+  
+  
   
   struct value::ostream {
 
@@ -890,18 +901,17 @@ namespace sexpr {
       
       try {
         list params;
-        const list rest = unpack(args, params);
-        if(!rest) throw empty_list();
+        const list& rest = unpack(args, &params);
 
         std::vector<symbol> vars;
         
         symbol s;
         while(params) {
-          params = unpack(params, s);
+          params = unpack(params, &s);
           vars.push_back(s);
         }
         
-        return std::make_shared<sexpr::lambda>(ctx, std::move(vars), rest->head);
+        return std::make_shared<sexpr::lambda>(ctx, std::move(vars), head(rest));
       } catch(empty_list& e) {
         throw syntax_error("lambda");        
       } catch(value::bad_cast& e) {
@@ -916,10 +926,9 @@ namespace sexpr {
       
       try{
         symbol name;
-        list rest = unpack(args, name);
-        if(!rest) throw empty_list();
+        const list& rest = unpack(args, &name);
         
-        const value& val = eval(ctx, rest->head);
+        const value val = eval(ctx, head(rest));
         auto res = ctx->locals.emplace( std::make_pair(name, val) );
         if(!res.second) res.first->second = val;
 
@@ -939,14 +948,12 @@ namespace sexpr {
         for(const value& x : args) {
           const list& term = x.get<list>();
 
-          if(!term) throw empty_list();
-          const value test = eval(ctx, term->head);
-
+          const value test = eval(ctx, head(term));
+          
           if(test.is<list>() && !test.get<list>()) {
             // test fails on nil
           } else {
-            if(!term->tail) throw empty_list();
-            return eval(ctx, term->tail->head);
+            return eval(ctx, head(tail(term)));
           }
         }
       } catch(value::bad_cast& e) {
@@ -956,6 +963,15 @@ namespace sexpr {
       } 
       
       return list();
+    }
+
+
+    static value quote(const ref<context>& ctx, const list& args) {
+      try {
+        return head(args);
+      } catch( empty_list& e ) {
+        throw syntax_error("quote");
+      }
     }
     
   }
@@ -975,7 +991,8 @@ namespace sexpr {
       static const std::map<symbol, special::type> table = {
         {"lambda", special::lambda},
         {"def", special::def},
-        {"cond", special::cond}
+        {"cond", special::cond},
+        {"quote", special::quote}
       };
 
       if(first.is<symbol>()) {
