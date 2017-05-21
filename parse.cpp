@@ -2,12 +2,14 @@
 #include "parse.hpp"
 
 #include <sstream>
+#include <string>
 
 #include <set>
 #include <memory>
 #include <vector>
 #include <deque>
 #include <cassert>
+#include <fstream>
 
 #include <unordered_map>
 #include <map>
@@ -247,7 +249,7 @@ namespace monad {
   };
 
   template<class T>
-  static pure_type<T> pure(T value) { return {value}; }
+  static pure_type<T> pure(const T& value) { return {value}; }
 
 
   // lazy result
@@ -264,7 +266,7 @@ namespace monad {
   };
 
   template<class F>
-  static lazy_type<F> lazy(F f) { return {f}; }
+  static lazy_type<F> lazy(const F& f) { return {f}; }
 
 
   // monadic zero
@@ -311,13 +313,13 @@ namespace monad {
 
 
   template<class Parser, class F>
-  static bind_type<Parser, F> bind(Parser parser, F f) {
+  static bind_type<Parser, F> bind(const Parser& parser, const F& f) {
     return {parser, f};
   }
 
 
   template<class Parser, class F>
-  static bind_type<Parser, F> operator>>(Parser parser, F f) {
+  static bind_type<Parser, F> operator>>(const Parser& parser, const F& f) {
     return {parser, f};
   }
 
@@ -399,13 +401,13 @@ namespace monad {
 
 
   template<class Parser>
-  static kleene_type<Parser> kleene(Parser parser) {
+  static kleene_type<Parser> kleene(const Parser& parser) {
     return {parser};
   }
 
   template<class Parser>
-  static kleene_type<Parser> operator*(Parser parser) {
-    return {parser};
+  static kleene_type<Parser> operator*(const Parser& parser) {
+    return kleene_type<Parser>{parser};
   }
 
 
@@ -435,7 +437,7 @@ namespace monad {
       return none();
     }
 
-  };
+  }; 
   
   struct equals {
 	const char expected;
@@ -499,15 +501,8 @@ namespace monad {
   };
 
 
-  // boost::spirit style
-  static struct {
-
-    template<class Parser>
-    no_skip_type<Parser> operator[](Parser parser) const {
-      return {parser};
-    }
-  } no_skip;
-
+  template<class Parser>
+  static no_skip_type<Parser> no_skip(const Parser& parser) { return {parser}; }
 
 
   template<class Parser>
@@ -524,7 +519,7 @@ namespace monad {
 
 
   template<class Parser>
-  static ref_type<Parser> ref(const Parser& parser) { return { parser }; }
+  static ref_type<Parser> ref(const Parser& parser) { return {parser}; }
   
 
   template<class T>
@@ -613,6 +608,47 @@ namespace monad {
   static list_type<Parser, Separator> operator%(Parser parser, Separator separator) {
     return {parser, separator};
   }
+  
+
+ 
+  static std::size_t indent = 0;
+  
+  template<class Parser>
+  struct debug_type {
+    const std::string name;
+    const Parser parser;
+ 
+    using value_type = typename Parser::value_type;
+
+    maybe<value_type> operator()(std::istream& in) const {
+      for(std::size_t i = 0; i < indent; ++i) std::clog << ' ';
+      
+      std::clog << ">> " << name << " " << char(in.peek()) << std::endl;
+      ++indent;
+      const maybe<value_type> res = parser(in);
+      --indent;
+      for(std::size_t i = 0; i < indent; ++i) std::clog << ' ';
+      std::clog << "<< " << name << std::endl;
+      return res;
+    }
+    
+  };
+
+  // template<class Parser>
+  // static debug_type<Parser> debug(std::string name, Parser parser) {
+  //   return {name, parser};
+  // }
+
+  struct debug {
+    const std::string name;
+    debug(const std::string& name) : name(name) { }
+    
+    template<class Parser>
+    debug_type<Parser> operator>>=(const Parser& parser) const {
+      return {name, parser};
+    }
+    
+  };
   
   
 }
@@ -1073,10 +1109,11 @@ static monad::any<sexpr::value> sexpr_parser() {
   
   using namespace monad;
 
-  const auto alpha = chr<std::isalpha>();
-  const auto alnum = chr<std::isalnum>();
-  const auto space = chr<std::isspace>(); 
-
+  const auto alpha = debug("alpha") >>= chr<std::isalpha>();
+  const auto alnum = debug("alnum") >>= chr<std::isalnum>();
+  const auto space = debug("space") >>= chr<std::isspace>(); 
+  using trigger = decltype(alnum);
+  
   const auto endl = chr('\n');
   const auto dquote = chr('"');
   
@@ -1084,33 +1121,32 @@ static monad::any<sexpr::value> sexpr_parser() {
 
   auto as_value = cast<sexpr::value>();
   
-  auto real = lit<sexpr::real>() >> as_value;
-  auto integer = lit<sexpr::integer>() >> as_value;
+  auto real = debug("real") >>= lit<sexpr::real>() >> as_value;
+  auto integer = debug("integer") >>= lit<sexpr::integer>() >> as_value;
   
-  auto symbol = no_skip[ alpha >> [alnum](char first) {
+  auto symbol = debug("symbol") >>= no_skip(alpha >> [alnum](char first) {
       return *alnum >> [first](std::deque<char>&& chars) {
         chars.emplace_front(first);
         const sexpr::string str(chars.begin(), chars.end());
         return pure<sexpr::value>( sexpr::symbol(str) );
       };
-    }];
-  
+    });
     
-  auto string = no_skip[ (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
+    
+  auto string = debug("string") >>= no_skip( (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
       sexpr::string str(chars.begin(), chars.end());
       return dquote, pure<sexpr::value>(str);
-    }];
-    
-  auto atom = string | symbol | integer | real;
-    
-  any<sexpr::value> expr;
-    
-  auto list = no_skip[ (chr('('), *space, ref(expr) % +space)
-                       >> [space](std::deque<sexpr::value>&& terms) {
-      return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
-    }];
+    });
   
-  expr = atom | list;
+  auto atom = debug("atom") >>= string | symbol | integer | real;
+    
+  static any<sexpr::value> expr;
+  
+  auto list = debug("list") >>= no_skip( (chr('('), *space, ref(expr) % +space)
+                       >> [space](std::deque<sexpr::value>&& terms) {
+                         return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
+                       });
+  expr = debug("expr") >>= atom | list;
 
   return expr;
 }
@@ -1175,7 +1211,7 @@ static void read_loop(const F& f) {
 };
 
 
-int main(int, char** ) {
+int main(int argc, char** argv) {
 
   using namespace sexpr;
   ref<context> ctx = std::make_shared<context>();
@@ -1194,6 +1230,15 @@ int main(int, char** ) {
     })
     ("sub", wrap([](integer x, integer y) -> integer { return x - y; }))
     ("list", list_ctor)
+    ("print", [](const value* first, const value* last) -> value {
+      bool start = true;
+      for(const value* it = first; it != last; ++it) {
+        if(start) start = false;
+        else std::cout << ' ';
+        std::cout << *it;
+      }
+      return list();
+    })
     ;
   
   
@@ -1205,10 +1250,22 @@ int main(int, char** ) {
     }
     return monad::pure(expr);
   };
+
+
+  if( argc > 1 ) {
+    std::ifstream file(argv[1]);
+    
+    if(!parser(file)) {
+      std::cerr << "parse error" << std::endl;
+      return 1;
+    }
+    
+  } else {
   
-  read_loop([parser](std::istream& in) {
-      return bool( parser(in) );
-    });
+    read_loop([parser](std::istream& in) {
+        return bool( parser(in) );
+      });
+  }
   
   return 0;
 }
