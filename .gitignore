@@ -12,3 +12,4 @@ build
 /pouf/main
 /pouf/pouf
 /sparse
+*.dSYM
