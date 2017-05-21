@@ -621,23 +621,6 @@ namespace monad {
 
 
 
-template<class F>
-static void read_loop(const F& f) {
-
-  while( const char* line = readline("> ") ) {
-    add_history(line);
-
-	std::stringstream ss(line);
-
-	if( f(ss) ) {
-      // success
-	} else if(!std::cin.eof()) {
-	  std::cerr << "parse error" << std::endl;
-	}
-    
-  }
-  
-};
 
 
 namespace sexpr {
@@ -1172,6 +1155,24 @@ namespace sexpr {
   }
   
 }
+
+template<class F>
+static void read_loop(const F& f) {
+
+  while( const char* line = readline("> ") ) {
+    add_history(line);
+
+	std::stringstream ss(line);
+
+	if( f(ss) ) {
+      // success
+	} else if(!std::cin.eof()) {
+	  std::cerr << "parse error" << std::endl;
+	}
+    
+  }
+  
+};
 
 
 int main(int, char** ) {
