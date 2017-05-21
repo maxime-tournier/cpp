@@ -18,13 +18,10 @@
 #include <readline/history.h>
 
 #include "indices.hpp"
+#include "ref.hpp"
 
 
-
-namespace sexpr {
-
-  template<class T>
-  using ref = std::shared_ptr<T>;
+namespace lisp {
 
   struct value;
   
@@ -89,7 +86,7 @@ namespace sexpr {
 
 
   // TODO ref<string> ?
-  struct value : variant<list, integer, real, symbol, string,
+  struct value : variant<list, integer, real, symbol, ref<string>,
                          ref<lambda>, builtin > {
     using value::variant::variant;
 
@@ -101,17 +98,17 @@ namespace sexpr {
 
     
     list operator>>=(list tail) const {
-      return std::make_shared<cell>(*this, tail);
+      return make_ref<cell>(*this, tail);
     }
-
+ 
     struct ostream;
 
     // nil check
     explicit operator bool() const {
       return !is<list>() || unsafe<list>();
     }
-    
-  };
+
+  }; 
 
   static const list nil;
   
@@ -120,12 +117,12 @@ namespace sexpr {
   struct cell {
 
     value head;
-    list tail = 0;
+    list tail;
 
     cell(const value& head,
          const list& tail)
       : head(head),
-        tail(tail) {
+        tail(tail) { 
 
     }
     
@@ -190,8 +187,8 @@ namespace sexpr {
       out << self.name();
     }
 
-    void operator()(const string& self, std::ostream& out) const {
-      out << '"' << self << '"';
+    void operator()(const ref<string>& self, std::ostream& out) const {
+      out << '"' << *self << '"';
     }
 
     void operator()(const builtin& self, std::ostream& out) const {
@@ -228,12 +225,13 @@ namespace sexpr {
       : error("syntax error: " + s) { }
     
   };
+   
   
-  
-  struct context : std::enable_shared_from_this<context> {
+  struct context {
     
     ref<context> parent;
-
+    context(const ref<context>& parent = {}) : parent(parent) { }
+    
     using locals_type = std::map< symbol, value >;
     locals_type locals;
 
@@ -244,22 +242,23 @@ namespace sexpr {
       throw unbound_variable(name);
     }
 
-    template<class Iterator>
-    ref<context> extend(Iterator first, Iterator last) {
-      ref<context> res = std::make_shared<context>();
-
-      res->parent = shared_from_this();
-      res->locals.insert(first, last);
-
-      return res;
-    }
-
     context& operator()(const symbol& name, const value& expr) {
       locals.emplace( std::make_pair(name, expr) );
       return *this;
     }
     
   };
+
+
+  template<class Iterator>
+  static ref<context> extend(const ref<context>& parent, Iterator first, Iterator last) {
+    ref<context> res = make_ref<context>(parent);
+    res->locals.insert(first, last);
+    
+    return res;
+  }
+
+
 
 
   struct lambda {
@@ -304,7 +303,7 @@ namespace sexpr {
           vars.push_back(s);
         }
         
-        return std::make_shared<sexpr::lambda>(ctx, std::move(vars), head(rest));
+        return make_ref<lisp::lambda>(ctx, std::move(vars), head(rest));
       } catch(empty_list& e) {
         throw syntax_error("lambda");        
       } catch(value::bad_cast& e) {
@@ -455,7 +454,7 @@ namespace sexpr {
       iterator pair_first = {self->args.begin(), first};
       iterator pair_last = {self->args.end(), last};
 
-      ref<context> sub = self->ctx->extend(pair_first, pair_last);
+      ref<context> sub = extend(self->ctx, pair_first, pair_last);
       return eval(sub, self->body);
     }
 
@@ -483,7 +482,7 @@ namespace sexpr {
 
 
 
-static parse::any<sexpr::value> sexpr_parser() {
+static parse::any<lisp::value> sexpr_parser() {
   
   using namespace parse;
 
@@ -491,56 +490,54 @@ static parse::any<sexpr::value> sexpr_parser() {
   const auto alnum = debug("alnum") >>= chr<std::isalnum>();
   const auto space = debug("space") >>= chr<std::isspace>();
   
-  using trigger = decltype(alnum);
-  
-  const auto endl = chr('\n');
   const auto dquote = chr('"');
   
-  const auto comment = (chr(';'), kleene(!endl), endl);
+  // const auto endl = chr('\n');
+  // const auto comment = (chr(';'), kleene(!endl), endl);
 
-  const auto as_value = cast<sexpr::value>();
+  const auto as_value = cast<lisp::value>();
   
   const auto real = debug("real") >>= 
-    lit<sexpr::real>() >> as_value;
+    lit<lisp::real>() >> as_value;
   
   const auto integer = debug("integer") >>=
-    lit<sexpr::integer>() >> as_value;
+    lit<lisp::integer>() >> as_value;
   
   const auto symbol = debug("symbol") >>=
     no_skip(alpha >> [alnum](char first) {
         return *alnum >> [first](std::deque<char>&& chars) {
           chars.emplace_front(first);
-          const sexpr::string str(chars.begin(), chars.end());
-          return pure<sexpr::value>( sexpr::symbol(str) );
+          const lisp::string str(chars.begin(), chars.end());
+          return pure<lisp::value>( lisp::symbol(str) );
         };
       });
     
     
   const auto string = debug("string") >>=
     no_skip( (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
-        sexpr::string str(chars.begin(), chars.end());
-        return dquote, pure<sexpr::value>(str);
+        ref<lisp::string> str = make_ref<lisp::string>(chars.begin(), chars.end());
+        return dquote, pure<lisp::value>(str);
       });
   
   const auto atom = debug("atom") >>=
     string | symbol | integer | real;
     
   struct expr_tag;
-  rec<sexpr::value, expr_tag> expr;
+  rec<lisp::value, expr_tag> expr;
   
   const auto list = debug("list") >>=
-    no_skip( (chr('('), *space, expr % +space) >> [space](std::deque<sexpr::value>&& terms) {
-        return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
+    no_skip( (chr('('), *space, expr % +space) >> [space](std::deque<lisp::value>&& terms) {
+        return *space, chr(')'), pure<lisp::value>(lisp::make_list(terms));
       });
   
   expr = debug("expr") >>=
     atom | list;
-
+  
   return expr;
 }
 
 
-namespace sexpr {
+namespace lisp {
   
   template<class F, class Ret, class ... Args, std::size_t ... I>
   static builtin wrap(const F& f, Ret (*)(Args... args), indices<I...> indices) {
@@ -550,11 +547,11 @@ namespace sexpr {
       if((last - first) != sizeof...(Args)) {
         throw error("argc");
       }
-
+ 
       return ptr( first[I].template get<Args>() ... );
     };
-  }
-
+  } 
+ 
   template<class F, class Ret, class ... Args, std::size_t ... I>
   static builtin wrap(const F& f, Ret (*ptr)(Args... args)) {
     return wrap(f, ptr, typename tuple_indices<Args...>::type() );
@@ -571,7 +568,7 @@ namespace sexpr {
     list* curr = &res;
     
     for(const value* it = first; it != last; ++it) {
-      *curr = std::make_shared<cell>(*it, nil);
+      *curr = make_ref<cell>(*it, nil);
       curr = &(*curr)->tail;
     }
                                                  
@@ -610,13 +607,9 @@ static void read_loop(const F& f) {
 
 int main(int argc, char** argv) {
 
-  using namespace sexpr;
-  ref<context> ctx = std::make_shared<context>();
+  using namespace lisp;
+  const ref<context> ctx = make_ref<context>();
 
-  builtin test = wrap( [](integer a, integer b) {
-      return a + b;
-    });
-  
   (*ctx)
     ("add", [](const value* first, const value* last) -> value {
       integer res = 0;
@@ -626,6 +619,10 @@ int main(int argc, char** argv) {
       return res;
     })
     ("sub", wrap([](integer x, integer y) -> integer { return x - y; }))
+    ("mul", wrap([](integer x, integer y) -> integer { return x * y; }))
+    ("div", wrap([](integer x, integer y) -> integer { return x / y; }))
+    ("mod", wrap([](integer x, integer y) -> integer { return x % y; }))        
+    
     ("list", list_ctor)
     ("print", [](const value* first, const value* last) -> value {
       bool start = true;
@@ -648,15 +645,15 @@ int main(int argc, char** argv) {
       return t;
     })
     ;
-  
-  
+    
+   
   const auto parser = *sexpr_parser() >> [&](std::deque<value>&& exprs) {
     try{
 
       for(const value& e : exprs) {
         const value val = eval(ctx, e);
         if(val) {
-          std::cout << val << std::endl;
+          std::cout << val << std::endl; 
         }
       }
       
@@ -666,7 +663,6 @@ int main(int argc, char** argv) {
     
     return parse::pure(exprs);
   };
-
 
   if( argc > 1 ) {
     std::ifstream file(argv[1]);
@@ -682,7 +678,7 @@ int main(int argc, char** argv) {
         return bool( parser(in) );
       });
   }
-  
+ 
   return 0;
 }
  

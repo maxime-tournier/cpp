@@ -149,6 +149,8 @@ public:
   
   ~variant() {
     apply( destruct() );
+
+    // const int expand[] = { ((std::clog << typeid(T).name() << " " << sizeof() << std::endl), 0)... };
   }
 
 
