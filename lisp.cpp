@@ -22,7 +22,7 @@
 
 
 namespace lisp {
-
+ 
   struct value;
   
   struct cell;
@@ -71,7 +71,7 @@ namespace lisp {
 
   symbol::table_type symbol::table;
 
-
+  
   template<class Container>
   static list make_list(const Container& container) {
     list res;
@@ -80,10 +80,10 @@ namespace lisp {
         it != end; ++it) {
       res = *it >>= res;
     }
-    
+     
     return res;
   }
-
+ 
 
   // TODO ref<string> ?
   struct value : variant<list, integer, real, symbol, ref<string>,

@@ -10,12 +10,15 @@ class ref {
   struct block_type {
 
     T value;
-    std::size_t rc;
+    std::size_t rc;    
+
     
     template<class ... Args>
     block_type(Args&& ... args)
-      : value( std::forward<Args>(args) ... ),
-        rc(1) {
+      : // rc(1),
+      value( std::forward<Args>(args) ... )
+      , rc(1)
+    {
     }
   };
 
@@ -31,7 +34,11 @@ public:
   ref() : block(nullptr) { }
 
   ~ref() {
-    if(block && --block->rc == 0) delete block;
+    
+    if(block && --block->rc == 0) {
+      delete block;
+    }
+    
   }
 
   // copy
@@ -41,9 +48,9 @@ public:
 
 
   ref& operator=(const ref& other) {
-    if(block) --block->rc;
-    block = other.block;
-    if(other.block) ++block->rc;
+    if(block && --block->rc) delete block;
+    
+    if((block = other.block)) ++block->rc;
     return *this;
   }
 
