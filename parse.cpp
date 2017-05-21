@@ -643,8 +643,11 @@ namespace monad {
       ++indent;
       const maybe<value_type> res = parser(in);
       --indent;
-      for(std::size_t i = 0; i < indent; ++i) std::clog << ' ';
-      std::clog << "<< " << name << std::endl;
+
+      if( res ) {
+        for(std::size_t i = 0; i < indent; ++i) std::clog << ' ';
+        std::clog << "<< " << name << std::endl;
+      }
       return res;
     }
     
@@ -1127,44 +1130,52 @@ static monad::any<sexpr::value> sexpr_parser() {
 
   const auto alpha = debug("alpha") >>= chr<std::isalpha>();
   const auto alnum = debug("alnum") >>= chr<std::isalnum>();
-  const auto space = debug("space") >>= chr<std::isspace>(); 
+  const auto space = debug("space") >>= chr<std::isspace>();
+  
   using trigger = decltype(alnum);
   
   const auto endl = chr('\n');
   const auto dquote = chr('"');
   
-  auto comment = (chr(';'), kleene(!endl), endl);
+  const auto comment = (chr(';'), kleene(!endl), endl);
 
-  auto as_value = cast<sexpr::value>();
+  const auto as_value = cast<sexpr::value>();
   
-  auto real = debug("real") >>= lit<sexpr::real>() >> as_value;
-  auto integer = debug("integer") >>= lit<sexpr::integer>() >> as_value;
+  const auto real = debug("real") >>= 
+    lit<sexpr::real>() >> as_value;
   
-  auto symbol = debug("symbol") >>= no_skip(alpha >> [alnum](char first) {
-      return *alnum >> [first](std::deque<char>&& chars) {
-        chars.emplace_front(first);
-        const sexpr::string str(chars.begin(), chars.end());
-        return pure<sexpr::value>( sexpr::symbol(str) );
-      };
-    });
+  const auto integer = debug("integer") >>=
+    lit<sexpr::integer>() >> as_value;
+  
+  const auto symbol = debug("symbol") >>=
+    no_skip(alpha >> [alnum](char first) {
+        return *alnum >> [first](std::deque<char>&& chars) {
+          chars.emplace_front(first);
+          const sexpr::string str(chars.begin(), chars.end());
+          return pure<sexpr::value>( sexpr::symbol(str) );
+        };
+      });
     
     
-  auto string = debug("string") >>= no_skip( (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
-      sexpr::string str(chars.begin(), chars.end());
-      return dquote, pure<sexpr::value>(str);
-    });
+  const auto string = debug("string") >>=
+    no_skip( (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
+        sexpr::string str(chars.begin(), chars.end());
+        return dquote, pure<sexpr::value>(str);
+      });
   
-  auto atom = debug("atom") >>= string | symbol | integer | real;
+  const auto atom = debug("atom") >>=
+    string | symbol | integer | real;
     
   struct expr_tag;
   rec<sexpr::value, expr_tag> expr;
   
-  auto list = debug("list") >>= no_skip( (chr('('), *space, expr % +space)
-                                         >> [space](std::deque<sexpr::value>&& terms) {
-                                           return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
-                                         });
+  const auto list = debug("list") >>=
+    no_skip( (chr('('), *space, expr % +space) >> [space](std::deque<sexpr::value>&& terms) {
+        return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
+      });
   
-  expr = debug("expr") >>= atom | list;
+  expr = debug("expr") >>=
+    atom | list;
 
   return expr;
 }
