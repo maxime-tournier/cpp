@@ -212,7 +212,7 @@ namespace parse {
 	  bool operator()(char c) const { return !pred(c); }
 	};
 
-	character<negate> operator!() const { return {pred}; }
+	character<negate> operator!() const { return {{pred}}; }
     
     using value_type = char;
     
