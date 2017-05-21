@@ -3,137 +3,224 @@
 
 #include <type_traits>
 #include <memory>
-
-#include <iostream>
+#include <cassert>
 
 namespace impl {
-  template<std::size_t, class ... T> struct select;
+  template<std::size_t start, class ... T>
+  struct select;
 
-  template<std::size_t total_size> struct select<total_size> { };
+  template<std::size_t start, class H, class ... T>
+  struct select<start, H, T...> : select<start + 1, T...> {
 
-  template<std::size_t total_size, class H, class ...T>
-  struct select<total_size, H, T...> : select<total_size, T...> {
+    using select<start + 1, T...>::index;
+    static constexpr std::size_t index(const H& ) { return start; }
 
-	// friend function so that adl is used 
-	friend constexpr std::size_t index_of(const select&, const H* self) {
-	  return total_size - (1 + sizeof...(T));
-	}
-  
+    using select<start + 1, T...>::cast;
+    static const H& cast(const H& value) { return value; }
+    static H&& cast(H&& value) { return std::move(value); }    
+    
   };
 
-
-  template<std::size_t I, class ... T>
-  struct ith;
-
-  template<class H, class ... T>
-  struct ith<0, H, T...> {
-	using type = H;
+  template<std::size_t start> struct select<start> {
+    static void index();
+    static void cast();    
   };
-
-
-  template<std::size_t I, class H, class ... T>
-  struct ith<I, H, T...> : ith<I - 1, T...> {
-	
-  };
-  
-  
 }
 
-// a variant shared pointer type
+
 template<class ... T>
 class variant {
-  
-  using ptr_type = std::shared_ptr<void>;
-  ptr_type ptr;
-  
-  // TODO infer largest index_type based on data alignement?
-  using index_type = std::uintptr_t;
+
+  using storage_type = typename std::aligned_union<0, T...>::type;
+  storage_type storage;
+
+  using index_type = std::size_t;
   index_type index;
+  
+  using select_type = impl::select<0, T...>;
 
-  using select_type = impl::select<sizeof...(T), T...>;
-
-  template<class Variant, class U, class Visitor, class ... Args>
-  static void thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
-	U* ptr = reinterpret_cast<U*>(self.ptr.get());
-	std::forward<Visitor>(visitor)(ptr, std::forward<Args>(args)...);
+  template<class U, class Ret, class Variant, class Visitor, class ... Args>
+  static Ret call_thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
+    return std::forward<Visitor>(visitor)(self.template unsafe<U>(), std::forward<Args>(args)...);
   }
 
+  template<class U>
+  void construct(U&& value) {
+    new (&storage) typename std::decay<U>::type(std::forward<U>(value));
+  }
   
+  struct copy_construct {
+    template<class U>
+    void operator()(U& self, const variant& other) const {
+      new (&self) U(other.template unsafe<U>());
+    }
+  };
+
+
+  struct copy {
+    template<class U>
+    void operator()(U& self, const variant& other) const {
+      self = other.template unsafe<U>();
+    }
+  };
+
+
+  struct move {
+    template<class U>
+    void operator()(U& self, variant&& other) const {
+      self = std::move(other.template unsafe<U>());
+    }
+  };
+  
+  
+  struct move_construct {
+    template<class U>
+    void operator()(U& self, variant&& other) const {
+      new (&self) U(std::move(other.template unsafe<U>()));
+    }
+  };
+
+
+  
+  struct destruct {
+    template<class U>
+    void operator()(U& self) const {
+      self.~U();
+    }
+  };
+
+
+
 public:
-
   std::size_t type() const { return index; }
-  
-  template<std::size_t I>
-  typename impl::ith<I, T...>::type* get() {
-	assert(type() == I);
-	return (typename impl::ith<I, T...>::type*) ptr.get();
-  }
 
-  template<std::size_t I>
-  const typename impl::ith<I, T...>::type* get() const {
-	assert(type() == I);
-	return (const typename impl::ith<I, T...>::type*) ptr.get();
-  }
-
-  
-  variant() : ptr(nullptr), index(0) { }
-
-  explicit operator bool() {
-	return ptr;
-  }
-
+  struct bad_cast : std::runtime_error {
+    bad_cast() : std::runtime_error("bad_cast") { }
+  };
   
   template<class U>
-  variant( const std::shared_ptr<U>& u)
-	: ptr( u ),
-	  index( index_of(select_type(), u.get()) ) {
-	
+  U& get() {
+    U& res = reinterpret_cast<U&>(storage);
+    if( select_type::index(res) != index ) throw bad_cast();
+    return res;
+  }
+
+  template<class U>
+  const U& get() const {
+    const U& res = reinterpret_cast<const U&>(storage);
+    if( select_type::index(res) != index ) {
+      std::clog << select_type::index(res) << " vs. " << index << std::endl;
+      throw std::runtime_error("bad cast");
+    }
+    return res;
   }
 
 
   template<class U>
-  variant( std::shared_ptr<U>&& u)
-	: ptr( std::move(u) ),
-	  index( index_of(select_type(), u.get()) ) {
-	
+  U& unsafe() {
+    U& res = reinterpret_cast<U&>(storage);
+    assert(select_type::index(res) == index);
+    return res;
+  }
+
+  template<class U>
+  const U& unsafe() const {
+    const U& res = reinterpret_cast<const U&>(storage);
+    assert(select_type::index(res) == index);
+    return res;
+  }
+  
+  
+  template<class U, int R = select_type::index( *(U*)0 )>
+  bool is() const {
+    return R == index;
+  }
+  
+  
+  variant(const variant& other)
+    : index(other.index) {
+    apply( copy_construct(), other );
+  }
+
+  variant(variant&& other)
+    : index(other.index) {
+    apply( move_construct(), std::move(other) );
+  }
+  
+  ~variant() {
+    apply( destruct() );
   }
 
 
-  variant(const variant& ) = default;
-  variant(variant&& ) = default;  
+  variant& operator=(const variant& other) {
+    if(type() == other.type()) {
+      apply( copy(), other );
+    } else {
+      apply( destruct() );
+      apply( copy_construct(), other );
+    }
+    
+    return *this;
+  }
 
-  variant& operator=(const variant& ) = default;
-  variant& operator=(variant&& ) = default;  
+
+  variant& operator=(variant&& other) {
+    if(type() == other.type()) {
+      apply( move(), std::move(other) );
+    } else {
+      apply( destruct() );
+      apply( move_construct(), std::move(other) );
+    }
+    
+    return *this;
+  }
   
   
-  // template<class Visitor, class ... Args>
-  // void apply(Visitor&& visitor, Args&& ... args) {
-  // 	using thunk_type = void (*)(variant&, Visitor&&, Args&& ...);
-	
-  // 	static constexpr thunk_type dispatch [] = {
-  // 	  thunk<variant, T, Visitor, Args...>...
-  // 	};
-	
-  // 	dispatch[index](*this, std::forward<Visitor>(visitor),
-  // 					std::forward<Args>(args)...);
-  // }
+  
+  // TODO move constructors from values ?
+  template<class U, class = decltype( select_type::index( std::declval<const U&>() ) ) >
+  variant(const U& value)
+    : index( select_type::index(value) ) {
+    construct( select_type::cast(value) );
+  }
+  
+  
+  template<class Visitor, class ... Args>
+  void apply(Visitor&& visitor, Args&& ... args) {
+    using thunk_type = void (*)(variant& self, Visitor&& visitor, Args&& ... args);
 
+    static constexpr thunk_type thunk[] = {
+      call_thunk<T, void, variant, Visitor, Args...>...
+    };
+    
+    thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
+  }
 
   template<class Visitor, class ... Args>
   void apply(Visitor&& visitor, Args&& ... args) const {
-	using thunk_type = void (*)(const variant&, Visitor&&, Args&& ...);
-	
-	static constexpr thunk_type dispatch [] = {
-	  thunk<const variant, T, Visitor, Args...>...
-	};
-	
-	dispatch[index](*this, std::forward<Visitor>(visitor),
-					std::forward<Args>(args)...);
+    using thunk_type = void (*)(const variant& self, Visitor&& visitor, Args&& ... args);
+
+    static constexpr thunk_type thunk[] = {
+      call_thunk<T, void, const variant, Visitor, Args...>...
+    };
+    
+    thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
   }
+
+
+  template<class Visitor, class ... Args>
+  variant map(Visitor&& visitor, Args&& ... args) const {
+    using thunk_type = variant (*)(const variant& self, Visitor&& visitor, Args&& ... args);
+
+    static constexpr thunk_type thunk[] = {
+      call_thunk<T, variant, const variant, Visitor, Args...>...
+    };
+    
+    return thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
+  }
+
   
-  
-};
+}; 
 
 
 #endif
-
