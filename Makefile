@@ -1,12 +1,14 @@
 
-CXX=clang++
+# CXX=clang++
+# CXX=c++
+
 INCLUDEPATH=$(shell pkg-config --cflags eigen3)
-CXXFLAGS=-std=c++11 $(INCLUDEPATH) # -g # -fuse-ld=gold #-Xlinker -icf=all
+CXXFLAGS=-std=c++11 $(INCLUDEPATH) -g # -fuse-ld=gold #-Xlinker -icf=all
 
 ALL=parse rtti graph flow pcg sparse
 SUB=pouf
 
-LDFLAGS += -lstdc++ -lm
+LDLIBS += -lstdc++ -lm
 
 first: all
 
@@ -25,7 +27,7 @@ release: CXXFLAGS += -O3 -DNDEBUG
 release: all
 
 
-parse: LDFLAGS += -lreadline
+parse: LDLIBS += -lreadline
 
 pouf:
 	$(MAKE) -C $@
