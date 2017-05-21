@@ -55,7 +55,7 @@ class variant {
 
   template<class U, class Ret, class Variant, class Visitor, class ... Args>
   static Ret call_thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
-    return std::forward<Visitor>(visitor)(self.template get<U>(), std::forward<Args>(args)...);
+    return std::forward<Visitor>(visitor)(self.template unsafe<U>(), std::forward<Args>(args)...);
   }
 
   template<class U>
@@ -66,7 +66,7 @@ class variant {
   struct copy_construct {
     template<class U>
     void operator()(U& self, const variant& other) const {
-      new (&self) U(other.template get<U>());
+      new (&self) U(other.template unsafe<U>());
     }
   };
 
@@ -74,7 +74,7 @@ class variant {
   struct copy {
     template<class U>
     void operator()(U& self, const variant& other) const {
-      self = other.template get<U>();
+      self = other.template unsafe<U>();
     }
   };
 
@@ -82,7 +82,7 @@ class variant {
   struct move {
     template<class U>
     void operator()(U& self, variant&& other) const {
-      self = std::move(other.template get<U>());
+      self = std::move(other.template unsafe<U>());
     }
   };
   
@@ -90,7 +90,7 @@ class variant {
   struct move_construct {
     template<class U>
     void operator()(U& self, variant&& other) const {
-      new (&self) U(std::move(other.template get<U>()));
+      new (&self) U(std::move(other.template unsafe<U>()));
     }
   };
 
@@ -129,6 +129,22 @@ public:
     return res;
   }
 
+
+  template<class U>
+  U& unsafe() {
+    U& res = reinterpret_cast<U&>(storage);
+    assert(select_type::index(res) == index);
+    return res;
+  }
+
+  template<class U>
+  const U& unsafe() const {
+    const U& res = reinterpret_cast<const U&>(storage);
+    assert(select_type::index(res) == index);
+    return res;
+  }
+  
+  
   template<class U, int R = select_type::index( *(U*)0 )>
   bool is() const {
     return R == index;
@@ -628,9 +644,14 @@ namespace monad {
 
  
   static std::size_t indent = 0;
+  static const bool use_debug = false;
+
+  template<class Parser, bool = use_debug>
+  struct debug_type;
+
   
   template<class Parser>
-  struct debug_type {
+  struct debug_type<Parser, true> {
     const std::string name;
     const Parser parser;
  
@@ -653,14 +674,24 @@ namespace monad {
     
   };
 
-  // template<class Parser>
-  // static debug_type<Parser> debug(std::string name, Parser parser) {
-  //   return {name, parser};
-  // }
-
+  template<class Parser>
+  struct debug_type<Parser, false> {
+    
+    const Parser parser;
+    debug_type(const char*, const Parser& parser) : parser(parser) { }
+    
+    using value_type = typename traits<Parser>::value_type;
+    
+    maybe<value_type> operator()(std::istream& in) const {
+      return parser(in);
+    }
+    
+  };
+  
+  
   struct debug {
-    const std::string name;
-    debug(const std::string& name) : name(name) { }
+    const char* name;
+    debug(const char* name) : name(name) { }
     
     template<class Parser>
     debug_type<Parser> operator>>=(const Parser& parser) const {
@@ -716,6 +747,10 @@ namespace sexpr {
     symbol(const char* value) 
       : iterator(table.insert(value).first) { }  
 
+
+    bool operator==(const symbol& other) const {
+      return iterator == other.iterator;
+    }
     
     const std::string& name() const { return *iterator; }
 
@@ -758,8 +793,16 @@ namespace sexpr {
     }
 
     struct ostream;
+
+    // nil check
+    explicit operator bool() const {
+      return !is<list>() || unsafe<list>();
+    }
+    
   };
 
+  static const list nil;
+  
   static std::ostream& operator<<(std::ostream& out, const value& self);  
 
   struct cell {
@@ -971,7 +1014,7 @@ namespace sexpr {
         if(!res.second) res.first->second = val;
 
         // TODO nil?
-        return list();
+        return nil;
       } catch( value::bad_cast& e) {
         throw syntax_error("symbol expected");
       } catch( empty_list& e) {
@@ -986,11 +1029,7 @@ namespace sexpr {
         for(const value& x : args) {
           const list& term = x.get<list>();
 
-          const value test = eval(ctx, head(term));
-          
-          if(test.is<list>() && !test.get<list>()) {
-            // test fails on nil
-          } else {
+          if( eval(ctx, head(term)) ) {
             return eval(ctx, head(tail(term)));
           }
         }
@@ -1000,7 +1039,7 @@ namespace sexpr {
         throw syntax_error("cond");
       } 
       
-      return list();
+      return nil;
     }
 
 
@@ -1016,6 +1055,8 @@ namespace sexpr {
   
   struct eval_visitor {
 
+    static std::vector< value > stack;
+    
     value operator()(const symbol& self, const ref<context>& ctx) const {
       return ctx->find(self);
     }
@@ -1034,21 +1075,25 @@ namespace sexpr {
       };
 
       if(first.is<symbol>()) {
-        auto it = table.find(first.get<symbol>());
+        auto it = table.find(first.unsafe<symbol>());
         if(it != table.end()) return it->second(ctx, self->tail);
       }
       
 
       // applicatives
       const value app = eval(ctx, first);
-      
-      // TODO eval args to call stack ?
-      std::vector<value> args;      
-      for(const value& x : self->tail) {
-        args.emplace_back( eval(ctx, x) );
-      }
 
-      return apply(app, args.data(), args.data() + args.size());
+      const std::size_t start = stack.size();
+      
+      // TODO eval args to a call stack ?
+      for(const value& x : self->tail) {
+        stack.emplace_back( eval(ctx, x) );
+      }
+      
+      const value res = apply(app, stack.data() + start, stack.data() + stack.size());
+      stack.resize(start, nil);
+
+      return res;
     }
     
     
@@ -1059,6 +1104,8 @@ namespace sexpr {
     
   };
 
+
+  std::vector<value> eval_visitor::stack;
   
   static value eval(const ref<context>& ctx, const value& expr) {
     return expr.map( eval_visitor(), ctx );
@@ -1212,12 +1259,21 @@ namespace sexpr {
     list* curr = &res;
     
     for(const value* it = first; it != last; ++it) {
-      *curr = std::make_shared<cell>(*it, list());
+      *curr = std::make_shared<cell>(*it, nil);
       curr = &(*curr)->tail;
     }
                                                  
     return res;
   }
+
+  struct eq_visitor {
+
+    template<class T>
+    void operator()(const T& self, const value& other, bool& result) const {
+      result = self == other.template unsafe<T>();
+    }
+    
+  };
   
 }
 
@@ -1266,18 +1322,37 @@ int main(int argc, char** argv) {
         else std::cout << ' ';
         std::cout << *it;
       }
-      return list();
+      std::cout << std::endl;
+      return nil;
+    })
+    ("eq", [](const value* first, const value* last) -> value {
+      if(last - first < 2) throw error("argc");
+      if(first[0].type() != first[1].type()) return nil;
+      bool res;
+      first[0].apply(eq_visitor(), first[1], res);
+      if(!res) return nil;
+
+      static symbol t("t");
+      return t;
     })
     ;
   
   
-  const auto parser = sexpr_parser() >> [&](value&& expr) {
+  const auto parser = *sexpr_parser() >> [&](std::deque<value>&& exprs) {
     try{
-      std::cout << eval(ctx, expr) << std::endl;
+
+      for(const value& e : exprs) {
+        const value val = eval(ctx, e);
+        if(val) {
+          std::cout << val << std::endl;
+        }
+      }
+      
     } catch( error& e ) {
       std::cerr << "error: " << e.what() << std::endl;
     }
-    return monad::pure(expr);
+    
+    return monad::pure(exprs);
   };
 
 
