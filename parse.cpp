@@ -235,6 +235,13 @@ struct maybe : public variant<none, T> {
 
 namespace monad {
 
+  template<class Parser>
+  struct traits {
+    using value_type = typename Parser::value_type;
+  };
+
+  
+  
   // monadic return
   template<class T>
   struct pure_type {
@@ -287,7 +294,7 @@ namespace monad {
     const Parser parser;
     const F f;
 
-    using domain_type = typename Parser::value_type;
+    using domain_type = typename traits<Parser>::value_type;
     
     using range_type = typename std::result_of< F(domain_type) >::type;
     using value_type = typename range_type::value_type;
@@ -384,7 +391,7 @@ namespace monad {
   struct kleene_type {
     const Parser parser;
 
-    using source_type = typename Parser::value_type;
+    using source_type = typename traits<Parser>::value_type;
     using value_type = std::deque< source_type >;
 
     maybe<value_type> operator()(std::istream& in) const {
@@ -483,7 +490,7 @@ namespace monad {
   struct no_skip_type {
     const Parser parser;
 
-    using value_type = typename Parser::value_type;
+    using value_type = typename traits<Parser>::value_type;
 
     maybe<value_type> operator()(std::istream& in) const {
       if(in.flags() & std::ios::skipws) {
@@ -509,7 +516,7 @@ namespace monad {
   struct ref_type {
     const Parser& parser;
 
-    using value_type = typename Parser::value_type;
+    using value_type = typename traits<Parser>::value_type;
 
     maybe<value_type> operator()(std::istream& in) const {
       return parser(in);
@@ -552,7 +559,7 @@ namespace monad {
   struct plus_type {
     const Parser parser;
 
-    using source_type = typename Parser::value_type;
+    using source_type = typename traits<Parser>::value_type;
     using value_type = typename kleene_type<Parser>::value_type;
 
     maybe<value_type> operator()(std::istream& in) const {
@@ -582,7 +589,7 @@ namespace monad {
     const Parser parser;
     const Separator separator;
 
-    using source_type = typename Parser::value_type;
+    using source_type = typename traits<Parser>::value_type;
     using value_type = typename kleene_type<Parser>::value_type;
     
     maybe<value_type> operator()(std::istream& in) const {
@@ -618,7 +625,7 @@ namespace monad {
     const std::string name;
     const Parser parser;
  
-    using value_type = typename Parser::value_type;
+    using value_type = typename traits<Parser>::value_type;
 
     maybe<value_type> operator()(std::istream& in) const {
       for(std::size_t i = 0; i < indent; ++i) std::clog << ' ';
