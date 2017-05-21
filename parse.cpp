@@ -240,7 +240,11 @@ namespace monad {
     using value_type = typename Parser::value_type;
   };
 
-  
+
+  template<class T>
+  struct traits< maybe<T> (*)(std::istream& ) > {
+    using value_type = T;
+  };
   
   // monadic return
   template<class T>
@@ -512,23 +516,6 @@ namespace monad {
   static no_skip_type<Parser> no_skip(const Parser& parser) { return {parser}; }
 
 
-  template<class Parser>
-  struct ref_type {
-    const Parser& parser;
-
-    using value_type = typename traits<Parser>::value_type;
-
-    maybe<value_type> operator()(std::istream& in) const {
-      return parser(in);
-    }
-    
-  };
-
-
-  template<class Parser>
-  static ref_type<Parser> ref(const Parser& parser) { return {parser}; }
-  
-
   template<class T>
   struct any : std::function< maybe<T>(std::istream& in) >{
     using value_type = T;
@@ -536,12 +523,34 @@ namespace monad {
     using any::function::function;
   };
 
-  // hides std::ref
-  template<class T>
-  static ref_type<any<T>> ref(any<T>& self) { return {self}; }
 
-  template<class T>
-  static ref_type<any<T>> ref(const any<T>& self) { return {self}; }    
+  template<class T, class Tag>
+  struct rec {
+    using value_type = T;
+    using impl_type = maybe<T> (*)(std::istream& in);
+    
+    static impl_type impl;
+
+    maybe<T> operator()(std::istream& in) const {
+      if(!impl) throw std::runtime_error("empty recursive parser");
+      return impl(in);
+    }
+
+    template<class F>
+    rec& operator=(const F& other) {
+      static const F closure = other;
+      impl = [](std::istream& in) -> maybe<T> {
+        return closure(in);
+      };
+
+      return *this;
+    };
+    
+  };
+
+  template<class T, class Tag>
+  typename rec<T, Tag>::impl_type rec<T, Tag>::impl = nullptr;
+  
   
   
   template<class T>
@@ -1147,12 +1156,14 @@ static monad::any<sexpr::value> sexpr_parser() {
   
   auto atom = debug("atom") >>= string | symbol | integer | real;
     
-  static any<sexpr::value> expr;
+  struct expr_tag;
+  rec<sexpr::value, expr_tag> expr;
   
-  auto list = debug("list") >>= no_skip( (chr('('), *space, ref(expr) % +space)
-                       >> [space](std::deque<sexpr::value>&& terms) {
-                         return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
-                       });
+  auto list = debug("list") >>= no_skip( (chr('('), *space, expr % +space)
+                                         >> [space](std::deque<sexpr::value>&& terms) {
+                                           return *space, chr(')'), pure<sexpr::value>(sexpr::make_list(terms));
+                                         });
+  
   expr = debug("expr") >>= atom | list;
 
   return expr;
