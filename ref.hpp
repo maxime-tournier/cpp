@@ -9,16 +9,18 @@ class ref {
   
   struct block_type {
 
+    // note: you want value to be the first member, otherwise block == 0 does
+    // not imply get() == 0
+    
     T value;
     std::size_t rc;    
-
     
     template<class ... Args>
     block_type(Args&& ... args)
-      : // rc(1),
-      value( std::forward<Args>(args) ... )
-      , rc(1)
+      : value( std::forward<Args>(args) ... ),
+        rc(1)
     {
+      
     }
   };
 
@@ -77,17 +79,20 @@ public:
   bool operator==(const ref& other) const { return block == other.block; }
   
   T* get() const {
+    assert(block);
     return // reinterpret_cast<T*>(block);
       &block->value;
   }
 
   T* operator->() const {
+    assert(block);    
     return // reinterpret_cast<T*>(block);
       &block->value;
   }
 
 
   T& operator*() const {
+    assert(block);
     return block->value;
   }
   
