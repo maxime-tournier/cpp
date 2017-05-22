@@ -59,8 +59,8 @@ namespace lisp {
     
   };
 
-  struct value : variant<list, integer, real, symbol, ref<string>,
-                         ref<lambda>, builtin > {
+  struct value : variant<list, integer, real, symbol, ref<string>, builtin, 
+                         ref<lambda> > {
     using value::variant::variant;
 
     value(value::variant&& other)
