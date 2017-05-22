@@ -31,9 +31,9 @@ public:
   explicit operator bool() const { return block; }
 
   // default
-  ref() : block(nullptr) { }
+  ref() noexcept : block(nullptr) { }
 
-  ~ref() {
+  ~ref() noexcept {
     
     if(block && --block->rc == 0) {
       delete block;
@@ -42,12 +42,12 @@ public:
   }
 
   // copy
-  ref(const ref& other) : block(other.block) {
+  ref(const ref& other) noexcept  : block(other.block) {
     if(block) ++block->rc;
   }
 
 
-  ref& operator=(const ref& other) {
+  ref& operator=(const ref& other) noexcept {
     if(block && --block->rc) delete block;
     
     if((block = other.block)) ++block->rc;
@@ -56,11 +56,11 @@ public:
 
 
   // move
-  ref(ref&& other) : block(other.block) {
+  ref(ref&& other) noexcept : block(other.block) {
     other.block = nullptr;
   }
 
-  ref& operator=(ref&& other) {
+  ref& operator=(ref&& other) noexcept {
     block = other.block;
     other.block = nullptr;
     return *this;

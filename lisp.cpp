@@ -333,7 +333,7 @@ namespace lisp {
       }
       
     }
-
+ 
 
     static value cond(const ref<context>& ctx, const list& args) {
       try {
@@ -352,8 +352,8 @@ namespace lisp {
       
       return nil;
     }
-  
-
+    
+ 
     static value quote(const ref<context>& ctx, const list& args) {
       try {
         return head(args);
