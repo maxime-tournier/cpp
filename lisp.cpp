@@ -352,7 +352,7 @@ namespace lisp {
       
       return nil;
     }
-
+  
 
     static value quote(const ref<context>& ctx, const list& args) {
       try {
@@ -364,7 +364,7 @@ namespace lisp {
 
 
 
-
+ 
     // special forms
     static const std::map<symbol, type> table = {
       {"lambda", lambda},

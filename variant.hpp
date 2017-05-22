@@ -120,14 +120,14 @@ public:
 
 
   template<class U, index_type R = type_index<U>()>
-  U& get() {
+  U& get() noexcept {
     U& res = reinterpret_cast<U&>(storage);
     assert(R == index);
     return res;
   }
 
   template<class U, index_type R = type_index<U>() >
-  const U& get() const {
+  const U& get() const noexcept {
     const U& res = reinterpret_cast<const U&>(storage);
     assert(R == index);
     return res;
@@ -135,22 +135,22 @@ public:
   
   
   template<class U, index_type R = type_index<U>() >
-  bool is() const {
+  bool is() const noexcept {
     return R == index;
   }
   
   
-  variant(const variant& other)
+  variant(const variant& other) noexcept 
     : index(other.index) {
     apply( copy_construct(), other );
   }
 
-  variant(variant&& other)
+  variant(variant&& other) noexcept
     : index(other.index) {
     apply( move_construct(), std::move(other) );
   }
   
-  ~variant() {
+  ~variant() noexcept {
     apply( destruct() );
   }
 
@@ -161,7 +161,7 @@ public:
   //   construct( select_type::cast(value) );
   // }
 
-  variant& operator=(const variant& other) {
+  variant& operator=(const variant& other) noexcept {
     if(type() == other.type()) {
       apply( copy(), other );
     } else {
@@ -173,7 +173,7 @@ public:
   }
 
 
-  variant& operator=(variant&& other) {
+  variant& operator=(variant&& other)  noexcept{
     if(type() == other.type()) {
       apply( move(), std::move(other) );
     } else {
@@ -186,7 +186,7 @@ public:
   
   
   template<class U, index_type R = type_index<U>() >
-  variant(U&& value)
+  variant(U&& value) noexcept
     : index( R ) {
     construct( select_type::cast( std::forward<U>(value)) );
   }
