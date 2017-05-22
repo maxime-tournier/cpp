@@ -11,7 +11,6 @@ class ref {
 
     // note: you want value to be the first member, otherwise block == 0 does
     // not imply get() == 0
-    
     T value;
     std::size_t rc;    
     

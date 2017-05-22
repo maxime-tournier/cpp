@@ -235,7 +235,7 @@ namespace parse {
 	bool operator()(char c) const { return c == expected; }
   };
   
-  static character<equals> chr(char c) { return {{c}}; }
+  static inline character<equals> chr(char c) { return {{c}}; }
 
   template<int (*pred)(int) > struct adaptor {
     bool operator()(char c) const { return pred(c); }

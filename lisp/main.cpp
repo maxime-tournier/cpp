@@ -17,19 +17,10 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include "indices.hpp"
-#include "ref.hpp"
+#include "value.hpp"
+#include "eval.hpp"
 
-
-
-  
-
-  
-
-
-
-
-
+#include "../indices.hpp"
 
 namespace lisp {
   
@@ -144,7 +135,7 @@ int main(int argc, char** argv) {
     ;
     
    
-  const auto parser = *sexpr_parser() >> [&](std::deque<value>&& exprs) {
+  const auto parser = *lisp::parser() >> [&](std::deque<value>&& exprs) {
     try{
 
       for(const value& e : exprs) {
