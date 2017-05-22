@@ -361,7 +361,19 @@ namespace lisp {
         throw syntax_error("quote");
       }
     }
-    
+
+
+
+
+    // special forms
+    static const std::map<symbol, type> table = {
+      {"lambda", lambda},
+      {"def", def},
+      {"cond", cond},
+      {"quote", quote}
+    };
+
+    static const auto table_end = table.end();
   }
   
   struct eval_visitor {
@@ -378,16 +390,9 @@ namespace lisp {
       const value& first = self->head;
 
       // special forms
-      static const std::map<symbol, special::type> table = {
-        {"lambda", special::lambda},
-        {"def", special::def},
-        {"cond", special::cond},
-        {"quote", special::quote}
-      };
-
       if(first.is<symbol>()) {
-        auto it = table.find(first.get<symbol>());
-        if(it != table.end()) return it->second(ctx, self->tail);
+        auto it = special::table.find(first.get<symbol>());
+        if(it != special::table_end) return it->second(ctx, self->tail);
       }
       
 
@@ -396,7 +401,6 @@ namespace lisp {
 
       const std::size_t start = stack.size();
       
-      // TODO eval args to a call stack ?
       for(const value& x : self->tail) {
         stack.emplace_back( eval(ctx, x) );
       }

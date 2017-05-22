@@ -185,8 +185,6 @@ public:
   }
   
   
-  
-  // TODO move constructors from values ?
   template<class U, index_type R = type_index<U>() >
   variant(U&& value)
     : index( R ) {
