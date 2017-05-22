@@ -33,8 +33,8 @@ namespace lisp {
   
   using string = std::string;
   using integer = long;
-  using real = double;
-
+  using real = double; 
+ 
   // TODO maybe not const ?
   // TODO pass ctx ?
   using builtin = value (*)(const value* first, const value* last);
@@ -105,7 +105,7 @@ namespace lisp {
 
     // nil check
     explicit operator bool() const {
-      return !is<list>() || unsafe<list>();
+      return !is<list>() || get<list>();
     }
 
   }; 
@@ -153,7 +153,7 @@ namespace lisp {
   template<class H, class ... Args>
   static const list& unpack(const list& from, H* to, Args*... args) {
     if(!from) throw empty_list();
-    *to = from->head.get<H>();
+    *to = from->head.cast<H>();
     return unpack(from->tail, args...);
   }
 
@@ -338,7 +338,7 @@ namespace lisp {
     static value cond(const ref<context>& ctx, const list& args) {
       try {
         for(const value& x : args) {
-          const list& term = x.get<list>();
+          const list& term = x.cast<list>();
 
           if( eval(ctx, head(term)) ) {
             return eval(ctx, head(tail(term)));
@@ -386,7 +386,7 @@ namespace lisp {
       };
 
       if(first.is<symbol>()) {
-        auto it = table.find(first.unsafe<symbol>());
+        auto it = table.find(first.get<symbol>());
         if(it != table.end()) return it->second(ctx, self->tail);
       }
       
@@ -548,7 +548,7 @@ namespace lisp {
         throw error("argc");
       }
  
-      return ptr( first[I].template get<Args>() ... );
+      return ptr( first[I].template cast<Args>() ... );
     };
   } 
  
@@ -579,7 +579,7 @@ namespace lisp {
 
     template<class T>
     void operator()(const T& self, const value& other, bool& result) const {
-      result = self == other.template unsafe<T>();
+      result = self == other.template get<T>();
     }
     
   };
@@ -602,19 +602,18 @@ static void read_loop(const F& f) {
     
   }
   
-};
+}; 
 
 
 int main(int argc, char** argv) {
-
   using namespace lisp;
-  const ref<context> ctx = make_ref<context>();
+  ref<context> ctx = make_ref<context>();
 
   (*ctx)
-    ("add", [](const value* first, const value* last) -> value {
+    ("add", +[](const value* first, const value* last) -> value {
       integer res = 0;
       while(first != last) {
-        res += (first++)->get<integer>();
+        res += (first++)->cast<integer>();
       };
       return res;
     })
@@ -624,7 +623,7 @@ int main(int argc, char** argv) {
     ("mod", wrap([](integer x, integer y) -> integer { return x % y; }))        
     
     ("list", list_ctor)
-    ("print", [](const value* first, const value* last) -> value {
+    ("print", +[](const value* first, const value* last) -> value {
       bool start = true;
       for(const value* it = first; it != last; ++it) {
         if(start) start = false;
@@ -634,7 +633,7 @@ int main(int argc, char** argv) {
       std::cout << std::endl;
       return nil;
     })
-    ("eq", [](const value* first, const value* last) -> value {
+    ("eq", +[](const value* first, const value* last) -> value {
       if(last - first < 2) throw error("argc");
       if(first[0].type() != first[1].type()) return nil;
       bool res;

@@ -13,11 +13,11 @@ namespace impl {
   struct select<start, H, T...> : select<start + 1, T...> {
 
     using select<start + 1, T...>::index;
-    static constexpr std::size_t index(const H& ) { return start; }
+    static constexpr std::size_t index(const H* ) { return start; }
 
     using select<start + 1, T...>::cast;
-    static const H& cast(const H& value) { return value; }
-    static H&& cast(H&& value) { return std::move(value); }    
+    static constexpr const H& cast(const H& value) { return value; }
+    static constexpr H&& cast(H&& value) { return std::move(value); }    
     
   };
 
@@ -26,7 +26,7 @@ namespace impl {
     static void cast();    
   };
 }
-
+ 
 
 template<class ... T>
 class variant {
@@ -41,7 +41,7 @@ class variant {
 
   template<class U, class Ret, class Variant, class Visitor, class ... Args>
   static Ret call_thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
-    return std::forward<Visitor>(visitor)(self.template unsafe<U>(), std::forward<Args>(args)...);
+    return std::forward<Visitor>(visitor)(self.template get<U>(), std::forward<Args>(args)...);
   }
 
   template<class U>
@@ -52,7 +52,7 @@ class variant {
   struct copy_construct {
     template<class U>
     void operator()(U& self, const variant& other) const {
-      new (&self) U(other.template unsafe<U>());
+      new (&self) U(other.template get<U>());
     }
   };
 
@@ -60,7 +60,7 @@ class variant {
   struct copy {
     template<class U>
     void operator()(U& self, const variant& other) const {
-      self = other.template unsafe<U>();
+      self = other.template get<U>();
     }
   };
 
@@ -68,7 +68,7 @@ class variant {
   struct move {
     template<class U>
     void operator()(U& self, variant&& other) const {
-      self = std::move(other.template unsafe<U>());
+      self = std::move(other.template get<U>());
     }
   };
   
@@ -76,7 +76,7 @@ class variant {
   struct move_construct {
     template<class U>
     void operator()(U& self, variant&& other) const {
-      new (&self) U(std::move(other.template unsafe<U>()));
+      new (&self) U(std::move(other.template get<U>()));
     }
   };
 
@@ -97,55 +97,44 @@ public:
   struct bad_cast : std::runtime_error {
     bad_cast() : std::runtime_error("bad_cast") { }
   };
+
+  template<class U, index_type R = select_type::index( ((typename std::decay<U>::type*)0) ) >
+  static constexpr index_type type_index() { return R; }
   
-  template<class U>
-  U& get() {
+  template<class U, index_type R = type_index<U>() >
+  U& cast() {
     U& res = reinterpret_cast<U&>(storage);
-    if( select_type::index(res) != index ) throw bad_cast();
+    if( R != index ) throw bad_cast();
     return res;
   }
+
   
-  struct copy {
-    template<class U>
-    void operator()(U& self, const variant& other) const {
-      new (&self) U(other.template get<U>());
-    }
-  };
-
-  struct move {
-    template<class U>
-    void operator()(U& self, variant&& other) const {
-      new (&self) U(std::move(other.template get<U>()));
-    }
-  };
-
-  template<class U>
-  const U& get() const {
+  template<class U, index_type R = type_index<U>() >
+  const U& cast() const {
     const U& res = reinterpret_cast<const U&>(storage);
-    if( select_type::index(res) != index ) {
-      std::clog << select_type::index(res) << " vs. " << index << std::endl;
+    if(R != index ) {
       throw std::runtime_error("bad cast");
     }
     return res;
   }
 
 
-  template<class U>
-  U& unsafe() {
+  template<class U, index_type R = type_index<U>()>
+  U& get() {
     U& res = reinterpret_cast<U&>(storage);
-    assert(select_type::index(res) == index);
+    assert(R == index);
     return res;
   }
 
-  template<class U>
-  const U& unsafe() const {
+  template<class U, index_type R = type_index<U>() >
+  const U& get() const {
     const U& res = reinterpret_cast<const U&>(storage);
-    assert(select_type::index(res) == index);
+    assert(R == index);
     return res;
   }
   
   
-  template<class U, int R = select_type::index( *(U*)0 )>
+  template<class U, index_type R = type_index<U>() >
   bool is() const {
     return R == index;
   }
@@ -163,16 +152,14 @@ public:
   
   ~variant() {
     apply( destruct() );
-
-    // const int expand[] = { ((std::clog << typeid(T).name() << " " << sizeof() << std::endl), 0)... };
   }
 
   
-  template<class U>
-  variant(U&& value)
-    : index( select_type::index(value) ) {
-    construct( select_type::cast(value) );
-  }
+  // template<class U>
+  // variant(U&& value)
+  //   : index( select_type::index(value) ) {
+  //   construct( select_type::cast(value) );
+  // }
 
   variant& operator=(const variant& other) {
     if(type() == other.type()) {
@@ -197,16 +184,13 @@ public:
     return *this;
   }
   
-  ~variant() {
-    apply( destruct() );
-  }
   
   
   // TODO move constructors from values ?
-  template<class U, class = decltype( select_type::index( std::declval<const U&>() ) ) >
-  variant(const U& value)
-    : index( select_type::index(value) ) {
-    construct( select_type::cast(value) );
+  template<class U, index_type R = type_index<U>() >
+  variant(U&& value)
+    : index( R ) {
+    construct( select_type::cast( std::forward<U>(value)) );
   }
   
   
