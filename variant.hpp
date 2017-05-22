@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <memory>
 #include <cassert>
-
+#include <stdexcept>
 
 template<class ... T> class variant;
 
