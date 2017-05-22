@@ -331,15 +331,15 @@ namespace lisp {
       } catch( empty_list& e) {
         throw syntax_error("def");
       }
-      
+       
     }
- 
+  
 
     static value cond(const ref<context>& ctx, const list& args) {
       try {
         for(const value& x : args) {
           const list& term = x.cast<list>();
-
+ 
           if( eval(ctx, head(term)) ) {
             return eval(ctx, head(tail(term)));
           }

@@ -5,6 +5,10 @@
 #include <memory>
 #include <cassert>
 
+
+template<class ... T> class variant;
+
+
 namespace impl {
   template<std::size_t start, class ... T>
   struct select;
@@ -25,8 +29,32 @@ namespace impl {
     static void index();
     static void cast();    
   };
+
+
+  template<class Variant, class Self, class Signature>
+  struct dispatch;
+
+  template<class ... T, class Self, class Visitor, class Ret, class ... Args>
+  struct dispatch<variant<T...>, Self, Ret (Visitor, Args...) > {
+  
+    template<class U>
+    static Ret call_thunk(Self& self, Visitor&& visitor, Args&& ... args) {
+      return std::forward<Visitor>(visitor)(self.template get<U>(), std::forward<Args>(args)...);
+    }
+  
+    using thunk_type = Ret (*)(Self& self, Visitor&& visitor, Args&& ... args);
+    static constexpr thunk_type table[] = { call_thunk<T>... };
+  };
+
+  template<class ... T, class Self, class Visitor,  class Ret, class ... Args>
+  constexpr typename dispatch<variant<T...>, Self, Ret (Visitor, Args...) >::thunk_type
+  dispatch<variant<T...>, Self, Ret (Visitor, Args...) >::table[];
+
+  
 }
- 
+
+
+
 
 template<class ... T>
 class variant {
@@ -39,10 +67,6 @@ class variant {
   
   using select_type = impl::select<0, T...>;
 
-  template<class U, class Ret, class Variant, class Visitor, class ... Args>
-  static Ret call_thunk(Variant& self, Visitor&& visitor, Args&& ... args) {
-    return std::forward<Visitor>(visitor)(self.template get<U>(), std::forward<Args>(args)...);
-  }
 
   template<class U>
   void construct(U&& value) {
@@ -190,44 +214,36 @@ public:
     : index( R ) {
     construct( select_type::cast( std::forward<U>(value)) );
   }
-  
-  
+
+
   template<class Visitor, class ... Args>
   void apply(Visitor&& visitor, Args&& ... args) {
-    using thunk_type = void (*)(variant& self, Visitor&& visitor, Args&& ... args);
 
-    static constexpr thunk_type thunk[] = {
-      call_thunk<T, void, variant, Visitor, Args...>...
-    };
+    impl::dispatch<variant, variant, void (Visitor, Args...)>::table[index]
+      (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
     
-    thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
   }
 
   template<class Visitor, class ... Args>
   void apply(Visitor&& visitor, Args&& ... args) const {
-    using thunk_type = void (*)(const variant& self, Visitor&& visitor, Args&& ... args);
 
-    static constexpr thunk_type thunk[] = {
-      call_thunk<T, void, const variant, Visitor, Args...>...
-    };
-    
-    thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
+    impl::dispatch<variant, const variant, void (Visitor, Args...)>::table[index]
+      (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
+
   }
 
 
   template<class Visitor, class ... Args>
   variant map(Visitor&& visitor, Args&& ... args) const {
-    using thunk_type = variant (*)(const variant& self, Visitor&& visitor, Args&& ... args);
 
-    static constexpr thunk_type thunk[] = {
-      call_thunk<T, variant, const variant, Visitor, Args...>...
-    };
-    
-    return thunk[index](*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
+    return impl::dispatch<variant, const variant, variant(Visitor, Args...) >::table[index]
+      (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
   }
 
   
-}; 
+};
+
+
 
 
 #endif
