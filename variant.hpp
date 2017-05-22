@@ -178,12 +178,6 @@ public:
     apply( destruct() );
   }
 
-  
-  // template<class U>
-  // variant(U&& value)
-  //   : index( select_type::index(value) ) {
-  //   construct( select_type::cast(value) );
-  // }
 
   variant& operator=(const variant& other) noexcept {
     if(type() == other.type()) {
