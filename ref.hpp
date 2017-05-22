@@ -79,20 +79,17 @@ public:
   bool operator==(const ref& other) const { return block == other.block; }
   
   T* get() const {
-    assert(block);
     return // reinterpret_cast<T*>(block);
       &block->value;
   }
 
   T* operator->() const {
-    assert(block);    
     return // reinterpret_cast<T*>(block);
       &block->value;
   }
 
 
   T& operator*() const {
-    assert(block);
     return block->value;
   }
   
