@@ -71,19 +71,6 @@ namespace lisp {
 
   symbol::table_type symbol::table;
 
-  
-  template<class Container>
-  static list make_list(const Container& container) {
-    list res;
-    
-    for(auto it = container.rbegin(), end = container.rend();
-        it != end; ++it) {
-      res = *it >>= res;
-    }
-     
-    return res;
-  }
- 
 
   // TODO ref<string> ?
   struct value : variant<list, integer, real, symbol, ref<string>,
@@ -110,13 +97,11 @@ namespace lisp {
 
   }; 
 
-  static const list nil;
-  
   static std::ostream& operator<<(std::ostream& out, const value& self);  
 
   struct cell {
 
-    value head;
+    value head; 
     list tail;
 
     cell(const value& head,
@@ -139,6 +124,24 @@ namespace lisp {
   static cell::iterator begin(const list& self) { return { self.get() }; }
   static cell::iterator end(const list& self) { return { nullptr }; }
 
+
+  static const list nil;  
+  
+  template<class Iterator>
+  static list make_list(Iterator first, Iterator last) {
+    list res;
+    list* curr = &res;
+    
+    for(Iterator it = first; it != last; ++it) {
+      *curr = make_ref<cell>(*it, nil);
+      curr = &(*curr)->tail;
+    }
+    
+    return res;
+  }
+ 
+
+  
   struct error : std::runtime_error {
     using std::runtime_error::runtime_error;
   };
@@ -531,7 +534,7 @@ static parse::any<lisp::value> sexpr_parser() {
   
   const auto list = debug("list") >>=
     no_skip( (chr('('), *space, expr % +space) >> [space](std::deque<lisp::value>&& terms) {
-        return *space, chr(')'), pure<lisp::value>(lisp::make_list(terms));
+        return *space, chr(')'), pure<lisp::value>(lisp::make_list(terms.begin(), terms.end()));
       });
   
   expr = debug("expr") >>=
@@ -606,7 +609,11 @@ static void read_loop(const F& f) {
     
   }
   
-}; 
+};
+
+
+
+
 
 
 int main(int argc, char** argv) {

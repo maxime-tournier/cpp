@@ -34,7 +34,7 @@ public:
   ref() noexcept : block(nullptr) { }
 
   ~ref() noexcept {
-    
+    assert(!block || block->rc );
     if(block && --block->rc == 0) {
       delete block;
     }
@@ -42,13 +42,15 @@ public:
   }
 
   // copy
-  ref(const ref& other) noexcept  : block(other.block) {
+  ref(const ref& other) noexcept : block(other.block) {
     if(block) ++block->rc;
   }
 
 
   ref& operator=(const ref& other) noexcept {
-    if(block && --block->rc) delete block;
+    if(block && (--block->rc == 0)) {
+      delete block;
+    }
     
     if((block = other.block)) ++block->rc;
     return *this;
