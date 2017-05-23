@@ -87,6 +87,7 @@ namespace vm {
         continue;
         break;
       }
+        
       case opcode::LOAD: {
         // fetch index
         ++op;
@@ -95,6 +96,7 @@ namespace vm {
         data.push_back( data[fp.back() + i]);
         break;
       }
+        
       case opcode::STORE: {
         // fetch index
         ++op;
@@ -108,6 +110,33 @@ namespace vm {
         break;
       }
 
+
+      case opcode::LOADC: {
+        // fetch index
+        ++op;
+        const integer i = op->get<integer>();
+
+        const ref<closure>& f = data[fp.back()].get< ref<closure> >();
+        assert( i < f->capture.size() );
+        data.push_back( f->capture[i] );
+        break;
+      }
+        
+      case opcode::STOREC: {
+        // fetch index
+        ++op;
+        const integer i = op->get<integer>();
+
+        const ref<closure>& f = data[fp.back()].get< ref<closure> >();
+        assert( i < f->capture.size() );
+
+        // pop value in capture
+        f->capture[i] = std::move(data.back());
+        data.pop_back();
+        break;
+      }
+
+        
       case opcode::CLOSE: {
 
         // fetch argc and close over the last n variables
@@ -139,7 +168,7 @@ namespace vm {
 
         // calling convention:
         // (func, args..., retaddr, locals...)
-        // ^- fp
+        //   ^- fp
           
         // fetch argc
         ++op;
@@ -168,14 +197,14 @@ namespace vm {
           break;
         }
 
-        case value::type_index< lisp::builtin >():
+        case value::type_index< builtin >():
 
           {
             // call builtin
             const value* first = data.data() + start + 1;
             const value* last = data.data() + n + 1;
             
-            const lisp::value res = func.get<lisp::builtin>()
+            const lisp::value res = func.get<builtin>()
               ( reinterpret_cast<const lisp::value*>(first),
                 reinterpret_cast<const lisp::value*>(last));
             
@@ -296,11 +325,19 @@ namespace vm {
     ref<context> parent;
 
     std::map< symbol, integer > locals;
-    std::map< symbol, integer > capture;    
+    std::map< symbol, integer > captures;    
 
-    void add_local(symbol s) {
+    integer add_local(symbol s) {
       auto res = locals.insert( std::make_pair(s, locals.size()));
       if(!res.second) throw lisp::error("duplicate local");
+      return res.first->second;
+    }
+
+    integer capture(symbol s) {
+      if(!parent) throw lisp::unbound_variable(s);
+      
+      auto res = captures.insert( std::make_pair(s, captures.size()));
+      return res.first->second;
     }
     
   };
@@ -372,6 +409,33 @@ namespace vm {
     }
 
 
+    void operator()(const builtin& self, ref<context>& ctx, bytecode& res) const {
+      push_literal(res, self);
+    }
+    
+
+
+    void operator()(const symbol& self, ref<context>& ctx, bytecode& res) const {
+
+      // locals
+      {
+        auto it = ctx->locals.find(self);
+        if(it != ctx->locals.end()) {
+          res.push_back( opcode::LOAD );
+          res.push_back( it->second );
+          return;
+        }
+      }
+
+      // captures
+      {
+        res.push_back( opcode::LOADC );
+        res.push_back( ctx->capture(self) );
+        return;
+      }
+      
+    }
+    
     void operator()(const list& self, ref<context>& ctx, bytecode& res) const {
       try{
 

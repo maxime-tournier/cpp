@@ -15,9 +15,13 @@ namespace vm {
 
       PUSH,
       POP,
+      
       LOAD,
       STORE,
 
+      LOADC,
+      STOREC,
+      
       CALL,
       RET,
       
@@ -39,6 +43,7 @@ namespace vm {
   using lisp::symbol;
   using lisp::real;
   using lisp::list;
+  using lisp::builtin;
   
   struct label : symbol {
 
@@ -54,7 +59,7 @@ namespace vm {
                           real,
                           symbol,
                           ref<lisp::string>,
-                          lisp::builtin,
+                          builtin,
                           ref<closure>,
                           opcode,
                           label> {
