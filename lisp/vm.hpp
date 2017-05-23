@@ -35,19 +35,22 @@ namespace vm {
     std::size_t addr;
   };
 
-  struct label : lisp::symbol {
+  using lisp::integer;
+  using lisp::symbol;
+  
+  struct label : symbol {
 
     // TODO use separate symbol table
-    using lisp::symbol::symbol;
+    using symbol::symbol;
     
   };
   
   
   
   struct value : variant< lisp::list,
-                          lisp::integer, 
+                          integer, 
                           lisp::real,
-                          lisp::symbol,
+                          symbol,
                           ref<lisp::string>,
                           lisp::builtin,
                           ref<closure>,
@@ -60,7 +63,7 @@ namespace vm {
 
 
   class bytecode : public std::vector<value> {
-    std::map< vm::label, lisp::integer > labels;
+    std::map< vm::label, integer > labels;
   public:
     
     void label(vm::label s);
@@ -78,6 +81,7 @@ namespace vm {
 
   
   struct machine {
+    machine();
     
     std::vector<std::size_t> fp;
     std::vector<value> data;

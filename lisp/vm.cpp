@@ -15,6 +15,10 @@ namespace vm {
   };
 
 
+  machine::machine() {
+    fp.push_back(0);
+  }
+
   void bytecode::label(vm::label s) {
     auto it = labels.insert( std::make_pair(s, size()) );
     if( !it.second ) throw lisp::error("duplicate label: " + s.name());
@@ -66,8 +70,7 @@ namespace vm {
     while(true) {
 
       std::clog << op - code.data() << " " << *op << std::endl;
-      assert(op->is<opcode>());
-        
+      
       switch(op->get<opcode>()) {
 
       case opcode::NOOP: break;
@@ -76,55 +79,45 @@ namespace vm {
       case opcode::POP: data.pop_back(); break;
       case opcode::JMP: {
         // fetch addr
-        ++op; assert( op->is<lisp::integer>());
+        ++op;
+        const integer addr = op->get<integer>();
 
         // jump
-        op = code.data() + op->get<lisp::integer>();
+        op = code.data() + addr;
         continue;
         break;
       }
-      case opcode::LOAD:
+      case opcode::LOAD: {
         // fetch index
-        ++op; assert( op->is<lisp::integer>());
-        data.push_back( data[fp.back() + op->get<lisp::integer>()]);
-        break;
-      case opcode::STORE: {
-        // fetch index
-        ++op; assert( op->is<lisp::integer>());
-        auto& dst = data[fp.back() + op->get<lisp::integer>()];
-        dst = *++op;
+        ++op;
+        const integer i = op->get<integer>();
+        assert( fp.back() + i < data.size() );
+        data.push_back( data[fp.back() + i]);
         break;
       }
-        // case opcode::BUILTIN: {
+      case opcode::STORE: {
+        // fetch index
+        ++op;
+        const integer i = op->get<integer>();
+        assert( fp.back() + i < data.size() );
 
-        //   // fetch argc 
-        //   ++op; assert( op->is<lisp::integer>());
-        //   const lisp::integer n = op->get<lisp::integer>();
-        //   assert(n <= data.size());
-          
-        //   // builtin
-        //   assert( data.end()[- n - 1].is<lisp::builtin>());
-        //   const lisp::builtin func = data.end()[- n - 1].get<lisp::builtin>();
-          
-        //   // call builtin
-        //   const lisp::value res = func( reinterpret_cast<const lisp::value*>(&data.end()[-n]),
-        //                                 reinterpret_cast<const lisp::value*>(&data.end()[0]) );
+        // pop value into cell
+        value& cell = data[fp.back() + i];
+        cell = std::move(data.back());
+        data.pop_back();
+        break;
+      }
 
-        //   // pop args + push result
-        //   data.resize( data.size() - n - 1, lisp::nil );
-        //   data.push_back( reinterpret_cast<const value&>(res) );
-        //   break;
-        // }
       case opcode::CLOSE: {
 
         // fetch argc and close over the last n variables
-        ++op; assert( op->is<lisp::integer>());
-        const lisp::integer n = op->get<lisp::integer>();
-        assert(n <= data.size());
-
+        ++op;
+        const integer n = op->get<integer>();
+        assert(n <= integer(data.size()));
+        
         // fetch code address from bytecode start
-        ++op; assert( op->is<lisp::integer>());
-        const lisp::integer addr = op->get<lisp::integer>();
+        ++op;
+        const integer addr = op->get<integer>();
 
         // build closure
         ref<closure> res = make_ref<closure>();
@@ -149,10 +142,10 @@ namespace vm {
         // ^- fp
           
         // fetch argc
-        ++op; assert( op->is<lisp::integer>());
-        const lisp::integer n = op->get<lisp::integer>();
-
-
+        ++op;
+        const integer n = op->get<integer>();
+        assert( fp.back() + n + 1 <= data.size() );
+        
         // get function
         const std::size_t start = data.size() - n - 1;
         const value func = data[start];
@@ -174,16 +167,20 @@ namespace vm {
           continue;
           break;
         }
+
         case value::type_index< lisp::builtin >():
 
           {
             // call builtin
+            const value* first = data.data() + start + 1;
+            const value* last = data.data() + n + 1;
+            
             const lisp::value res = func.get<lisp::builtin>()
-              ( reinterpret_cast<const lisp::value*>(&data.end()[-n]),
-                reinterpret_cast<const lisp::value*>(&data.end()[0]) );
-              
+              ( reinterpret_cast<const lisp::value*>(first),
+                reinterpret_cast<const lisp::value*>(last));
+            
             // pop args + push result
-            data.resize( data.size() - n - 1, lisp::nil );
+            data.resize( start, lisp::nil );
             data.push_back( reinterpret_cast<const value&>(res) );
           }
             
@@ -201,10 +198,9 @@ namespace vm {
         data.pop_back();
 
         // pop return address
-        value addr = std::move(data.back());
+        const integer addr = data.back().get<integer>();
         data.pop_back();
-        assert(addr.is<lisp::integer>());
-
+        
         // cleanup frame
         data.resize( fp.back(), lisp::nil );
 
@@ -215,7 +211,7 @@ namespace vm {
         fp.pop_back();
 
         // jump back
-        op = code.data() + addr.get<lisp::integer>();
+        op = code.data() + addr;
         continue;
         break;
       }
