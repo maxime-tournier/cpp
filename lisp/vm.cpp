@@ -553,6 +553,12 @@ namespace vm {
   static std::map<symbol, special> table = {
     {"def", def},
     {"lambda", lambda}
+
+    // TODO cond, seq
+
+    // TODO seq create/destroy a scope (but not a frame?)
+    
+    // TODO how does seq mix with def ?
   };
   
   struct compile_visitor {
