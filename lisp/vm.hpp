@@ -76,10 +76,11 @@ namespace vm {
     
     void label(vm::label s);
     void link();
-    
+
+    friend std::ostream& operator<<(std::ostream& out, const bytecode& self);    
   };
 
-  std::ostream& operator<<(std::ostream& out, const bytecode& self);
+
   
   
   static_assert(sizeof(value) == sizeof(lisp::value),

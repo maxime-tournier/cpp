@@ -31,10 +31,12 @@ namespace vm {
     for(value& x : *this) {
     
       if(!x.is<vm::label>()) continue;
-    
-      auto it = labels.find(x.get<vm::label>());
+
+      const vm::label sym = x.get<vm::label>();
+      auto it = labels.find( sym );
+      
       if(it == labels.end()) {
-        throw lisp::error("unknown label: " + it->first.name());
+        throw lisp::error("unknown label: " + sym.name());
       } else {
         std::cout << "label: " << it->first.name() << " resolved to: " << it->second << std::endl;;
         x = it->second;
@@ -110,9 +112,18 @@ namespace vm {
   };
 
   std::ostream& operator<<(std::ostream& out, const bytecode& self) {
-    // TODO labels
+    // TODO print labels
+    std::map<integer, symbol> reverse;
+    for(const auto& it : self.labels) {
+      reverse[it.second] = it.first;
+    }
+    
     std::size_t i = 0;
     for(const value& x : self) {
+      auto it = reverse.find(i);
+      if(it != reverse.end()) {
+        out << std::endl << it->second.name() << ":" << std::endl;
+      }
       out << '\t' << i++ << '\t' << x << std::endl;
     }
 
@@ -386,6 +397,8 @@ namespace vm {
   struct context {
     ref<context> parent;
 
+    context(const ref<context>& parent = {}) : parent(parent) { }
+    
     std::map< symbol, integer > locals;
     std::map< symbol, integer > captures;    
 
@@ -447,7 +460,7 @@ namespace vm {
       const lisp::value& body = head(curr);
 
       // sub context
-      ref<context> sub = make_ref<context>();
+      ref<context> sub = make_ref<context>(ctx);
 
       // populate sub with locals for self + args
       
@@ -593,26 +606,18 @@ namespace vm {
 
     // forms
     void operator()(const list& self, ref<context>& ctx, bytecode& res) const {
-      try{
+      const lisp::value& h = head(self);
 
-        const lisp::value& h = head(self);
+      if(h.is<symbol>()) {
 
-        if(h.is<symbol>()) {
-
-          auto it = table.find(h.cast<symbol>());
-          if( it != table.end() ) {
-            return it->second(res, ctx, tail(self));
-          }
-
+        auto it = table.find(h.cast<symbol>());
+        if( it != table.end() ) {
+          return it->second(res, ctx, tail(self));
         }
 
-        return app(res, ctx, h, tail(self));
-        
-      } catch (lisp::error& e) {
-
-      } catch (lisp::value::bad_cast& e) {
-
       }
+
+      return app(res, ctx, h, tail(self));
     }
     
     
@@ -632,31 +637,44 @@ namespace vm {
       bytecode code;
       ref<context> ctx = make_ref<context>();
       
-      const auto parser = lisp::parser() >> [&](lisp::value&& expr) {
-        compile(code, ctx, expr);
-        return parse::pure(expr);
+      const auto parser = *lisp::parser() >> [&]( std::deque<lisp::value>&& exprs) {
+
+        for(const lisp::value& e : exprs) {
+          std::cout << "compiling: " << e << std::endl;
+          compile(code, ctx, e);
+        }
+        
+        return parse::pure(exprs);
       };
 
       std::stringstream ss;
-      ss << "((lambda (x) x) 1)";
 
-      if( !parser(ss) ) {
-        throw lisp::error("parse error");
-      }
+      ss << "(def y 5)";
+      ss << "(def second (lambda (x y) y))";
+      ss << "(def test (lambda (x) (lambda (y) x)))";
+      ss << "(def foo (test 2))";
+      ss << "(foo 10)";
+
+      try {
+        if( !parser(ss) || !ss.eof() ) {
+          throw lisp::error("parse error");
+        }
+
+        code.push_back(opcode::STOP);
       
-      code.push_back(opcode::STOP);
+        std::cout << "bytecode:" << std::endl;
+        std::cout << code << std::endl;
 
-      
-      std::cout << "bytecode:" << std::endl;
-      std::cout << code << std::endl;
+        code.link();
+        m.run(code);
 
-      code.link();
-      m.run(code);
+        if(m.data.size()) {
+          std::cout << m.data.back() << std::endl;
+        }
 
-      if(m.data.size()) {
-        std::cout << m.data.back() << std::endl;
+      } catch( lisp::error& e ) {
+        std::cerr << "error: " << e.what() << std::endl;
       }
-
     }
 
 
