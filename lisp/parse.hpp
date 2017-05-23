@@ -6,7 +6,7 @@
 
 namespace lisp {
 
-  class value;
+  struct value;
   parse::any<value> parser();
   
 }

@@ -5,8 +5,8 @@ CXX=/usr/bin/g++-6
 INCLUDEPATH=$(shell pkg-config --cflags eigen3)
 CXXFLAGS=-std=c++11 $(INCLUDEPATH) -Wall -g # -fuse-ld=gold #-Xlinker -icf=all
 
-ALL=lisp rtti graph flow pcg sparse
-SUB=pouf
+ALL=rtti graph flow pcg sparse
+SUB=pouf lisp
 
 LDLIBS += -lstdc++ -lm
 
@@ -14,7 +14,6 @@ first: all
 
 all: $(ALL) $(SUB)
 
- 
 clean:
 	rm -f $(ALL) *.o
 
@@ -26,10 +25,12 @@ debug: all
 release: CXXFLAGS += -O3 -DNDEBUG
 release: all
 
-lisp: LDLIBS += -lreadline
+pouf: FORCE
+	ninja -C $@/build/
 
-pouf:
-	$(MAKE) -C $@
+lisp: FORCE
+	ninja -C $@/build/
 
 
 FORCE:
+
