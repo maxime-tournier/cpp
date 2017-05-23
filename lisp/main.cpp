@@ -134,8 +134,9 @@ int main(int argc, char** argv) {
     })
     ;
     
-   
-  const auto parser = *lisp::parser() >> [&](std::deque<value>&& exprs) {
+
+  // clang chokes with default capture by reference
+  const auto parser = *lisp::parser() >> [&ctx](std::deque<value>&& exprs) {
     try{
 
       for(const value& e : exprs) {
@@ -151,6 +152,7 @@ int main(int argc, char** argv) {
     
     return parse::pure(exprs);
   };
+  
 
   if( argc > 1 ) {
     std::ifstream file(argv[1]);
