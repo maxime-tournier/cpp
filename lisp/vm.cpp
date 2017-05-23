@@ -288,6 +288,122 @@ namespace vm {
     }  
   
   } instance;
+
+
+
+  // codegen
+  struct context {
+    ref<context> parent;
+
+    std::map< symbol, integer > locals;
+    std::map< symbol, integer > capture;    
+
+    void add_local(symbol s) {
+      auto res = locals.insert( std::make_pair(s, locals.size()));
+      if(!res.second) throw lisp::error("duplicate local");
+    }
+    
+  };
+
+
+  using special = void (*)(bytecode& res, ref<context>&, const list&);
+  
+  static void compile(bytecode& res, ref<context>& ctx, const lisp::value& e);
+  
+  static void def(bytecode& res, ref<context>& ctx, const list& args) {
+    try{
+      list curr = args;
+      const symbol name = head(curr).cast<symbol>();
+      ctx->add_local(name);
+      
+      curr = tail(curr);
+      const lisp::value& body = head(curr);
+
+      compile(res, ctx, body);
+    } catch( lisp::error& e ) {
+      throw lisp::syntax_error("def");
+    }
+  };
+
+
+  template<class T>
+  static void push_literal(bytecode& res, const T& value) {
+    res.push_back( opcode::PUSH );
+    res.push_back( value );
+  }
+
+  
+
+  static void app(bytecode& res, ref<context>& ctx, const lisp::value& func, const list& args) {
+
+    // compile function
+    compile(res, ctx, func);
+    
+    // compile args
+    integer n = 0;
+    for(const lisp::value& x : args) {
+      compile(res, ctx, x);
+      ++n;
+    }
+
+    // call
+    res.push_back( opcode::CALL );
+    res.push_back( n );
+  };
+  
+  
+  static std::map<symbol, special> table = {
+    {"def", def}
+  };
+  
+  struct compile_visitor {
+
+    template<class T>
+    void operator()(const T& self, ref<context>& ctx, bytecode& res) const {
+      throw lisp::error("not implemented");
+    }
+
+    void operator()(const integer& self, ref<context>& ctx, bytecode& res) const {
+      push_literal(res, self);
+    }
+
+    void operator()(const real& self, ref<context>& ctx, bytecode& res) const {
+      push_literal(res, self);
+    }
+
+
+    void operator()(const list& self, ref<context>& ctx, bytecode& res) const {
+      try{
+
+        const lisp::value& h = head(self);
+
+        if(h.is<symbol>()) {
+
+          auto it = table.find(h.cast<symbol>());
+          if( it != table.end() ) {
+            return it->second(res, ctx, tail(self));
+          }
+
+        }
+
+        return app(res, ctx, h, tail(self));
+        
+      } catch (lisp::error& e) {
+
+      } catch (lisp::value::bad_cast& e) {
+
+      }
+    }
+    
+    
+    
+  };
+  
+  static void compile(bytecode& res, ref<context>& ctx, const lisp::value& e) {
+    e.apply(compile_visitor(), ctx, res);
+  }
+  
+  
   
 }
 

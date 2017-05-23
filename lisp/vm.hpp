@@ -37,6 +37,8 @@ namespace vm {
 
   using lisp::integer;
   using lisp::symbol;
+  using lisp::real;
+  using lisp::list;
   
   struct label : symbol {
 
@@ -47,9 +49,9 @@ namespace vm {
   
   
   
-  struct value : variant< lisp::list,
+  struct value : variant< list,
                           integer, 
-                          lisp::real,
+                          real,
                           symbol,
                           ref<lisp::string>,
                           lisp::builtin,
