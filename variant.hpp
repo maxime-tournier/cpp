@@ -184,6 +184,7 @@ public:
       apply( copy(), other );
     } else {
       apply( destruct() );
+      index = other.index;
       apply( copy_construct(), other );
     }
     
@@ -196,6 +197,7 @@ public:
       apply( move(), std::move(other) );
     } else {
       apply( destruct() );
+      index = other.index;      
       apply( move_construct(), std::move(other) );
     }
     
