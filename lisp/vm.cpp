@@ -1,6 +1,9 @@
 #include "vm.hpp"
 #include <iostream>
 
+#include "parse.hpp"
+#include <sstream>
+  
 namespace vm {
 
   static const auto print = +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
@@ -53,14 +56,36 @@ namespace vm {
     void operator()(const opcode& self, std::ostream& out) const {
 
       switch(self) {
+        
       case opcode::PUSH:
         out << "push";
         break;
+
+      case opcode::CLOS:
+        out << "clos";
+        break;
+
+      case opcode::JMP:
+        out << "jmp";
+        break;
+
+      case opcode::LOADC:
+        out << "loadc";
+        break;
+
+      case opcode::STOREC:
+        out << "storec";
+        break;
+        
         
       case opcode::CALL:
         out << "call";
         break;
 
+      case opcode::RET:
+        out << "ret";
+        break;
+        
         
       case opcode::STOP:
         out << "stop";
@@ -175,7 +200,7 @@ namespace vm {
       }
 
         
-      case opcode::CLOSE: {
+      case opcode::CLOS: {
 
         // fetch argc and close over the last n variables
         ++op;
@@ -330,7 +355,7 @@ namespace vm {
         
         // build closure
         code.label(start);        
-        code.push_back(opcode::CLOSE);
+        code.push_back(opcode::CLOS);
         code.push_back(0l);
         code.push_back(2l);        
         
@@ -442,8 +467,8 @@ namespace vm {
       // label for function code
       const integer id = unique();
       
-      const label start = std::string("lambda-start-" + id);
-      const label end = std::string("lambda-end-" + id);      
+      const label start = "lambda-" + std::to_string(id);
+      const label end = "after-" + start.name();
 
       // skip function body
       res.push_back( opcode::JMP );
@@ -475,7 +500,7 @@ namespace vm {
         compile(res, ctx, s);
       }
 
-      res.push_back( opcode::CLOSE );
+      res.push_back( opcode::CLOS );
       res.push_back( integer(ordered.size()) );
       res.push_back( start );      
       
@@ -607,19 +632,25 @@ namespace vm {
       bytecode code;
       ref<context> ctx = make_ref<context>();
       
-      lisp::value expr = symbol("def") >>= symbol("x") >>= print >>= lisp::nil;
-      
-      compile(code, ctx, expr);
+      const auto parser = lisp::parser() >> [&](lisp::value&& expr) {
+        compile(code, ctx, expr);
+        return parse::pure(expr);
+      };
 
-      expr = symbol("x") >>= make_ref<string>("lolwat") >>= integer(14) >>= lisp::nil;
-      
-      compile(code, ctx, expr);
+      std::stringstream ss;
+      ss << "((lambda (x) x) 1)";
+
+      if( !parser(ss) ) {
+        throw lisp::error("parse error");
+      }
       
       code.push_back(opcode::STOP);
 
+      
       std::cout << "bytecode:" << std::endl;
       std::cout << code << std::endl;
-      
+
+      code.link();
       m.run(code);
 
       if(m.data.size()) {

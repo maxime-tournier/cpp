@@ -25,7 +25,7 @@ namespace vm {
       CALL,
       RET,
       
-      CLOSE,
+      CLOS,
       
       JNE,
       JMP
