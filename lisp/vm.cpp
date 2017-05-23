@@ -364,6 +364,8 @@ namespace vm {
     std::map< symbol, integer > locals;
     std::map< symbol, integer > captures;    
 
+    const symbol* defining = nullptr;
+    
     integer add_local(symbol s) {
       auto res = locals.insert( std::make_pair(s, locals.size()));
       if(!res.second) throw lisp::error("duplicate local");
@@ -381,8 +383,10 @@ namespace vm {
 
 
   using special = void (*)(bytecode& res, ref<context>&, const list&);
+
   
   static void compile(bytecode& res, ref<context>& ctx, const lisp::value& e);
+
   
   static void def(bytecode& res, ref<context>& ctx, const list& args) {
     try{
@@ -391,17 +395,99 @@ namespace vm {
       ctx->add_local(name);
       
       curr = tail(curr);
-      const lisp::value& body = head(curr);
+      const lisp::value& expr = head(curr);
 
-      compile(res, ctx, body);
+      // TODO better ?
+      ctx->defining = &name;
+      compile(res, ctx, expr);
+      ctx->defining = nullptr;
+      
     } catch( lisp::error& e ) {
       throw lisp::syntax_error("def");
     }
   };
 
+  static integer unique() {
+    static integer res = 0;
+    return res++;
+  }
+  
 
+  static void lambda(bytecode& res, ref<context>& ctx, const list& args) {
+    try{
+      list curr = args;
+      const list args = head(curr).cast<list>();
+
+      curr = tail(curr);
+      const lisp::value& body = head(curr);
+
+      // sub context
+      ref<context> sub = make_ref<context>();
+
+      // populate sub with locals for self + args
+      
+      if(ctx->defining) {
+        sub->add_local(*ctx->defining);
+      } else {
+        sub->add_local("__self__");
+      }
+
+      for(const lisp::value& x : args) {
+        sub->add_local(x.get<symbol>());
+      }
+
+      // reserve space for return address
+      sub->add_local("__return__");
+      
+      // label for function code
+      const integer id = unique();
+      
+      const label start = std::string("lambda-start-" + id);
+      const label end = std::string("lambda-end-" + id);      
+
+      // skip function body
+      res.push_back( opcode::JMP );
+      res.push_back( end );      
+
+      // generate function body in sub context      
+      res.label(start);
+      compile(res, sub, body);
+      res.push_back( opcode::RET );
+
+      // push closure      
+      res.label(end);
+
+      // order sub captures and extend current ones
+      std::vector< symbol > ordered(sub->captures.size());
+      
+      for(const auto& it : sub->captures) {
+        const symbol& name = it.first;
+        ordered[it.second] = name;
+        
+        auto local = ctx->locals.find(name);
+        if(local == ctx->locals.end()) {
+          ctx->capture(name);
+        }
+      }
+
+      // load sub captures in order
+      for(const symbol& s : ordered) {
+        compile(res, ctx, s);
+      }
+
+      res.push_back( opcode::CLOSE );
+      res.push_back( integer(ordered.size()) );
+      res.push_back( start );      
+      
+    } catch( lisp::error& e ) {
+      throw lisp::syntax_error("lambda");
+    }
+  };
+
+  
+  
   template<class T>
-  static void push_literal(bytecode& res, const T& value) {
+  static void literal(bytecode& res, const T& value) {
     res.push_back( opcode::PUSH );
     res.push_back( value );
   }
@@ -427,7 +513,8 @@ namespace vm {
   
   
   static std::map<symbol, special> table = {
-    {"def", def}
+    {"def", def},
+    {"lambda", lambda}
   };
   
   struct compile_visitor {
@@ -439,21 +526,21 @@ namespace vm {
 
     // literals
     void operator()(const integer& self, ref<context>& ctx, bytecode& res) const {
-      push_literal(res, self);
+      literal(res, self);
     }
 
     void operator()(const ref<string>& self, ref<context>& ctx, bytecode& res) const {
-      push_literal(res, self);
+      literal(res, self);
     }
     
     
     void operator()(const real& self, ref<context>& ctx, bytecode& res) const {
-      push_literal(res, self);
+      literal(res, self);
     }
 
 
     void operator()(const builtin& self, ref<context>& ctx, bytecode& res) const {
-      push_literal(res, self);
+      literal(res, self);
     }
     
 
