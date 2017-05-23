@@ -70,10 +70,6 @@ namespace lisp {
       : value::variant(other) { }
 
     
-    list operator>>=(list tail) const {
-      return make_ref<cell>(*this, tail);
-    }
- 
     struct ostream;
 
     // nil check
@@ -81,7 +77,14 @@ namespace lisp {
       return !is<list>() || get<list>();
     }
 
-  }; 
+  };
+
+  template<class T>
+  static inline list operator>>=(const T& head, list tail) {
+    return make_ref<cell>(head, tail);
+  }
+
+  
 
   // lists
   struct cell {

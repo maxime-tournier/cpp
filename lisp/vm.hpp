@@ -44,6 +44,7 @@ namespace vm {
   using lisp::real;
   using lisp::list;
   using lisp::builtin;
+  using lisp::string;
   
   struct label : symbol {
 
@@ -58,7 +59,7 @@ namespace vm {
                           integer, 
                           real,
                           symbol,
-                          ref<lisp::string>,
+                          ref<string>,
                           builtin,
                           ref<closure>,
                           opcode,
@@ -77,6 +78,9 @@ namespace vm {
     void link();
     
   };
+
+  std::ostream& operator<<(std::ostream& out, const bytecode& self);
+  
   
   static_assert(sizeof(value) == sizeof(lisp::value),
                 "value size mismatch");

@@ -51,11 +51,49 @@ namespace vm {
     }
 
     void operator()(const opcode& self, std::ostream& out) const {
-      out << "#<opcode>";
+
+      switch(self) {
+      case opcode::PUSH:
+        out << "push";
+        break;
+        
+      case opcode::CALL:
+        out << "call";
+        break;
+
+        
+      case opcode::STOP:
+        out << "stop";
+        break;        
+
+      case opcode::LOAD:
+        out << "load";
+        break;
+
+      case opcode::STORE:
+        out << "store";
+        break;
+        
+      default:
+        out << "#<opcode>";
+      };
+      
+
     }
 
     
-  };  
+  };
+
+  std::ostream& operator<<(std::ostream& out, const bytecode& self) {
+    // TODO labels
+    std::size_t i = 0;
+    for(const value& x : self) {
+      out << '\t' << i++ << '\t' << x << std::endl;
+    }
+
+    return out;
+  }
+  
 
   std::ostream& operator<<(std::ostream& out, const value& self) {
     self.apply( value::ostream(), out);
@@ -117,7 +155,7 @@ namespace vm {
         const integer i = op->get<integer>();
 
         const ref<closure>& f = data[fp.back()].get< ref<closure> >();
-        assert( i < f->capture.size() );
+        assert( i < integer(f->capture.size()) );
         data.push_back( f->capture[i] );
         break;
       }
@@ -128,7 +166,7 @@ namespace vm {
         const integer i = op->get<integer>();
 
         const ref<closure>& f = data[fp.back()].get< ref<closure> >();
-        assert( i < f->capture.size() );
+        assert( i < integer(f->capture.size()) );
 
         // pop value in capture
         f->capture[i] = std::move(data.back());
@@ -202,7 +240,7 @@ namespace vm {
           {
             // call builtin
             const value* first = data.data() + start + 1;
-            const value* last = data.data() + n + 1;
+            const value* last = first + n;
             
             const lisp::value res = func.get<builtin>()
               ( reinterpret_cast<const lisp::value*>(first),
@@ -310,7 +348,6 @@ namespace vm {
       code.link();
       m.run(code);
       
-      std::clog << "success" << std::endl;
       if( !m.data.empty() ) {
         std::clog << m.data.back() << std::endl;
       }
@@ -400,10 +437,16 @@ namespace vm {
       throw lisp::error("not implemented");
     }
 
+    // literals
     void operator()(const integer& self, ref<context>& ctx, bytecode& res) const {
       push_literal(res, self);
     }
 
+    void operator()(const ref<string>& self, ref<context>& ctx, bytecode& res) const {
+      push_literal(res, self);
+    }
+    
+    
     void operator()(const real& self, ref<context>& ctx, bytecode& res) const {
       push_literal(res, self);
     }
@@ -414,7 +457,7 @@ namespace vm {
     }
     
 
-
+    // vars
     void operator()(const symbol& self, ref<context>& ctx, bytecode& res) const {
 
       // locals
@@ -435,7 +478,8 @@ namespace vm {
       }
       
     }
-    
+
+    // forms
     void operator()(const list& self, ref<context>& ctx, bytecode& res) const {
       try{
 
@@ -467,7 +511,38 @@ namespace vm {
     e.apply(compile_visitor(), ctx, res);
   }
   
-  
+
+  static struct test_codegen {
+    test_codegen() {
+
+      machine m;
+
+      bytecode code;
+      ref<context> ctx = make_ref<context>();
+      
+      lisp::value expr = symbol("def") >>= symbol("x") >>= print >>= lisp::nil;
+      
+      compile(code, ctx, expr);
+
+      expr = symbol("x") >>= make_ref<string>("lolwat") >>= integer(14) >>= lisp::nil;
+      
+      compile(code, ctx, expr);
+      
+      code.push_back(opcode::STOP);
+
+      std::cout << "bytecode:" << std::endl;
+      std::cout << code << std::endl;
+      
+      m.run(code);
+
+      if(m.data.size()) {
+        std::cout << m.data.back() << std::endl;
+      }
+
+    }
+
+
+  } instance2;
   
 }
 
