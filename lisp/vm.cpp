@@ -175,11 +175,8 @@ namespace vm {
         // pop value
         const value top = std::move(data.back());
 
-        std::clog << "jnz value: " << top << std::endl;
-        
         // jnz
         if( top ) {
-          std::clog << "jumping" << std::endl;
           op = code.data() + addr;
           continue;
         }
