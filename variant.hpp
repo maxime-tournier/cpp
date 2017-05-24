@@ -153,6 +153,7 @@ public:
   template<class U, index_type R = type_index<U>() >
   const U& get() const noexcept {
     const U& res = reinterpret_cast<const U&>(storage);
+
     assert(R == index);
     return res;
   }

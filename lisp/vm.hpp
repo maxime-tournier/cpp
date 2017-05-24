@@ -27,7 +27,7 @@ namespace vm {
       
       CLOS,
       
-      JNE,
+      JNZ,
       JMP
       };
 
@@ -66,6 +66,10 @@ namespace vm {
                           label> {
     using value::variant::variant;
 
+    explicit operator bool() const {
+      return !is<list>() || get<list>();
+    }
+    
     struct ostream;
   };
 

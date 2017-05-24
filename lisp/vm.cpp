@@ -67,6 +67,10 @@ namespace vm {
         out << "clos";
         break;
 
+      case opcode::JNZ:
+        out << "jnz";
+        break;
+        
       case opcode::JMP:
         out << "jmp";
         break;
@@ -151,6 +155,7 @@ namespace vm {
       case opcode::STOP: return;
       case opcode::PUSH: data.push_back(*++op); break;
       case opcode::POP: data.pop_back(); break;
+
       case opcode::JMP: {
         // fetch addr
         ++op;
@@ -161,6 +166,27 @@ namespace vm {
         continue;
         break;
       }
+
+      case opcode::JNZ: {
+        // fetch addr
+        ++op;
+        const integer addr = op->get<integer>();
+
+        // pop value
+        const value top = std::move(data.back());
+
+        std::clog << "jnz value: " << top << std::endl;
+        
+        // jnz
+        if( top ) {
+          std::clog << "jumping" << std::endl;
+          op = code.data() + addr;
+          continue;
+        }
+        
+        break;
+      }
+
         
       case opcode::LOAD: {
         // fetch index
@@ -449,7 +475,82 @@ namespace vm {
     static integer res = 0;
     return res++;
   }
+
+
+  static void cond(bytecode& res, ref<context>& ctx, const list& args) {
+    try{
+
+      const integer id = unique();
+
+
+      const label start = "cond-" + std::to_string(id) + "-start";
+      
+      res.label(start);
+      const label end = "cond-" + std::to_string(id) + "-end";
+      
+      std::map<label, lisp::value> branch;
+
+      // compile tests
+      integer i = 0;
+      for(const lisp::value& item : args) {
+        
+        const list chunk = item.cast<list>(); 
+
+        const lisp::value test = head(chunk);
+        const lisp::value result = head(tail(chunk));        
+        // TODO syntax check
+
+        const label then = "cond-" + std::to_string(id) + "-then-" + std::to_string(i);
+        
+        branch.emplace( std::make_pair(then, result) );
+        
+        compile(res, ctx, test);
+        res.push_back( opcode::JNZ );
+        res.push_back( then );
+        ++i;
+      }
+
+      // don't forget to jump
+      res.push_back( opcode::JMP );
+      res.push_back( end );      
+
+      // compile branches
+      // TODO order branches ?
+      for(const auto it : branch) {
+        res.label(it.first);
+        compile(res, ctx, it.second);
+        res.push_back( opcode::JMP );
+        res.push_back( end );      
+      }
+
+      res.label(end);
+      
+    } catch( lisp::error& e ) {
+      throw lisp::syntax_error("lambda");
+    }
+
+  }
+
+  template<class T>
+  static void literal(bytecode& res, const T& value) {
+    res.push_back( opcode::PUSH );
+    res.push_back( value );
+  }
+
   
+  
+
+  static void quote(bytecode& res, ref<context>& ctx, const list& args) {
+    try{
+      const lisp::value arg = head(args);
+      // TODO syntax check
+
+      literal(res, reinterpret_cast<const value&>(arg));
+      
+    } catch(lisp::error& e) {
+      throw lisp::syntax_error("quote");
+    }
+  }
 
   static void lambda(bytecode& res, ref<context>& ctx, const list& args) {
     try{
@@ -484,7 +585,7 @@ namespace vm {
       const label end = "after-" + start.name();
 
       // skip function body
-      res.push_back( opcode::JMP );
+      res.push_back( opcode::JMP ); 
       res.push_back( end );      
 
       // generate function body in sub context      
@@ -524,13 +625,6 @@ namespace vm {
 
   
   
-  template<class T>
-  static void literal(bytecode& res, const T& value) {
-    res.push_back( opcode::PUSH );
-    res.push_back( value );
-  }
-
-  
 
   static void app(bytecode& res, ref<context>& ctx, const lisp::value& func, const list& args) {
 
@@ -552,10 +646,11 @@ namespace vm {
   
   static std::map<symbol, special> table = {
     {"def", def},
-    {"lambda", lambda}
-
+    {"lambda", lambda},
+    {"cond", cond},
+    {"quote", quote},    
+    
     // TODO cond, seq
-
     // TODO seq create/destroy a scope (but not a frame?)
     
     // TODO how does seq mix with def ?
@@ -659,8 +754,10 @@ namespace vm {
       ss << "(def second (lambda (x y) y))";
       ss << "(def test (lambda (x) (lambda (y) x)))";
       ss << "(def foo (test 2))";
-      ss << "(foo 10)";
-
+      // ss << "(foo 10)";
+      ss << "(def nil (quote ()))";
+      ss << "(cond (nil 0) (nil 1) (2 2))";
+      
       try {
         if( !parser(ss) || !ss.eof() ) {
           throw lisp::error("parse error");
