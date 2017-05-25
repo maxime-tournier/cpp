@@ -3,21 +3,12 @@
 
 #include "parse.hpp"
 #include <sstream>
-  
+
+#include "tool.hpp"
+
 namespace vm {
 
-  static const auto print = +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
-    bool start = true;
-    for(const lisp::value* it = first; it != last; ++it) {
-      if(start) start = false;
-      else std::cout << ' ';
-      std::cout << *it;
-    }
-    std::cout << std::endl;
-    return lisp::nil;
-  };
-
-
+  
   machine::machine() {
     fp.push_back(0);
   }
@@ -353,6 +344,9 @@ namespace vm {
       
   }
 
+
+
+  static const ref<lisp::context> ctx = lisp::std_env();
   
   static struct test {
 
@@ -363,7 +357,7 @@ namespace vm {
 
       auto test_print = [&] {
         code.push_back(opcode::PUSH);
-        code.push_back( print );
+        code.push_back( ctx->find("print").get<builtin>() );
       
         code.push_back( opcode::PUSH );
         code.push_back( 1l );
@@ -561,7 +555,6 @@ namespace vm {
       ref<context> sub = make_ref<context>(ctx);
 
       // populate sub with locals for self + args
-      
       if(ctx->defining) {
         sub->add_local(*ctx->defining);
       } else {

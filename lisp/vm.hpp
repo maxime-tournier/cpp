@@ -1,5 +1,5 @@
-#ifndef VM_HPP
-#define VM_HPP
+#ifndef LISP_VM_HPP
+#define LISP_VM_HPP
 
 #include "value.hpp"
 #include "eval.hpp"
