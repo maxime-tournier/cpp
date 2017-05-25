@@ -51,10 +51,15 @@ namespace lisp {
       no_skip( (chr('('), *space, expr % +space) >> [space](std::deque<value>&& terms) {
           return *space, chr(')'), pure<value>(lisp::make_list(terms.begin(), terms.end()));
         });
-  
+
+    const auto quote = chr('\'');
+    const auto quoted_expr = no_skip(quote >> then(expr) >> [](value&& e) {
+        return pure<value>( lisp::symbol("quote") >>= e >>= nil );
+      });
+    
     expr = debug("expr") >>=
-      atom | list;
-  
+      atom | list | quoted_expr;
+    
     return expr;
   }
 

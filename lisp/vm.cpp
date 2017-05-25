@@ -647,9 +647,8 @@ namespace vm {
     {"cond", cond},
     {"quote", quote},    
     
-    // TODO cond, seq
+    // TODO seq
     // TODO seq create/destroy a scope (but not a frame?)
-    
     // TODO how does seq mix with def ?
   };
   
