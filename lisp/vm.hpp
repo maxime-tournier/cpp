@@ -79,8 +79,8 @@ namespace vm {
   public:
     
     void label(vm::label s);
-    void link();
-
+    void link(std::size_t start = 0);
+    
     friend std::ostream& operator<<(std::ostream& out, const bytecode& self);    
   };
 
@@ -106,6 +106,8 @@ namespace vm {
     
 
   };
+
+
   
 
 }

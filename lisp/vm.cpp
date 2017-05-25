@@ -18,20 +18,24 @@ namespace vm {
     if( !it.second ) throw lisp::error("duplicate label: " + s.name());
   }
   
-  void bytecode::link()  {
-    for(value& x : *this) {
+  void bytecode::link( std::size_t start )  {
+    assert(start < size());
     
-      if(!x.is<vm::label>()) continue;
+    for(value* x = data() + start, *end = data() + size(); x != end; ++x) {
 
-      const vm::label sym = x.get<vm::label>();
+      if(!x->is<vm::label>()) continue;
+      
+      const vm::label sym = x->get<vm::label>();
       auto it = labels.find( sym );
       
       if(it == labels.end()) {
         throw lisp::error("unknown label: " + sym.name());
       } else {
-        std::cout << "label: " << it->first.name() << " resolved to: " << it->second << std::endl;;
-        x = it->second;
+        // std::cout << "link: " << it->first.name() << " resolved to: " << it->second << std::endl;;
+        *x = it->second;
       }
+
+      
     }
   }  
 
