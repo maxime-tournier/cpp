@@ -57,7 +57,11 @@ namespace vm {
       case opcode::PUSH:
         out << "push";
         break;
-
+        
+      case opcode::POP:
+        out << "pop";
+        break;
+        
       case opcode::CLOS:
         out << "clos";
         break;
@@ -143,14 +147,19 @@ namespace vm {
 
     while(true) {
 
-      std::clog << op - code.data() << " " << *op << std::endl;
-      
       switch(op->get<opcode>()) {
 
       case opcode::NOOP: break;
       case opcode::STOP: return;
-      case opcode::PUSH: data.push_back(*++op); break;
-      case opcode::POP: data.pop_back(); break;
+
+      case opcode::PUSH: 
+        data.push_back(*++op);
+        break;
+      
+      case opcode::POP:
+        assert( !data.empty() );
+        data.pop_back();
+        break;
 
       case opcode::JMP: {
         // fetch addr
@@ -353,7 +362,7 @@ namespace vm {
 
   static const ref<lisp::context> ctx = lisp::std_env();
   
-  static struct test {
+  struct test {
 
     test() {
       machine m;
@@ -411,7 +420,7 @@ namespace vm {
       }
     }  
   
-  } instance;
+  };
 
 
 
@@ -461,6 +470,10 @@ namespace vm {
       ctx->defining = &name;
       compile(res, ctx, expr);
       ctx->defining = nullptr;
+
+      // def evals to nil
+      res.push_back( opcode::PUSH );
+      res.push_back( lisp::nil );
       
     } catch( lisp::error& e ) {
       throw lisp::syntax_error("def");
@@ -546,6 +559,25 @@ namespace vm {
     } catch(lisp::error& e) {
       throw lisp::syntax_error("quote");
     }
+  }
+
+  static void seq(bytecode& res, ref<context>& ctx, const list& args) {
+    try{
+
+      bool first = true;
+      for(const lisp::value& arg : args) {
+        if(first) first = false;
+        else {
+          res.push_back( opcode::POP );
+        }
+
+        compile(res, ctx, arg);
+      }
+      
+    } catch( lisp::error& e ) {
+      throw lisp::syntax_error("seq");
+    }
+    
   }
 
   static void lambda(bytecode& res, ref<context>& ctx, const list& args) {
@@ -643,7 +675,8 @@ namespace vm {
     {"def", def},
     {"lambda", lambda},
     {"cond", cond},
-    {"quote", quote},    
+    {"quote", quote},
+    {"seq", seq},    
     
     // TODO seq
     // TODO seq create/destroy a scope (but not a frame?)
@@ -724,7 +757,7 @@ namespace vm {
   }
   
 
-  static struct test_codegen {
+  struct test_codegen {
     test_codegen() {
 
       machine m;
@@ -750,6 +783,7 @@ namespace vm {
       ss << "(def foo (test 2))";
       ss << "(def nil '())";
       ss << "(cond (nil 0) (nil 1) ('else 2))";
+      ss << "(seq 1 2 3)";
       
       try {
         if( !parser(ss) || !ss.eof() ) {
@@ -774,7 +808,39 @@ namespace vm {
     }
 
 
-  } instance2;
+  };
+
+
+  jit::jit() : ctx( make_ref<context>() ) { }
+  jit::~jit() { }
+
+  void jit::import(const ref<lisp::context>& env) {
+
+    for(const auto& it : env->locals) {
+      eval( symbol("def") >>= it.first >>= it.second >>= lisp::nil );
+    }
+
+  }
+  
+  lisp::value jit::eval(const lisp::value& expr) {
+    const std::size_t start = code.size();
+
+    compile(code, ctx, expr);
+    code.push_back( opcode::STOP );
+
+
+    // TODO only incremental
+    // std::cout << "bytecode:" << std::endl;
+    // std::cout << code << std::endl;
+    
+    code.link(start);
+
+    m.run(code, start);
+    const value res = std::move(m.data.back());
+    m.data.pop_back();
+    
+    return reinterpret_cast<const lisp::value&>(res);    
+  }
   
 }
 

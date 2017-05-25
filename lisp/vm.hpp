@@ -107,8 +107,23 @@ namespace vm {
 
   };
 
+  struct context;
 
-  
+  class jit {
+    machine m;
+    bytecode code;
+    ref<context> ctx;
+  public:
+    
+    jit();
+    ~jit();
+
+    // not sure though
+    void import(const ref<lisp::context>& ctx);
+    
+    lisp::value eval(const lisp::value& expr);
+    
+  };
 
 }
 

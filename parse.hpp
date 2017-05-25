@@ -69,6 +69,25 @@ namespace parse {
   };
 
 
+  // TODO clarify this one
+  template<class T>
+  struct error : std::runtime_error {
+    error() : std::runtime_error("parse error") { }
+    
+    using value_type = T;
+
+    maybe<value_type> operator()(std::istream& in) const {
+
+      if(!in.eof()) {
+        throw *this;
+      }
+      return none();
+    }
+  
+  };
+
+  
+
   // sequencing with binding
   template<class Parser, class F>
   struct bind_type {
@@ -182,7 +201,7 @@ namespace parse {
       while( maybe<source_type> x = parser(in) ) {
         res.push_back(x.template get<source_type>() );
       }
-
+ 
       return res;
     }
 

@@ -21,12 +21,8 @@
 #include "eval.hpp"
 
 #include "tool.hpp"
+#include "vm.hpp"
 
-namespace lisp {
-  
-
-  
-}
 
 template<class F>
 static void read_loop(const F& f) {
@@ -35,12 +31,7 @@ static void read_loop(const F& f) {
     add_history(line);
 
 	std::stringstream ss(line);
-
-	if( f(ss) ) {
-      // success
-	} else if(!std::cin.eof()) {
-	  std::cerr << "parse error" << std::endl;
-	}
+	f(ss);
     
   }
   
@@ -49,44 +40,79 @@ static void read_loop(const F& f) {
 
 
 
+static const auto evaluate = [] {
+  ref<lisp::context> ctx = lisp::std_env();
+  
+  return [ctx](lisp::value&& e) {
+    const lisp::value val = eval(ctx, e);
+    if(val) {
+      std::cout << val << std::endl;  
+    }
+    return parse::pure(e);
+  };
+};
+
+
+
+
+template<class Action>
+static int process(std::istream& in, Action action) {
+  
+  const auto parse = *( lisp::parser() >> action | parse::error<lisp::value>() );
+  
+  try{
+    parse(in);
+    return 0;
+  } catch(parse::error<lisp::value>& e) {
+    std::cerr << e.what() << std::endl;
+  }
+  catch( lisp::error& e ) {
+    std::cerr << "error: " << e.what() << std::endl;
+  }
+
+  return 1;
+}
+
+
+
+const auto jit = [] {
+
+  ref<vm::jit> jit = make_ref<vm::jit>();
+
+  jit->import( lisp::std_env() );
+  
+  return [jit](lisp::value&& e) {
+
+    const lisp::value val = jit->eval(e);
+
+    if(val) {
+      std::cout << val << std::endl;  
+    }
+    return parse::pure(e);
+  };
+  
+  
+
+};
 
 
 int main(int argc, char** argv) {
   using namespace lisp;
-  ref<context> ctx = std_env(argc, argv);
-  
-  // clang chokes with default capture by reference
-  const auto parser = *lisp::parser() >> [&ctx](std::deque<value>&& exprs) {
-    try{
 
-      for(const value& e : exprs) {
-        const value val = eval(ctx, e);
-        if(val) {
-          std::cout << val << std::endl; 
-        }
-      }
-      
-    } catch( error& e ) {
-      std::cerr << "error: " << e.what() << std::endl;
-    }
-    
-    return parse::pure(exprs);
-  };
+  // const auto action = interpret();
+  const auto action = jit();  
   
-
   if( argc > 1 ) {
     std::ifstream file(argv[1]);
     
-    if(!parser(file)) {
-      std::cerr << "parse error" << std::endl;
-      return 1;
-    }
+    return process(file, action );
     
   } else {
   
-    read_loop([parser](std::istream& in) {
-        return bool( parser(in) );
+    read_loop([&](std::istream& in) {
+        process(in, action );
       });
+    
   }
  
   return 0;
