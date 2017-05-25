@@ -1,6 +1,6 @@
 
 # CXX=clang++
-CXX=/usr/bin/g++-6
+# CXX=/usr/bin/g++-6
 
 INCLUDEPATH=$(shell pkg-config --cflags eigen3)
 CXXFLAGS=-std=c++11 $(INCLUDEPATH) -Wall -g # -fuse-ld=gold #-Xlinker -icf=all

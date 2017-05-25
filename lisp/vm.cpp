@@ -289,7 +289,7 @@ namespace vm {
           fp.push_back( start );
             
           // push return address
-          data.push_back(++op - code.data());
+          data.push_back( integer( ++op - code.data()) );
 
           // get function address
           const ref<closure>& f = func.get<ref<closure>>();
