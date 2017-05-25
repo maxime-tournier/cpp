@@ -114,23 +114,24 @@ namespace vm {
     
   };
 
-  std::ostream& operator<<(std::ostream& out, const bytecode& self) {
-    // TODO print labels
-    std::map<integer, symbol> reverse;
-    for(const auto& it : self.labels) {
-      reverse[it.second] = it.first;
-    }
+
+  void bytecode::dump(std::ostream& out, std::size_t start) const {
+    assert( start < size() );
     
-    std::size_t i = 0;
-    for(const value& x : self) {
-      auto it = reverse.find(i);
-      if(it != reverse.end()) {
-        out << std::endl << it->second.name() << ":" << std::endl;
-      }
-      out << '\t' << i++ << '\t' << x << std::endl;
+    // TODO print labels
+    std::map<integer, std::string> reverse;
+    for(const auto& it : labels) {
+      reverse[it.second] += it.first.name() + ":";
     }
 
-    return out;
+    for(std::size_t i = start; i < size(); ++i) {
+      const value& x = (*this)[i];
+      auto it = reverse.find(i);
+      if(it != reverse.end()) {
+        out << std::endl << it->second << std::endl;
+      }
+      out << '\t' << i << '\t' << x << std::endl;
+    }
   }
   
 
@@ -179,7 +180,8 @@ namespace vm {
 
         // pop value
         const value top = std::move(data.back());
-
+        data.pop_back();
+        
         // jnz
         if( top ) {
           op = code.data() + addr;
@@ -358,7 +360,20 @@ namespace vm {
       
   }
 
+  std::ostream& operator<<(std::ostream& out, const machine& self) {
+    out << "[";
 
+    bool first = true;
+    for(const value& x: self.data) {
+      if( first ) first = false;
+      else out << ", ";
+
+      out << x;
+    }
+    
+    return out << "]";
+  }
+  
 
   static const ref<lisp::context> ctx = lisp::std_env();
   
@@ -828,10 +843,8 @@ namespace vm {
     compile(code, ctx, expr);
     code.push_back( opcode::STOP );
 
-
-    // TODO only incremental
-    // std::cout << "bytecode:" << std::endl;
-    // std::cout << code << std::endl;
+    std::cout << "bytecode:" << std::endl;
+    code.dump(std::cout, start);
     
     code.link(start);
 

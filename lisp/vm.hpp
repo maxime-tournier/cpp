@@ -69,7 +69,7 @@ namespace vm {
     explicit operator bool() const {
       return !is<list>() || get<list>();
     }
-    
+
     struct ostream;
   };
 
@@ -80,11 +80,15 @@ namespace vm {
     
     void label(vm::label s);
     void link(std::size_t start = 0);
-    
-    friend std::ostream& operator<<(std::ostream& out, const bytecode& self);    
+
+    void dump(std::ostream& out, std::size_t start = 0) const;
   };
 
-
+  
+  static inline std::ostream& operator<<(std::ostream& out, const bytecode& self) {
+    self.dump(out);
+    return out;
+  }
   
   
   static_assert(sizeof(value) == sizeof(lisp::value),
@@ -105,8 +109,11 @@ namespace vm {
     void run(const bytecode& code, std::size_t start = 0);
     
 
+
   };
 
+  std::ostream& operator<<(std::ostream& out, const machine& self);
+  
   struct context;
 
   class jit {
