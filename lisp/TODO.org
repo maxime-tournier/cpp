@@ -1,8 +1,9 @@
 
-- seq
-- jit
+- seq should introduce scope (codegen)
+  
+- expand/syntax pass before eval, shared between interpreter/codegen
+- clarify value type (lisp::sexpr, lisp::value, vm::value)
 
-- separate expand/syntax checking pass
 - macros
-- packages
+- packages?
 - typechecking on argc
