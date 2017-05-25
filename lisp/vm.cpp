@@ -132,9 +132,10 @@ namespace vm {
   }  
 
 
-  void machine::run(const bytecode& code) {
+  void machine::run(const bytecode& code, std::size_t start) {
 
-    const value* op = code.data();
+    assert( start < code.size() );
+    const value* op = code.data() + start;
 
     while(true) {
 

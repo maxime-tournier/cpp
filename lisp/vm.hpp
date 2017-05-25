@@ -102,7 +102,7 @@ namespace vm {
     std::vector<std::size_t> fp;
     std::vector<value> data;
 
-    void run(const bytecode& code);
+    void run(const bytecode& code, std::size_t start = 0);
     
 
   };
