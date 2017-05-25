@@ -750,9 +750,8 @@ namespace vm {
       ss << "(def second (lambda (x y) y))";
       ss << "(def test (lambda (x) (lambda (y) x)))";
       ss << "(def foo (test 2))";
-      // ss << "(foo 10)";
-      ss << "(def nil (quote ()))";
-      ss << "(cond (nil 0) (nil 1) (2 2))";
+      ss << "(def nil '())";
+      ss << "(cond (nil 0) (nil 1) ('else 2))";
       
       try {
         if( !parser(ss) || !ss.eof() ) {
