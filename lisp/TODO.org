@@ -1,0 +1,8 @@
+
+- seq
+- jit
+
+- separate expand/syntax checking pass
+- macros
+- packages
+- typechecking on argc
