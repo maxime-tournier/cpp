@@ -15,6 +15,7 @@ namespace vm {
 
       PUSH,
       POP,
+      SWAP,
       
       LOAD,
       STORE,
@@ -29,6 +30,7 @@ namespace vm {
       
       JNZ,
       JMP
+
       };
 
 

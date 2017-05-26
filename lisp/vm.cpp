@@ -61,6 +61,10 @@ namespace vm {
       case opcode::POP:
         out << "pop";
         break;
+
+      case opcode::SWAP:
+        out << "swap";
+        break;
         
       case opcode::CLOS:
         out << "clos";
@@ -162,6 +166,13 @@ namespace vm {
         data.pop_back();
         break;
 
+      case opcode::SWAP: {
+        assert( data.size() > 1 );
+        auto last = data.rbegin();
+        std::swap(*last, *(last + 1));
+        break;
+      }
+        
       case opcode::JMP: {
         // fetch addr
         ++op;
@@ -443,9 +454,11 @@ namespace vm {
   struct context {
     ref<context> parent;
 
-    context(const ref<context>& parent = {}) : parent(parent) { }
-    
-    std::map< symbol, integer > locals;
+    context(const ref<context>& parent = {})
+      : parent(parent) { }
+
+    using locals_type = std::map<symbol, integer>;
+    locals_type locals;
     std::map< symbol, integer > captures;    
 
     const symbol* defining = nullptr;
@@ -578,7 +591,8 @@ namespace vm {
 
   static void seq(bytecode& res, ref<context>& ctx, const list& args) {
     try{
-
+      const context::locals_type locals = ctx->locals;
+      
       bool first = true;
       for(const lisp::value& arg : args) {
         if(first) first = false;
@@ -588,6 +602,23 @@ namespace vm {
 
         compile(res, ctx, arg);
       }
+
+
+      const integer n = ctx->locals.size() - locals.size();
+      assert(n >= 0);
+      
+      if( n ) {
+        // we need to clear scope
+
+        // TODO add an opcode for that
+        for(integer i = 0; i < n; ++i) {
+          res.push_back(opcode::SWAP);
+          res.push_back(opcode::POP);          
+        }
+
+        ctx->locals = std::move(locals);
+      }
+
       
     } catch( lisp::error& e ) {
       throw lisp::syntax_error("seq");
