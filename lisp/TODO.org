@@ -1,5 +1,6 @@
 
-- seq should introduce scope (codegen)
+- wrap everything in `do` or make `def` illegal except in sequences
+
   
 - expand/syntax pass before eval, shared between interpreter/codegen
 - clarify value type (lisp::sexpr, lisp::value, vm::value)
