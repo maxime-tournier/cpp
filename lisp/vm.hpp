@@ -4,6 +4,7 @@
 #include "value.hpp"
 #include "eval.hpp"
 
+
 namespace vm {
 
   struct value;
@@ -122,6 +123,7 @@ namespace vm {
     machine m;
     bytecode code;
     ref<context> ctx;
+    ref<lisp::context> env;
   public:
     
     jit();

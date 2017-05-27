@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "tool.hpp"
+#include "syntax.hpp"
 
 namespace vm {
 
@@ -506,7 +507,7 @@ namespace vm {
       res.push_back( lisp::nil );
       
     } catch( lisp::error& e ) {
-      throw lisp::syntax_error("def");
+      throw std::logic_error("def");
     }
   };
 
@@ -856,11 +857,17 @@ namespace vm {
   };
 
 
-  jit::jit() : ctx( make_ref<context>() ) { }
+  jit::jit()
+    : ctx( make_ref<context>()),
+      env( make_ref<lisp::context>()) { }
+  
   jit::~jit() { }
 
   void jit::import(const ref<lisp::context>& env) {
 
+    this->env->locals.insert(env->locals.begin(),
+                             env->locals.end());
+    
     for(const auto& it : env->locals) {
       eval( symbol("def") >>= it.first >>= it.second >>= lisp::nil );
     }
@@ -870,6 +877,9 @@ namespace vm {
   lisp::value jit::eval(const lisp::value& expr) {
     const std::size_t start = code.size();
 
+    // macro 
+    const lisp::value ex = expand(env, expr);
+    
     compile(code, ctx, expr);
     code.push_back( opcode::STOP );
 

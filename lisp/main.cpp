@@ -22,7 +22,7 @@
 
 #include "tool.hpp"
 #include "vm.hpp"
-
+#include "syntax.hpp"
 
 template<class F>
 static void read_loop(const F& f) {
@@ -44,7 +44,8 @@ static const auto evaluate = [] {
   ref<lisp::context> ctx = lisp::std_env();
   
   return [ctx](lisp::value&& e) {
-    const lisp::value val = eval(ctx, e);
+    const lisp::value ex = expand(ctx, e);
+    const lisp::value val = eval(ctx, ex);
     if(val) {
       std::cout << val << std::endl;  
     }
