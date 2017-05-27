@@ -1,7 +1,9 @@
 #include "vm.hpp"
 #include <iostream>
 
+#include "syntax.hpp"
 #include "parse.hpp"
+
 #include <sstream>
 
 #include "tool.hpp"
@@ -725,7 +727,7 @@ namespace vm {
     {"do", seq},    
 
   };
-  
+
   struct compile_visitor {
 
     template<class T>

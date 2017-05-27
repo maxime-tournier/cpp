@@ -11,19 +11,19 @@ namespace lisp {
     
   };
 
-  struct syntax_error : error {
-    syntax_error(const std::string& s);
-  };
-  
   
   struct context {
     
     ref<context> parent;
-    context(const ref<context>& parent = {}) : parent(parent) { }
+    context(const ref<context>& parent = {}) 
+      : parent(parent) { }
     
     using locals_type = std::map< symbol, value >;
     locals_type locals;
 
+    using macros_type = std::map< symbol, value >;
+    macros_type macros;
+    
     value& find(const symbol& name) {
       auto it = locals.find(name);
       if(it != locals.end()) return it->second;

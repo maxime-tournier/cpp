@@ -1,13 +1,11 @@
 #include "eval.hpp"
+#include "syntax.hpp"
 
 namespace lisp {
 
   unbound_variable::unbound_variable(const symbol& s) 
     : error("unbound variable: " + s.name()) { }
   
-  syntax_error::syntax_error(const std::string& s)  
-    : error("syntax error: " + s) { }
-
 
   namespace special {
     using type = value (*)(const ref<context>&, const list& args);
@@ -36,17 +34,14 @@ namespace lisp {
     }
 
     static value def(const ref<context>& ctx, const list& args) {
-      
-      struct fail { };
-      
+      list curr = args;
       try{
-        symbol name;
-        const list& rest = unpack(args, &name);
+        const symbol name = head(curr).get<symbol>();
         
-        const value val = eval(ctx, head(rest));
+        const value val = eval(ctx, head(curr));
         auto res = ctx->locals.emplace( std::make_pair(name, val) );
         if(!res.second) res.first->second = val;
-
+        
         // TODO nil?
         return nil;
       } catch( value::bad_cast& e) {
