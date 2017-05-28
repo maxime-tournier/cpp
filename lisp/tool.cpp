@@ -26,6 +26,46 @@ namespace lisp {
     
   };
 
+  struct repr_visitor {
+    template<class T>
+    void operator()(const T& self, std::ostream& out) const {
+      out << self;
+    }
+
+    void operator()(const symbol& self, std::ostream& out) const {
+      out << '\'' << self.name();
+    }
+    
+  };
+
+  struct print_visitor {
+    template<class T>
+    void operator()(const T& self, std::ostream& out) const {
+      out << self;
+    }
+
+    void operator()(const ref<string>& self, std::ostream& out) const {
+      out << *self;
+    }
+    
+  };
+
+
+  template<class Visitor>
+  static value ostream(const value* first, const value* last) {
+    bool start = true;
+    for(const value* it = first; it != last; ++it) {
+      if(start) start = false;
+      else std::cout << ' ';
+      
+      it->apply(Visitor(), std::cout);
+    }
+    std::cout << std::endl;
+    return nil;
+  };
+
+
+  
 
   ref<context> std_env(int argc, char** argv) {
     
@@ -39,16 +79,8 @@ namespace lisp {
       ("mod", wrap([](integer x, integer y) -> integer { return x % y; }))        
     
       ("list", list_ctor)
-      ("print", +[](const value* first, const value* last) -> value {
-        bool start = true;
-        for(const value* it = first; it != last; ++it) {
-          if(start) start = false;
-          else std::cout << ' ';
-          std::cout << *it;
-        }
-        std::cout << std::endl;
-        return nil;
-      })
+      ("repr", ostream<repr_visitor>)
+      ("print", ostream<print_visitor>)
       ("eq", +[](const value* first, const value* last) -> value {
         if(last - first < 2) throw error("argc");
         if(first[0].type() != first[1].type()) return nil;
