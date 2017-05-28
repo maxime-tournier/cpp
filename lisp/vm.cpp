@@ -178,9 +178,8 @@ namespace vm {
         
       case opcode::JMP: {
         // fetch addr
-        ++op;
-        const integer addr = op->get<integer>();
-
+        const integer addr = (++op)->get<integer>();
+        
         // jump
         op = code.data() + addr;
         continue;
@@ -189,8 +188,7 @@ namespace vm {
 
       case opcode::JNZ: {
         // fetch addr
-        ++op;
-        const integer addr = op->get<integer>();
+        const integer addr = (++op)->get<integer>();
 
         // pop value
         const value top = std::move(data.back());
@@ -208,8 +206,7 @@ namespace vm {
         
       case opcode::LOAD: {
         // fetch index
-        ++op;
-        const integer i = op->get<integer>();
+        const integer i = (++op)->get<integer>();
         assert( fp.back() + i < data.size() );
         data.push_back( data[fp.back() + i]);
         break;
@@ -217,8 +214,7 @@ namespace vm {
         
       case opcode::STORE: {
         // fetch index
-        ++op;
-        const integer i = op->get<integer>();
+        const integer i = (++op)->get<integer>();
         assert( fp.back() + i < data.size() );
 
         // pop value into cell
@@ -231,9 +227,8 @@ namespace vm {
 
       case opcode::LOADC: {
         // fetch index
-        ++op;
-        const integer i = op->get<integer>();
-
+        const integer i = (++op)->get<integer>();
+        
         const ref<closure>& f = data[fp.back()].get< ref<closure> >();
         assert( i < integer(f->capture.size()) );
         data.push_back( f->capture[i] );
@@ -242,9 +237,8 @@ namespace vm {
         
       case opcode::STOREC: {
         // fetch index
-        ++op;
-        const integer i = op->get<integer>();
-
+        const integer i = (++op)->get<integer>();
+        
         const ref<closure>& f = data[fp.back()].get< ref<closure> >();
         assert( i < integer(f->capture.size()) );
 
@@ -258,14 +252,12 @@ namespace vm {
       case opcode::CLOS: {
 
         // fetch argc and close over the last n variables
-        ++op;
-        const integer n = op->get<integer>();
+        const integer n = (++op)->get<integer>();
         assert(n <= integer(data.size()));
         
         // fetch code address from bytecode start
-        ++op;
-        const integer addr = op->get<integer>();
-
+        const integer addr = (++op)->get<integer>();
+        
         // build closure
         ref<closure> res = make_ref<closure>();
         
@@ -289,13 +281,12 @@ namespace vm {
         //   ^- fp
           
         // fetch argc
-        ++op;
-        const integer n = op->get<integer>();
+        const integer n = (++op)->get<integer>();
         assert( fp.back() + n + 1 <= data.size() );
         
         // get function
         const std::size_t start = data.size() - n - 1;
-        const value func = data[start];
+        const value& func = data[start];
         
         switch( func.type() ) {
         case value::type_index< ref<closure> >(): {
@@ -303,8 +294,9 @@ namespace vm {
           fp.push_back( start );
             
           // push return address
-          data.push_back( integer( ++op - code.data()) );
-
+          const integer ret_addr = ++op - code.data();
+          data.push_back( ret_addr);
+          
           // get function address
           const ref<closure>& f = func.get<ref<closure>>();
           const value* addr = code.data() + f->addr;
@@ -319,7 +311,8 @@ namespace vm {
 
           {
             // call builtin
-            const value* first = data.data() + start + 1;
+            const std::size_t first_index = start + 1;
+            const value* first = data.data() + first_index;
             const value* last = first + n;
             
             const lisp::value res = func.get<builtin>()
@@ -327,8 +320,8 @@ namespace vm {
                 reinterpret_cast<const lisp::value*>(last));
             
             // pop args + push result
-            data.resize( start, lisp::nil );
-            data.push_back( reinterpret_cast<const value&>(res) );
+            data.resize( first_index, lisp::nil );
+            data.back() = std::move( reinterpret_cast<const value&>(res) );
           }
             
           break;
@@ -341,7 +334,7 @@ namespace vm {
 
       case opcode::RET: {
         // pop result
-        value result = std::move(data.back());
+        const value result = std::move(data.back());
         data.pop_back();
 
         // pop return address
@@ -349,11 +342,11 @@ namespace vm {
         data.pop_back();
         
         // cleanup frame
-        data.resize( fp.back(), lisp::nil );
+        data.resize( fp.back() + 1, lisp::nil );
 
         // push result
-        data.emplace_back( std::move(result) );
-
+        data.back() = std::move(result);
+        
         // pop frame pointer
         fp.pop_back();
 
@@ -364,7 +357,6 @@ namespace vm {
       }
         
       default:
-          
         assert(false && "unknown opcode");
       };
         

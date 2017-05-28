@@ -17,7 +17,8 @@ namespace lisp {
         throw error("argc");
       }
  
-      return ptr( first[I].template cast<Args>() ... );
+      // return ptr( first[I].template cast<Args>() ... );
+      return ptr( first[I].template get<Args>() ... );      
     };
   } 
  
