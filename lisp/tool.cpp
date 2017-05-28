@@ -6,11 +6,11 @@ namespace lisp {
 
 
   static value list_ctor(const value* first, const value* last) {
-    list res;
-    list* curr = &res;
+    value::list res;
+    value::list* curr = &res;
     
     for(const value* it = first; it != last; ++it) {
-      *curr = make_ref<cell>(*it, nil);
+      *curr = *it >>= value::list();
       curr = &(*curr)->tail;
     }
                                                  
@@ -27,11 +27,17 @@ namespace lisp {
   };
 
   struct repr_visitor {
+    
     template<class T>
     void operator()(const T& self, std::ostream& out) const {
       out << self;
     }
 
+    void operator()(const ref<std::string>& self, std::ostream& out) const {
+      out << *self;
+    }
+
+    
     void operator()(const symbol& self, std::ostream& out) const {
       out << '\'' << self.name();
     }
@@ -61,10 +67,10 @@ namespace lisp {
       it->apply(Visitor(), std::cout);
     }
     std::cout << std::endl;
-    return nil;
+    return value::list();
   };
 
-
+  static symbol t("t");
   
 
   ref<context> std_env(int argc, char** argv) {
@@ -79,16 +85,17 @@ namespace lisp {
       ("mod", wrap([](integer x, integer y) -> integer { return x % y; }))        
     
       ("list", list_ctor)
+      
       ("repr", ostream<repr_visitor>)
       ("print", ostream<print_visitor>)
+      
       ("eq", +[](const value* first, const value* last) -> value {
-        if(last - first < 2) throw error("argc");
-        if(first[0].type() != first[1].type()) return nil;
+        if(last - first != 2) throw error("argc");
+        if(first[0].type() != first[1].type()) return value::list();
         bool res;
         first[0].apply(eq_visitor(), first[1], res);
-        if(!res) return nil;
-
-        static symbol t("t");
+        if(!res) return value::list();
+        
         return t;
       })
       ;

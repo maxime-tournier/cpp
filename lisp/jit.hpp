@@ -7,10 +7,9 @@
 namespace lisp {
 
   class jit {
-    vm::machine m;
+    vm::machine machine;
     vm::bytecode code;
     ref<codegen::context> ctx;
-    ref<lisp::context> env;
   public:
     
     jit();
@@ -19,7 +18,7 @@ namespace lisp {
     // not sure though
     void import(const ref<lisp::context>& ctx);
     
-    vm::value eval(const lisp::value& expr);
+    vm::value eval(const lisp::sexpr& expr);
   };
 
   

@@ -1,8 +1,11 @@
 #ifndef EVAL_HPP
 #define EVAL_HPP
 
-#include "value.hpp"
 #include <map>
+#include <vector>
+
+#include "error.hpp"
+#include "sexpr.hpp"
 
 namespace lisp {
 
@@ -11,6 +14,53 @@ namespace lisp {
     
   };
 
+  struct value;
+  
+  struct context;
+  struct lambda;
+  
+  // TODO pass ctx ?
+  using builtin = value (*)(const value* first, const value* last);
+  
+
+  struct value : variant<list<value>, integer, real, symbol, ref<string>, builtin, 
+                         ref<lambda> > {
+
+    using list = lisp::list<value>;
+    
+    using value::variant::variant;
+
+    value(const sexpr& other) : value::variant( reinterpret_cast<const variant&> (other)) { }
+    value(sexpr&& other) : value::variant( reinterpret_cast<variant&&> (other)) { }    
+    
+    // nil check
+    explicit inline operator bool() const {
+      return !is<list>() || get<list>();
+    }
+
+  };
+
+
+  std::ostream& operator<<(std::ostream& out, const value& self);
+
+
+  // lambda
+  struct lambda {
+
+    ref<context> ctx;
+    using args_type = std::vector<symbol>;
+    args_type args;
+    sexpr body;
+
+
+    lambda(const ref<context>& ctx,
+           args_type&& args,
+           const sexpr& body);
+    
+    
+  };
+
+  
   
   struct context {
     
@@ -24,17 +74,9 @@ namespace lisp {
     using macros_type = std::map< symbol, value >;
     macros_type macros;
     
-    value& find(const symbol& name) {
-      auto it = locals.find(name);
-      if(it != locals.end()) return it->second;
-      if(parent) return parent->find(name);
-      throw unbound_variable(name);
-    }
+    value& find(const symbol& name);
 
-    context& operator()(const symbol& name, const value& expr) {
-      locals.emplace( std::make_pair(name, expr) );
-      return *this;
-    }
+    context& operator()(const symbol& name, const value& expr);
     
   };
 
@@ -48,7 +90,7 @@ namespace lisp {
   }
 
 
-  value eval(const ref<context>& ctx, const value& expr);
+  value eval(const ref<context>& ctx, const sexpr& expr);
   value apply(const value& app, const value* first, const value* last);
   
 }

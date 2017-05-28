@@ -9,34 +9,75 @@ namespace lisp {
     : error("unbound variable: " + s.name()) { }
   
 
-  namespace special {
-    using type = value (*)(const ref<context>&, const list& args);
+  lambda::lambda(const ref<context>& ctx,
+                 args_type&& args,
+                 const sexpr& body)
+    : ctx(ctx),
+      args(std::move(args)),
+      body(body) {
+
+  }
+
+  struct ostream_visitor {
+
+    void operator()(const value::list& self, std::ostream& out) const {
+      out << '(' << self << ')';
+    }
     
-    static value lambda(const ref<context>& ctx, const list& args) {
-      
-      try {
-        list params;
-        const list& rest = unpack(args, &params);
-
-        std::vector<symbol> vars;
-        
-        symbol s;
-        while(params) {
-          params = unpack(params, &s);
-          vars.push_back(s);
-        }
-        
-        return make_ref<lisp::lambda>(ctx, std::move(vars), head(rest));
-      } catch(empty_list& e) {
-        throw syntax_error("lambda");        
-      } catch(value::bad_cast& e) {
-        throw syntax_error("symbol list expected for function parameters");
-      } 
-
+    void operator()(const symbol& self, std::ostream& out) const {
+      out << self.name();
     }
 
-    static value def(const ref<context>& ctx, const list& args) {
-      list curr = args;
+    void operator()(const ref<string>& self, std::ostream& out) const {
+      out << *self;
+    }
+
+    
+    template<class T>
+    void operator()(const T& self, std::ostream& out) const {
+      out << self;
+    }
+    
+  };
+
+  std::ostream& operator<<(std::ostream& out, const value& self) {
+    self.apply( ostream_visitor(), out );
+    return out;
+  }
+  
+  
+  context& context::operator()(const symbol& name, const value& expr) {
+    locals.emplace( std::make_pair(name, expr) );
+    return *this;
+  }
+
+
+  value& context::find(const symbol& name){
+    auto it = locals.find(name);
+    if(it != locals.end()) return it->second;
+    if(parent) return parent->find(name);
+    throw unbound_variable(name);
+  }  
+  
+  namespace special {
+    using type = value (*)(const ref<context>&, const sexpr::list& args);
+    
+    static value lambda(const ref<context>& ctx, const sexpr::list& args) {
+      const sexpr::list& var_list = args->head.get<sexpr::list>();
+      const sexpr& body = args->tail->head;
+      
+      std::vector<symbol> vars;
+      
+      for(const sexpr& v : var_list) {
+        vars.emplace_back( v.get<symbol>() );
+      }
+      
+      return make_ref<lisp::lambda>(ctx, std::move(vars), body);
+    }
+
+    
+    static value def(const ref<context>& ctx, const sexpr::list& args) {
+      sexpr::list curr = args;
 
       const symbol name = curr->head.get<symbol>();
 
@@ -47,32 +88,32 @@ namespace lisp {
       auto res = ctx->locals.emplace( std::make_pair(name, val) );
       if(!res.second) throw error(name.name() + " already defined");
       
-      return nil;
+      return value::list();
     }
   
 
-    static value cond(const ref<context>& ctx, const list& args) {
-      for(const value& x : args) {
-        const list& term = x.get<list>();
- 
+    static value cond(const ref<context>& ctx, const sexpr::list& args) {
+      for(const sexpr& x : args) {
+        const sexpr::list& term = x.get<sexpr::list>();
+        
         if( eval(ctx, term->head) ) {
           return eval(ctx, term->tail->head);
         }
-
+        
       }
       
-      return nil;
+      return value::list();
     }
     
  
-    static value quote(const ref<context>& ctx, const list& args) {
+    static value quote(const ref<context>& ctx, const sexpr::list& args) {
       return args->head;
     }
+    
+    static value seq(const ref<context>& ctx, const sexpr::list& args) {
 
-    static value seq(const ref<context>& ctx, const list& args) {
-
-      value res = nil;
-      for(const value& x : args) {
+      value res = value::list();
+      for(const sexpr& x : args) {
         res = eval(ctx, x);
       }
       
@@ -103,14 +144,15 @@ namespace lisp {
       return ctx->find(self);
     }
 
-    value operator()(const list& self, const ref<context>& ctx) const {
+    
+    value operator()(const sexpr::list& self, const ref<context>& ctx) const {
       if(!self) throw error("empty list in application");
 
-      const value& first = self->head;
-
-      // special forms
-      if(first.is<symbol>()) {
-        auto it = special::table.find(first.get<symbol>());
+      const sexpr& first = self->head;
+      
+      // special forms dispatch
+      if( first.is<symbol>() ) {
+        auto it = special::table.find( first.get<symbol>() );
         if(it != special::table.end()) {
           return it->second(ctx, self->tail);
         }
@@ -122,13 +164,14 @@ namespace lisp {
 
       const std::size_t start = stack.size();
       // TODO use VLA here instead?
-      for(const value& x : self->tail) {
+
+      for(const sexpr& x : self->tail) {
         stack.emplace_back( eval(ctx, x) );
       }
       
       const value res = apply(app, stack.data() + start, stack.data() + stack.size());
-      stack.resize(start, nil);
-
+      stack.resize(start, value::list());
+      
       return res;
     }
     
@@ -143,8 +186,8 @@ namespace lisp {
   // not quite sure where does this belong
   std::vector<value> eval_visitor::stack;
   
-  value eval(const ref<context>& ctx, const value& expr) {
-    return expr.map( eval_visitor(), ctx );
+  value eval(const ref<context>& ctx, const sexpr& expr) {
+    return expr.map<value>( eval_visitor(), ctx );
   }
 
 
@@ -208,7 +251,7 @@ namespace lisp {
 
   
   value apply(const value& app, const value* first, const value* last) {
-    return app.map(apply_visitor(), first, last);
+    return app.map<value>(apply_visitor(), first, last);
   }
   
 

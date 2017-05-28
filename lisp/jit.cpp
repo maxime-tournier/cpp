@@ -6,23 +6,42 @@
 namespace lisp {
 
   jit::jit()
-    : ctx( make_ref<codegen::context>()),
-      env( make_ref<lisp::context>()) { }
+    : ctx( make_ref<codegen::context>()) { }
   
   jit::~jit() { }
 
-  void jit::import(const ref<lisp::context>& env) {
 
-    this->env->locals.insert(env->locals.begin(),
-                             env->locals.end());
-    
-    for(const auto& it : env->locals) {
-      eval( symbol("def") >>= it.first >>= it.second >>= lisp::nil );
+  struct import_visitor {
+
+    vm::value operator()(const sexpr& self) const {
+      return self;
     }
 
+    vm::value operator()(const builtin& self) const {
+      return self;
+    }
+
+
+    template<class T>
+    vm::value operator()(const T& self) const {
+      throw error("cannot import values of this type");
+    }
+    
+  };
+
+
+  
+  
+  void jit::import(const ref<lisp::context>& env) {
+
+    for(const auto& it : env->locals) {
+      ctx->add_local(it.first);
+      machine.data.push_back( it.second.map<vm::value>(import_visitor()) );
+    }
+    
   }
   
-  vm::value jit::eval(const lisp::value& expr) {
+  vm::value jit::eval(const lisp::sexpr& expr) {
     const std::size_t start = code.size();
 
     compile(code, ctx, expr);
@@ -33,9 +52,9 @@ namespace lisp {
     
     code.link(start);
 
-    m.run(code, start);
-    const vm::value res = std::move(m.data.back());
-    m.data.pop_back();
+    machine.run(code, start);
+    const vm::value res = std::move(machine.data.back());
+    machine.data.pop_back();
     
     return res;
   }

@@ -11,27 +11,26 @@ namespace lisp {
     using vm::opcode;
 
 
-    using special = void (*)(bytecode& res, ref<context>&, const list&);
+    using special = void (*)(bytecode& res, ref<context>&, const sexpr::list&);
 
   
 
-  
-    static void def(bytecode& res, ref<context>& ctx, const list& args) {
-      list curr = args;
-      const symbol name = head(curr).get<symbol>();
+    static void def(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+      sexpr::list curr = args;
+      const symbol name = curr->head.get<symbol>();
       ctx->add_local(name);
       
-      curr = tail(curr);
-      const lisp::value& expr = head(curr);
-
+      curr = curr->tail;
+      const sexpr& expr = curr->head;
+      
       // TODO better ?
       ctx->defining = &name;
       compile(res, ctx, expr);
       ctx->defining = nullptr;
-
+      
       // def evals to nil
       res.push_back( opcode::PUSH );
-      res.push_back( lisp::nil );
+      res.push_back( vm::value::list() );
     };
 
   
@@ -41,25 +40,25 @@ namespace lisp {
     }
 
 
-    static void cond(bytecode& res, ref<context>& ctx, const list& args) {
+    static void cond(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
       const integer id = unique();
-
 
       const label start = "cond-" + std::to_string(id) + "-start";
       
       res.label(start);
       const label end = "cond-" + std::to_string(id) + "-end";
       
-      std::map<label, lisp::value> branch;
+      std::map<label, sexpr> branch;
 
       // compile tests
       integer i = 0;
-      for(const lisp::value& item : args) {
+      for(const sexpr& item : args) {
         
-        const list chunk = item.cast<list>(); 
-
-        const lisp::value test = head(chunk);
-        const lisp::value result = head(tail(chunk));        
+        const sexpr::list& chunk = item.get<sexpr::list>(); 
+        
+        const sexpr& test = chunk->head;
+        const sexpr& result = chunk->tail->head;
+        
         // TODO syntax check
 
         const label then = "cond-" + std::to_string(id) + "-then-" + std::to_string(i);
@@ -97,16 +96,15 @@ namespace lisp {
    
   
 
-    static void quote(bytecode& res, ref<context>& ctx, const list& args) {
-      const lisp::value arg = head(args);
-      literal(res, reinterpret_cast<const vm::value&>(arg));
+    static void quote(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+      literal(res, args->head);
     }
 
-    static void seq(bytecode& res, ref<context>& ctx, const list& args) {
+    static void seq(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
       const context::locals_type locals = ctx->locals;
       
       bool first = true;
-      for(const lisp::value& arg : args) {
+      for(const sexpr& arg : args) {
         if(first) first = false;
         else {
           res.push_back( opcode::POP );
@@ -132,13 +130,13 @@ namespace lisp {
       }
     }
 
-    static void lambda(bytecode& res, ref<context>& ctx, const list& args) {
-      list curr = args;
-      const list vars = head(curr).cast<list>();
+    static void lambda(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+      sexpr::list curr = args;
+      const sexpr::list vars = head(curr).cast<sexpr::list>();
 
       curr = tail(curr);
-      const lisp::value& body = head(curr);
-
+      const sexpr& body = head(curr);
+      
       // sub context
       ref<context> sub = make_ref<context>(ctx);
 
@@ -150,7 +148,7 @@ namespace lisp {
       }
 
       integer n = 0;
-      for(const lisp::value& x : vars) {
+      for(const sexpr& x : vars) {
         sub->add_local(x.get<symbol>());
         ++n;
       }
@@ -204,14 +202,14 @@ namespace lisp {
   
   
 
-    static void app(bytecode& res, ref<context>& ctx, const lisp::value& func, const list& args) {
+    static void app(bytecode& res, ref<context>& ctx, const sexpr& func, const sexpr::list& args) {
 
       // compile function
       compile(res, ctx, func);
     
       // compile args
       integer n = 0;
-      for(const lisp::value& x : args) {
+      for(const sexpr& x : args) {
         compile(res, ctx, x);
         ++n;
       }
@@ -281,19 +279,19 @@ namespace lisp {
       }
 
       // forms
-      void operator()(const list& self, ref<context>& ctx, bytecode& res) const {
-        const lisp::value& h = head(self);
-
+      void operator()(const sexpr::list& self, ref<context>& ctx, bytecode& res) const {
+        const sexpr& h = self->head;
+        
         if(h.is<symbol>()) {
 
           auto it = table.find(h.cast<symbol>());
           if( it != table.end() ) {
-            return it->second(res, ctx, tail(self));
+            return it->second(res, ctx, self->tail);
           }
 
         }
 
-        return app(res, ctx, h, tail(self));
+        return app(res, ctx, h, self->tail);
       }
     
     
@@ -301,7 +299,7 @@ namespace lisp {
     };
   }
   
-  void compile(vm::bytecode& res, ref<codegen::context>& ctx, const lisp::value& e) {
+  void compile(vm::bytecode& res, ref<codegen::context>& ctx, const lisp::sexpr& e) {
     e.apply(codegen::compile_visitor(), ctx, res);
   }
   

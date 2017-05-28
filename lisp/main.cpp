@@ -17,12 +17,14 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include "value.hpp"
 #include "eval.hpp"
 
 #include "tool.hpp"
 #include "vm.hpp"
 #include "syntax.hpp"
+
+#include "jit.hpp"
+
 
 template<class F>
 static void read_loop(const F& f) {
@@ -43,8 +45,8 @@ static void read_loop(const F& f) {
 static const auto evaluate = [] {
   const ref<lisp::context> ctx = lisp::std_env();
   
-  return [ctx](lisp::value&& e) {
-    const lisp::value ex = expand_seq(ctx, e);
+  return [ctx](lisp::sexpr&& e) {
+    const lisp::sexpr ex = expand_seq(ctx, e);
     const lisp::value val = eval(ctx, ex);
     if(val) {
       std::cout << val << std::endl;  
@@ -59,7 +61,7 @@ static const auto evaluate = [] {
 template<class Action>
 static int process(std::istream& in, Action action) {
   
-  const auto parse = *( lisp::parser() >> action | parse::error<lisp::value>() );
+  const auto parse = *( lisp::parser() >> action | parse::error<lisp::sexpr>() );
   
   try{
     parse(in);
@@ -73,7 +75,7 @@ static int process(std::istream& in, Action action) {
   }
   
   catch( lisp::error& e ) {
-    std::cerr << "error: " << e.what() << std::endl;
+    std::cerr << "runtime error: " << e.what() << std::endl;
   }  
 
   return 1;
@@ -81,17 +83,17 @@ static int process(std::istream& in, Action action) {
 
 
 
-const auto jit = [] {
+const auto jit_compile = [] {
 
-  const ref<vm::jit> jit = make_ref<vm::jit>();
+  const ref<lisp::jit> jit = make_ref<lisp::jit>();
   const ref<lisp::context> env = lisp::std_env();
   
   jit->import( env );
   
-  return [env, jit](lisp::value&& e) {
+  return [env, jit](lisp::sexpr&& e) {
 
-    const lisp::value ex = expand_seq(env, e);    
-    const vm::value val = jit->eval(ex);
+    const lisp::sexpr ex = expand_seq(env, e);    
+    const lisp::vm::value val = jit->eval(ex);
 
     if(val) {
       std::cout << val << std::endl;  
@@ -105,10 +107,9 @@ const auto jit = [] {
 
 
 int main(int argc, char** argv) {
-  using namespace lisp;
-
+  
   // const auto action = interpret();
-  const auto action = jit();  
+  const auto action = jit_compile();  
   
   if( argc > 1 ) {
     std::ifstream file(argv[1]);

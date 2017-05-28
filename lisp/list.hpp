@@ -4,6 +4,8 @@
 #include "../ref.hpp"
 #include "error.hpp"
 
+#include <ostream>
+
 
 namespace lisp {
 

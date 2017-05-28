@@ -1,7 +1,16 @@
 
 project('lisp', 'cpp', default_options : ['cpp_std=c++11'])
 
-sources = ['main.cpp', 'eval.cpp', 'value.cpp', 'parse.cpp', 'vm.cpp', 'tool.cpp', 'syntax.cpp' ]
+sources = ['main.cpp',
+           'symbol.cpp',
+           'sexpr.cpp',
+           'parse.cpp',
+           'syntax.cpp',           
+           'eval.cpp',
+           'vm.cpp',
+           'tool.cpp',
+           'codegen.cpp',
+           'jit.cpp']
 
 compiler = meson.get_compiler('cpp')
 

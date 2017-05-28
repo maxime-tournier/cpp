@@ -1,7 +1,6 @@
 #ifndef LISP_CODEGEN_HPP
 #define LISP_CODEGEN_HPP
 
-#include "value.hpp"
 #include <map>
 #include "eval.hpp"
 
@@ -43,7 +42,7 @@ namespace lisp {
 
   }
   
-  void compile(vm::bytecode& res, ref<codegen::context>& ctx, const lisp::value& e);
+  void compile(vm::bytecode& res, ref<codegen::context>& ctx, const lisp::sexpr& e);
   
 
 }

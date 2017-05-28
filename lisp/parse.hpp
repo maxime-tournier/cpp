@@ -6,8 +6,8 @@
 
 namespace lisp {
 
-  struct value;
-  parse::any<value> parser();
+  struct sexpr;
+  parse::any<sexpr> parser();
   
 }
 

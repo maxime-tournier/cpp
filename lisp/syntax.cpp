@@ -13,26 +13,25 @@ namespace lisp {
   
   namespace special {
 
-    using type = list (*)(const ref<context>&, const list& args);
-
+    using type = sexpr::list (*)(const ref<context>&, const sexpr::list& args);
     
-    static list def(const ref<context>& ctx, const list& args) {
+    static sexpr::list def(const ref<context>& ctx, const sexpr::list& args) {
 
       static const auto fail = [] {
         throw syntax_error("(def `symbol` `expr`)");
       };
       
-      list curr = args;
+      sexpr::list curr = args;
       try{
-        symbol name;
-        curr = unpack(curr, &name);
-
-        const value body = expand(ctx, head(curr));
-
+        const symbol& name = head(curr).cast<symbol>();
+        curr = tail(curr);
+        
+        const sexpr body = expand(ctx, head(curr));
+        
         curr = tail(curr);
         if(curr) fail();
         
-
+        return name >>= body >>= sexpr::list();
         
       } catch( value::bad_cast& e) {
         fail();
@@ -40,48 +39,51 @@ namespace lisp {
         fail();
       }
 
-      return args;      
+      throw;
     }
 
 
-    static list quote(const ref<context>& ctx, const list& args) {
+    static sexpr::list quote(const ref<context>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(quote `expr`)");
       };
       
-      list curr = args;
+      sexpr::list curr = args;
       try {
-        const value res = head(curr);
+        const sexpr& res = head(curr);
 
         curr = tail(curr);
         if(curr) fail();
+
+        return res >>= sexpr::list();
+        
       } catch( empty_list& e) {
         fail();
       }
 
-      return args;
+      throw;
     }
 
     
-    static list lambda(const ref<context>& ctx, const list& args) {
+    static sexpr::list lambda(const ref<context>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(lambda (`symbol`...) `expr`)");
       };
       
-      list curr = args;
+      sexpr::list curr = args;
       try {
 
-        const list vars = map(head(curr).cast<list>(), [](const value& x) {
+        const sexpr::list vars = map(head(curr).cast<sexpr::list>(), [](const sexpr& x) {
             return x.cast<symbol>();
           });
         
         curr = tail(curr);
-        const value body = head(curr);
-
+        const sexpr body = expand(ctx, head(curr));
+        
         curr = tail(curr);
         if(curr) fail();
-        
 
+        return vars >>= body >>= sexpr::list();
       }
       catch( value::bad_cast& e) {
         fail();
@@ -90,40 +92,46 @@ namespace lisp {
         fail();
       }
 
-      return args;      
+      throw;
     }
     
 
 
-    static list seq(const ref<context>& ctx, const list& args) {
-      return map(args, [&](const value& x) {
+    static sexpr::list seq(const ref<context>& ctx, const sexpr::list& args) {
+      return map(args, [&](const sexpr& x) {
           return expand_seq(ctx, x);
         });
     }
 
 
-    static list cond(const ref<context>& ctx, const list& args) {
+    static sexpr::list cond(const ref<context>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(cond (`expr` `expr`)...)");
       };
       try{
-        for(const lisp::value& x : args) {
-          list curr = x.cast<list>();
+        return map(args, [&](const sexpr& e) -> sexpr {
+            sexpr::list curr = e.cast<sexpr::list>();
+            
+            const sexpr test = expand(ctx, head(curr));
+            curr = tail(curr);
 
-          curr = tail(curr);
-          curr = tail(curr);
+            const sexpr value = expand(ctx, head(curr));
+            curr = tail(curr);
 
-          if(curr) fail();
-        }
+            if(curr) fail();
+
+            return test >>= value >>= sexpr::list();
+          });
+        
       } catch(empty_list& e){
         fail();
       } catch(value::bad_cast& e) {
         fail();
       }
       
-      return args;
+      throw;
     }
-
+    
     
     static const std::map<symbol, type> table = {
       {kw::seq, seq},
@@ -146,11 +154,11 @@ namespace lisp {
   struct expand_visitor {
 
     template<class T>
-    value operator()(const T& self, const ref<context>& ctx) const {
+    sexpr operator()(const T& self, const ref<context>& ctx) const {
       return self;
     }
 
-    value operator()(const symbol& self, const ref<context>& ctx) const {
+    sexpr operator()(const symbol& self, const ref<context>& ctx) const {
       if(special::reserved.find(self) != special::reserved.end()) {
         throw syntax_error(self.name() + " not allowed in this context");
       }
@@ -160,7 +168,7 @@ namespace lisp {
 
 
 
-    value operator()(const list& self, const ref<context>& ctx) const {
+    sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
 
       if(self && head(self).is<symbol>()) {
         const symbol name = head(self).get<symbol>();
@@ -173,7 +181,7 @@ namespace lisp {
         // TODO macros
       }
 
-      return map(self, [&](const value& e) {
+      return map(self, [&](const sexpr& e) {
           return expand(ctx, e);
         });
     }
@@ -186,7 +194,7 @@ namespace lisp {
 
     using expand_visitor::operator();
     
-    value operator()(const list& self, const ref<context>& ctx) const {
+    sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
       if(self && head(self).is<symbol>() ) {
         const symbol name = head(self).get<symbol>();
 
@@ -201,12 +209,12 @@ namespace lisp {
   };
   
   
-  value expand(const ref<context>& ctx, const value& expr) {
-    return expr.map(expand_visitor(), ctx);
+  sexpr expand(const ref<context>& ctx, const sexpr& expr) {
+    return expr.map<sexpr>(expand_visitor(), ctx);
   }
 
-  value expand_seq(const ref<context>& ctx, const value& expr) {
-    return expr.map(expand_seq_visitor(), ctx);
+  sexpr expand_seq(const ref<context>& ctx, const sexpr& expr) {
+    return expr.map<sexpr>(expand_seq_visitor(), ctx);
   }
   
 }

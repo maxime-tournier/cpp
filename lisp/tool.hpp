@@ -1,7 +1,6 @@
 #ifndef TOOL_HPP
 #define TOOL_HPP
 
-#include "value.hpp"
 #include "eval.hpp"
 
 #include "../indices.hpp"

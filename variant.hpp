@@ -230,11 +230,12 @@ public:
   }
 
 
-  template<class Visitor, class ... Args>
-  variant map(Visitor&& visitor, Args&& ... args) const {
+  template<class Return, class Visitor, class ... Args>
+  Return map(Visitor&& visitor, Args&& ... args) const {
 
-    return impl::dispatch<variant, const variant, variant(Visitor, Args...) >::table[index]
+    return impl::dispatch<variant, const variant, Return (Visitor, Args...) >::table[index]
       (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
+    
   }
 
   
