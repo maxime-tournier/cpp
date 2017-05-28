@@ -98,7 +98,7 @@ namespace lisp {
 
 
     static sexpr::list seq(const ref<context>& ctx, const sexpr::list& args) {
-      return map(args, [&](const sexpr& x) {
+      return map(args, [&ctx](const sexpr& x) {
           return expand_seq(ctx, x);
         });
     }
@@ -109,7 +109,7 @@ namespace lisp {
         throw syntax_error("(cond (`expr` `expr`)...)");
       };
       try{
-        return map(args, [&](const sexpr& e) -> sexpr {
+        return map(args, [&ctx](const sexpr& e) -> sexpr {
             sexpr::list curr = e.cast<sexpr::list>();
             
             const sexpr test = expand(ctx, head(curr));
