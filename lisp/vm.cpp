@@ -379,68 +379,6 @@ namespace vm {
   }
   
 
-  static const ref<lisp::context> ctx = lisp::std_env();
-  
-  struct test {
-
-    test() {
-      machine m;
-
-      bytecode code;
-
-      auto test_print = [&] {
-        code.push_back(opcode::PUSH);
-        code.push_back( ctx->find("print").get<builtin>() );
-      
-        code.push_back( opcode::PUSH );
-        code.push_back( 1l );
-      
-        code.push_back( opcode::PUSH );
-        code.push_back( 1.5 );
-      
-        code.push_back( opcode::CALL );
-        code.push_back( 2l );
-      };      
-      
-
-      auto test_closure = [&] {
-
-        // skip function code
-        label start = "__start";
-        code.push_back(opcode::JMP);        
-        code.push_back(start);
-        
-        code.push_back(opcode::PUSH);
-        code.push_back(14l);        
-        code.push_back(opcode::RET);
-        
-        // build closure
-        code.label(start);        
-        code.push_back(opcode::CLOS);
-        code.push_back(0l);
-        code.push_back(2l);        
-        
-        // call closure with no arguments
-        code.push_back( opcode::CALL );
-        code.push_back( 0l );
-        
-      };      
-
-
-      test_closure();
-
-      code.push_back( opcode::STOP );
-
-      code.link();
-      m.run(code);
-      
-      if( !m.data.empty() ) {
-        std::clog << m.data.back() << std::endl;
-      }
-    }  
-  
-  };
-
 
 
   // codegen
@@ -793,58 +731,6 @@ namespace vm {
   }
   
 
-  struct test_codegen {
-    test_codegen() {
-
-      machine m;
-
-      bytecode code;
-      ref<context> ctx = make_ref<context>();
-      
-      const auto parser = *lisp::parser() >> [&]( std::deque<lisp::value>&& exprs) {
-
-        for(const lisp::value& e : exprs) {
-          std::cout << "compiling: " << e << std::endl;
-          compile(code, ctx, e);
-        }
-        
-        return parse::pure(exprs);
-      };
-
-      std::stringstream ss;
-
-      ss << "(def y 5)";
-      ss << "(def second (lambda (x y) y))";
-      ss << "(def test (lambda (x) (lambda (y) x)))";
-      ss << "(def foo (test 2))";
-      ss << "(def nil '())";
-      ss << "(cond (nil 0) (nil 1) ('else 2))";
-      ss << "(seq 1 2 3)";
-      
-      try {
-        if( !parser(ss) || !ss.eof() ) {
-          throw lisp::error("parse error");
-        }
-
-        code.push_back(opcode::STOP);
-      
-        std::cout << "bytecode:" << std::endl;
-        std::cout << code << std::endl;
-
-        code.link();
-        m.run(code);
-
-        if(m.data.size()) {
-          std::cout << m.data.back() << std::endl;
-        }
-
-      } catch( lisp::error& e ) {
-        std::cerr << "error: " << e.what() << std::endl;
-      }
-    }
-
-
-  };
 
 
   jit::jit()
@@ -873,8 +759,8 @@ namespace vm {
     compile(code, ctx, expr);
     code.push_back( opcode::STOP );
 
-    std::cout << "bytecode:" << std::endl;
-    code.dump(std::cout, start);
+    // std::cout << "bytecode:" << std::endl;
+    // code.dump(std::cout, start);
     
     code.link(start);
 
