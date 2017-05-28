@@ -43,7 +43,7 @@ namespace lisp {
       }
     }  
 
-    struct value::ostream {
+    struct ostream_visitor {
 
       template<class T>
       void operator()(const T& self, std::ostream& out) const {
@@ -144,7 +144,7 @@ namespace lisp {
   
 
     std::ostream& operator<<(std::ostream& out, const value& self) {
-      self.apply( value::ostream(), out);
+      self.apply( ostream_visitor(), out);
       return out;
     }  
 
@@ -400,7 +400,7 @@ namespace lisp {
 
         out << x;
       }
-    
+      
       return out << "]";
     }
   }  

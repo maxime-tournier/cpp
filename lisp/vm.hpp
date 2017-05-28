@@ -71,14 +71,13 @@ namespace lisp {
       
       using value::variant::variant;
 
-      explicit operator bool() const {
+      inline explicit operator bool() const {
         return !is<list>() || get<list>();
       }
 
       value(const sexpr& other) : value::variant( reinterpret_cast<const variant&> (other)) { }
       value(sexpr&& other) : value::variant( reinterpret_cast<variant&&> (other)) { }    
       
-      struct ostream;
     };
 
 
