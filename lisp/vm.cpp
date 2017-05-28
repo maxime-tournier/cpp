@@ -191,15 +191,15 @@ namespace vm {
         const integer addr = (++op)->get<integer>();
 
         // pop value
-        const value top = std::move(data.back());
-        data.pop_back();
-        
+        const value& top = data.back();
+
         // jnz
         if( top ) {
+          data.pop_back();
           op = code.data() + addr;
           continue;
         }
-        
+        data.pop_back();
         break;
       }
 
@@ -218,8 +218,8 @@ namespace vm {
         assert( fp.back() + i < data.size() );
 
         // pop value into cell
-        value& cell = data[fp.back() + i];
-        cell = std::move(data.back());
+        value& dest = data[fp.back() + i];
+        dest = std::move(data.back());
         data.pop_back();
         break;
       }
@@ -285,7 +285,7 @@ namespace vm {
         assert( fp.back() + n + 1 <= data.size() );
         
         // get function
-        const std::size_t start = data.size() - n - 1;
+        const std::size_t start = data.size() - (n + 1);
         const value& func = data[start];
         
         switch( func.type() ) {
@@ -333,10 +333,11 @@ namespace vm {
       }
 
       case opcode::RET: {
-        // pop result
-        const value result = std::move(data.back());
+        // put result and pop
+        const std::size_t start = fp.back();
+        data[start] = std::move(data.back());
         data.pop_back();
-
+        
         // pop return address
         const integer addr = data.back().get<integer>();
         data.pop_back();
@@ -344,9 +345,6 @@ namespace vm {
         // cleanup frame
         data.resize( fp.back() + 1, lisp::nil );
 
-        // push result
-        data.back() = std::move(result);
-        
         // pop frame pointer
         fp.pop_back();
 
