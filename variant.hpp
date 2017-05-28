@@ -164,7 +164,6 @@ public:
     return R == index;
   }
   
-  
   variant(const variant& other) noexcept 
     : index(other.index) {
     apply( copy_construct(), other );
@@ -176,7 +175,8 @@ public:
   }
   
   ~variant() noexcept {
-    apply( destruct() );
+    static constexpr bool skip_destructor[] = {std::is_trivially_destructible<T>::value...};    
+    if(!skip_destructor[index]) apply( destruct() );
   }
 
 
@@ -184,7 +184,7 @@ public:
     if(type() == other.type()) {
       apply( copy(), other );
     } else {
-      apply( destruct() );
+      this->~variant();
       index = other.index;
       apply( copy_construct(), other );
     }
@@ -197,7 +197,7 @@ public:
     if(type() == other.type()) {
       apply( move(), std::move(other) );
     } else {
-      apply( destruct() );
+      this->~variant();      
       index = other.index;      
       apply( move_construct(), std::move(other) );
     }

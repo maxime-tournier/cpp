@@ -41,7 +41,7 @@ static void read_loop(const F& f) {
 
 
 static const auto evaluate = [] {
-  ref<lisp::context> ctx = lisp::std_env();
+  static ref<lisp::context> ctx = lisp::std_env();
   
   return [ctx](lisp::value&& e) {
     const lisp::value ex = expand(ctx, e);
@@ -80,7 +80,9 @@ const auto jit = [] {
 
   ref<vm::jit> jit = make_ref<vm::jit>();
 
-  jit->import( lisp::std_env() );
+  const ref<lisp::context> env = lisp::std_env();
+  
+  jit->import( env );
   
   return [jit](lisp::value&& e) {
 

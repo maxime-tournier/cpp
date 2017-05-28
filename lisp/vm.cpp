@@ -379,8 +379,6 @@ namespace vm {
   }
   
 
-
-
   // codegen
   struct context {
     ref<context> parent;
