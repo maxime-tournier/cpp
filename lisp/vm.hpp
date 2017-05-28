@@ -132,7 +132,7 @@ namespace vm {
     // not sure though
     void import(const ref<lisp::context>& ctx);
     
-    lisp::value eval(const lisp::value& expr);
+    value eval(const lisp::value& expr);
     
   };
 

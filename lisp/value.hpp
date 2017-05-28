@@ -28,6 +28,7 @@ namespace lisp {
   // TODO pass ctx ?
   using builtin = value (*)(const value* first, const value* last);
 
+
   // symbols
   class symbol {
     using table_type = std::set<string>;
@@ -47,17 +48,18 @@ namespace lisp {
       : iterator(table().insert(value).first) { }  
 
 
-    bool operator==(const symbol& other) const {
+    inline bool operator==(const symbol& other) const {
       return iterator == other.iterator;
     }
     
-    const std::string& name() const { return *iterator; }
+    inline const std::string& name() const { return *iterator; }
 
-    bool operator<(const symbol& other) const {
+    inline bool operator<(const symbol& other) const {
       return &(*iterator) < &(*other.iterator);
     }
     
   };
+
 
   struct value : variant<list, integer, real, symbol, ref<string>, builtin, 
                          ref<lambda> > {
@@ -73,11 +75,12 @@ namespace lisp {
     struct ostream;
 
     // nil check
-    explicit operator bool() const {
+    explicit inline operator bool() const {
       return !is<list>() || get<list>();
     }
 
   };
+
 
   template<class T>
   static inline list operator>>=(const T& head, list tail) {
@@ -102,15 +105,22 @@ namespace lisp {
     struct iterator {
       cell* ptr;
 
-      value& operator*() const { return ptr->head; }
-      bool operator!=(iterator other) const { return ptr != other.ptr; }
-      iterator& operator++() { ptr = ptr->tail.get(); return *this; }
+      inline value& operator*() const { return ptr->head; }
+      inline bool operator!=(iterator other) const { return ptr != other.ptr; }
+      inline iterator& operator++() { ptr = ptr->tail.get(); return *this; }
     };
 
   };
+
   
   static inline cell::iterator begin(const list& self) { return { self.get() }; }
   static inline cell::iterator end(const list& self) { return { nullptr }; }
+
+  template<class F>
+  static inline list map(const list& self, const F& f) {
+    if(!self) return self;
+    return f(self->head) >>= map(self->tail, f);
+  }
 
 
   static const list nil;  

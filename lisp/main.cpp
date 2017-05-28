@@ -41,10 +41,10 @@ static void read_loop(const F& f) {
 
 
 static const auto evaluate = [] {
-  static ref<lisp::context> ctx = lisp::std_env();
+  const ref<lisp::context> ctx = lisp::std_env();
   
   return [ctx](lisp::value&& e) {
-    const lisp::value ex = expand(ctx, e);
+    const lisp::value ex = expand_seq(ctx, e);
     const lisp::value val = eval(ctx, ex);
     if(val) {
       std::cout << val << std::endl;  
@@ -65,11 +65,16 @@ static int process(std::istream& in, Action action) {
     parse(in);
     return 0;
   } catch(parse::error<lisp::value>& e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << "parse error: " << e.what() << std::endl;
   }
+  
+  catch( lisp::syntax_error& e ) {
+    std::cerr << "syntax error: " << e.what() << std::endl;
+  }
+  
   catch( lisp::error& e ) {
     std::cerr << "error: " << e.what() << std::endl;
-  }
+  }  
 
   return 1;
 }
@@ -78,15 +83,15 @@ static int process(std::istream& in, Action action) {
 
 const auto jit = [] {
 
-  ref<vm::jit> jit = make_ref<vm::jit>();
-
+  const ref<vm::jit> jit = make_ref<vm::jit>();
   const ref<lisp::context> env = lisp::std_env();
   
   jit->import( env );
   
-  return [jit](lisp::value&& e) {
+  return [env, jit](lisp::value&& e) {
 
-    const lisp::value val = jit->eval(e);
+    const lisp::value ex = expand_seq(env, e);    
+    const vm::value val = jit->eval(ex);
 
     if(val) {
       std::cout << val << std::endl;  

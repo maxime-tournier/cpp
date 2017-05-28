@@ -1,5 +1,7 @@
 #include "eval.hpp"
+
 #include "syntax.hpp"
+#include <sstream>
 
 namespace lisp {
 
@@ -35,61 +37,59 @@ namespace lisp {
 
     static value def(const ref<context>& ctx, const list& args) {
       list curr = args;
-      try{
-        const symbol name = head(curr).get<symbol>();
-        
-        const value val = eval(ctx, head(curr));
-        auto res = ctx->locals.emplace( std::make_pair(name, val) );
-        if(!res.second) res.first->second = val;
-        
-        // TODO nil?
-        return nil;
-      } catch( value::bad_cast& e) {
-        throw syntax_error("symbol expected");
-      } catch( empty_list& e) {
-        throw syntax_error("def");
-      }
-       
+
+      const symbol name = curr->head.get<symbol>();
+
+      curr = curr->tail;
+      const value val = eval(ctx, curr->head);
+
+      // TODO semantic: do we allow duplicate symbols ?
+      auto res = ctx->locals.emplace( std::make_pair(name, val) );
+      if(!res.second) throw error(name.name() + " already defined");
+      
+      return nil;
     }
   
 
     static value cond(const ref<context>& ctx, const list& args) {
-      try {
-        for(const value& x : args) {
-          const list& term = x.cast<list>();
+      for(const value& x : args) {
+        const list& term = x.get<list>();
  
-          if( eval(ctx, head(term)) ) {
-            return eval(ctx, head(tail(term)));
-          }
+        if( eval(ctx, term->head) ) {
+          return eval(ctx, term->tail->head);
         }
-      } catch(value::bad_cast& e) {
-        throw syntax_error("list of pairs expected");
-      } catch( empty_list& e ){
-        throw syntax_error("cond");
-      } 
+
+      }
       
       return nil;
     }
     
  
     static value quote(const ref<context>& ctx, const list& args) {
-      try {
-        return head(args);
-      } catch( empty_list& e ) {
-        throw syntax_error("quote");
-      }
+      return args->head;
     }
 
+    static value seq(const ref<context>& ctx, const list& args) {
+
+      value res = nil;
+      for(const value& x : args) {
+        res = eval(ctx, x);
+      }
+      
+      return res;
+    }
+
+    
 
     // special forms
     static const std::map<symbol, type> table = {
-      {"lambda", lambda},
-      {"def", def},
-      {"cond", cond},
-      {"quote", quote}
+      {kw::lambda, lambda},
+      {kw::def, def},
+      {kw::cond, cond},
+      {kw::quote, quote},
+      {kw::seq, seq},      
     };
 
-    static const auto table_end = table.end();
   }
   
   struct eval_visitor {
@@ -97,6 +97,9 @@ namespace lisp {
     static std::vector< value > stack;
     
     value operator()(const symbol& self, const ref<context>& ctx) const {
+      if(special::table.find(self) != special::table.end()) {
+        throw error(self.name() + " not allowed in this context");
+      }
       return ctx->find(self);
     }
 
@@ -108,7 +111,9 @@ namespace lisp {
       // special forms
       if(first.is<symbol>()) {
         auto it = special::table.find(first.get<symbol>());
-        if(it != special::table_end) return it->second(ctx, self->tail);
+        if(it != special::table.end()) {
+          return it->second(ctx, self->tail);
+        }
       }
       
 
@@ -116,7 +121,7 @@ namespace lisp {
       const value app = eval(ctx, first);
 
       const std::size_t start = stack.size();
-      
+      // TODO use VLA here instead?
       for(const value& x : self->tail) {
         stack.emplace_back( eval(ctx, x) );
       }
@@ -135,7 +140,7 @@ namespace lisp {
     
   };
 
-
+  // not quite sure where does this belong
   std::vector<value> eval_visitor::stack;
   
   value eval(const ref<context>& ctx, const value& expr) {
@@ -147,6 +152,10 @@ namespace lisp {
 
     value operator()(const ref<lambda>& self, const value* first, const value* last) {
 
+      struct argc_error : error {
+        argc_error() : error("argc") {} 
+      };
+      
       struct iterator {
         lambda::args_type::iterator it_name;
         const value* it_arg;
@@ -164,7 +173,7 @@ namespace lisp {
           const bool cond_name = it_name != other.it_name;
           const bool cond_arg = it_arg != other.it_arg;
 
-          if(cond_name ^ cond_arg) throw error("arg count");
+          if(cond_name ^ cond_arg) throw  argc_error();
 
           return cond_name || cond_arg;
         }
@@ -174,8 +183,14 @@ namespace lisp {
       iterator pair_first = {self->args.begin(), first};
       iterator pair_last = {self->args.end(), last};
 
-      ref<context> sub = extend(self->ctx, pair_first, pair_last);
-      return eval(sub, self->body);
+      try {
+        ref<context> sub = extend(self->ctx, pair_first, pair_last);
+        return eval(sub, self->body);
+      } catch( argc_error& e ) {
+        std::stringstream ss;
+        ss << "argument error, got " << last - first << ", expected: " << self->args.size();
+        throw error(ss.str());
+      }
     }
 
     value operator()(const builtin& self, const value* first, const value* last) {
@@ -185,7 +200,8 @@ namespace lisp {
 
     template<class T>
     value operator()(const T& self, const value* first, const value* last) {
-      throw error("cannot apply");
+      // TODO
+      throw error("cannot apply values of this type");
     }
     
   };
