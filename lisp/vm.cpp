@@ -314,14 +314,14 @@ namespace vm {
             const std::size_t first_index = start + 1;
             const value* first = data.data() + first_index;
             const value* last = first + n;
-            
-            const lisp::value res = func.get<builtin>()
-              ( reinterpret_cast<const lisp::value*>(first),
-                reinterpret_cast<const lisp::value*>(last));
+
+            reinterpret_cast<lisp::value&>(data[start]) = 
+              (func.get<builtin>()
+               ( reinterpret_cast<const lisp::value*>(first),
+                 reinterpret_cast<const lisp::value*>(last)));
             
             // pop args + push result
             data.resize( first_index, lisp::nil );
-            data.back() = std::move( reinterpret_cast<const value&>(res) );
           }
             
           break;
