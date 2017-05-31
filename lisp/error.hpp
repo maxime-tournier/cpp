@@ -1,5 +1,5 @@
-#ifndef ERROR_HPP
-#define ERROR_HPP
+#ifndef LISP_ERROR_HPP
+#define LISP_ERROR_HPP
 
 #include <stdexcept>
 

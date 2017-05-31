@@ -11,7 +11,7 @@ namespace lisp {
   static builtin wrap(const F& f, Ret (*)(Args... args), indices<I...> indices) {
     static Ret(*ptr)(Args...) = f;
     
-    return [](const value* first, const value* last) -> value {
+    return +[](const value* first, const value* last) -> value {
       if((last - first) != sizeof...(Args)) {
         throw error("argc");
       }
@@ -19,7 +19,7 @@ namespace lisp {
       try{ 
         return ptr( first[I].template cast<Args>() ... );
       } catch( value::bad_cast& e) {
-        throw type_error("derp");
+        throw lisp::type_error("bad type for builtin");
       }
       
       return ptr( first[I].template get<Args>() ... );      

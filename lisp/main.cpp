@@ -67,12 +67,16 @@ static int process(std::istream& in, Action action) {
   try{
     parse(in);
     return 0;
-  } catch(parse::error<lisp::sexpr>& e) {
+  }
+  catch(parse::error<lisp::sexpr>& e) {
     std::cerr << "parse error: " << e.what() << std::endl;
   }
-  
   catch( lisp::syntax_error& e ) {
     std::cerr << "syntax error: " << e.what() << std::endl;
+  }
+
+  catch( lisp::type_error& e ) {
+    std::cerr << "type error: " << e.what() << std::endl;
   }
   
   catch( lisp::error& e ) {
