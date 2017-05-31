@@ -1,4 +1,5 @@
 #include "symbol.hpp"
+#include <ostream>
 
 namespace lisp {
 
