@@ -17,6 +17,19 @@ namespace lisp {
     return res;
   }
 
+  static value append(const value* first, const value* last) {
+    if(last - first != 2) throw error("argc");
+    
+    const value& head = *first++;
+    try{
+      const value::list& tail = first->cast<value::list>();
+      return head >>= tail;
+    } catch( value::bad_cast& e ) {
+      throw type_error("list expected");
+    }
+  }
+
+  
   struct eq_visitor {
 
     template<class T>
@@ -85,6 +98,8 @@ namespace lisp {
       ("mod", wrap([](integer x, integer y) -> integer { return x % y; }))        
     
       ("list", list_ctor)
+      ("append", append)      
+
       
       ("repr", ostream<repr_visitor>)
       ("print", ostream<print_visitor>)

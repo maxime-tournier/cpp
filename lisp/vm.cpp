@@ -367,7 +367,7 @@ namespace lisp {
             
               break;
             default:
-              assert(false && "must call a function");
+              throw type_error("function expected");
             };
           
             break;

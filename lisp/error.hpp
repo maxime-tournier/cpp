@@ -9,6 +9,9 @@ namespace lisp {
     using std::runtime_error::runtime_error;
   };
 
+  struct type_error : error {
+    using error::error;
+  };
   
 }
 

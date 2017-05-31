@@ -15,8 +15,13 @@ namespace lisp {
       if((last - first) != sizeof...(Args)) {
         throw error("argc");
       }
- 
-      // return ptr( first[I].template cast<Args>() ... );
+
+      try{ 
+        return ptr( first[I].template cast<Args>() ... );
+      } catch( value::bad_cast& e) {
+        throw type_error("derp");
+      }
+      
       return ptr( first[I].template get<Args>() ... );      
     };
   } 
