@@ -404,7 +404,7 @@ namespace lisp {
       } catch(lisp::error& e) {
         fp.resize(init_fp_size); // should be 1 anyways?
         data.resize(init_stack_size, vm::value::list());
-        throw e;
+        throw;
       }
       
     }

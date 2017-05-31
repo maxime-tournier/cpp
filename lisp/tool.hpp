@@ -19,7 +19,7 @@ namespace lisp {
       try{ 
         return ptr( first[I].template cast<Args>() ... );
       } catch( value::bad_cast& e) {
-        throw lisp::type_error("bad type for builtin");
+        throw type_error("bad type for builtin");
       }
       
       return ptr( first[I].template get<Args>() ... );      
