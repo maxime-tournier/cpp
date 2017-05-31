@@ -20,11 +20,13 @@ namespace lisp {
 
     const auto as_sexpr = cast<sexpr>();
   
-    const auto real = debug("real") >>= 
-      lit<lisp::real>() >> as_sexpr;
+    const auto number = debug("number") >>= 
+      lit<lisp::real>() >> [](lisp::real&& x) {
+      integer n = x;
+      if(n == x) return pure<sexpr>(n);
+      return pure<sexpr>(x);
+    };
   
-    const auto integer = debug("integer") >>=
-      lit<lisp::integer>() >> as_sexpr;
   
     const auto symbol = debug("symbol") >>=
       no_skip(alpha >> [alnum](char first) {
@@ -42,7 +44,7 @@ namespace lisp {
         });
   
     const auto atom = debug("atom") >>=
-      string | symbol | real | integer;
+      string | symbol | number;
     
     struct expr_tag;
     rec<sexpr, expr_tag> expr;
@@ -53,12 +55,25 @@ namespace lisp {
         });
 
     const auto quote = chr('\'');
+    const auto backquote = chr('`');
+    const auto comma = chr(',');        
+    
     const auto quoted_expr = no_skip(quote >> then(expr) >> [](sexpr&& e) {
         return pure<sexpr>( lisp::symbol(kw::quote) >>= e >>= sexpr::list() );
       });
+
+    const auto quasiquoted_expr = no_skip(backquote >> then(expr) >> [](sexpr&& e) {
+        return pure<sexpr>( lisp::symbol(kw::quasiquote) >>= e >>= sexpr::list() );
+      });
+
+    const auto unquote_expr = no_skip(comma >> then(expr) >> [](sexpr&& e) {
+        return pure<sexpr>( lisp::symbol(kw::unquote) >>= e >>= sexpr::list() );
+      });
+
+    
     
     expr = debug("expr") >>=
-      atom | list | quoted_expr;
+      atom | list | quoted_expr | quasiquoted_expr | unquote_expr;
     
     return expr;
   }

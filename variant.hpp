@@ -136,7 +136,9 @@ public:
   template<class U, index_type R = type_index<U>() >
   const U& cast() const {
     const U& res = reinterpret_cast<const U&>(storage);
-    if(R != index ) throw bad_cast();
+    if( R != index ) {
+      throw bad_cast();
+    }
     return res;
   }
 

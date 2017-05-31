@@ -1,9 +1,10 @@
-#ifndef TOOL_HPP
-#define TOOL_HPP
+#ifndef LISP_TOOL_HPP
+#define LISP_TOOL_HPP
 
 #include "eval.hpp"
 
 #include "../indices.hpp"
+#include <iostream>
 
 namespace lisp {
   
