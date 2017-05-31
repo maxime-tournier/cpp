@@ -31,10 +31,9 @@ static void read_loop(const F& f) {
 
   while( const char* line = readline("> ") ) {
     add_history(line);
-
+    
 	std::stringstream ss(line);
 	f(ss);
-    
   }
   
 };
@@ -48,9 +47,11 @@ static const auto evaluate = [] {
   return [ctx](lisp::sexpr&& e) {
     const lisp::sexpr ex = expand_seq(ctx, e);
     const lisp::value val = eval(ctx, ex);
+    
     if(val) {
       std::cout << val << std::endl;  
     }
+    
     return parse::pure(e);
   };
 };
@@ -66,7 +67,7 @@ static int process(std::istream& in, Action action) {
   try{
     parse(in);
     return 0;
-  } catch(parse::error<lisp::value>& e) {
+  } catch(parse::error<lisp::sexpr>& e) {
     std::cerr << "parse error: " << e.what() << std::endl;
   }
   
@@ -96,6 +97,9 @@ const auto jit_compile = [] {
     const lisp::vm::value val = jit->eval(ex);
 
     if(val) {
+      if(val.is<lisp::symbol>() || val.is<lisp::vm::value::list>()) {
+        std::cout << "'";
+      }
       std::cout << val << std::endl;  
     }
     return parse::pure(e);

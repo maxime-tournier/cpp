@@ -1,5 +1,7 @@
 #include "parse.hpp"
+
 #include "sexpr.hpp"
+#include "syntax.hpp"
 
 namespace lisp {
 
@@ -52,7 +54,7 @@ namespace lisp {
 
     const auto quote = chr('\'');
     const auto quoted_expr = no_skip(quote >> then(expr) >> [](sexpr&& e) {
-        return pure<sexpr>( lisp::symbol("quote") >>= e >>= sexpr::list() );
+        return pure<sexpr>( lisp::symbol(kw::quote) >>= e >>= sexpr::list() );
       });
     
     expr = debug("expr") >>=

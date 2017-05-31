@@ -3,19 +3,26 @@
 
 #include <map>
 
+#include <iostream>
 
 namespace lisp {
 
   namespace kw {
-    const symbol def = "def", lambda = "lambda", seq = "do", cond = "cond", quote = "quote";
+    const symbol def = "def",
+      lambda = "lambda",
+      seq = "do",
+      cond = "cond",
+      quote = "quote",
+      quasiquote = "quasiquote",
+      unquote = "unquote";
   }
 
   
   namespace special {
 
-    using type = sexpr::list (*)(const ref<context>&, const sexpr::list& args);
+    using type = sexpr (*)(const ref<context>&, const sexpr::list& args);
     
-    static sexpr::list def(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr def(const ref<context>& ctx, const sexpr::list& args) {
 
       static const auto fail = [] {
         throw syntax_error("(def `symbol` `expr`)");
@@ -31,7 +38,7 @@ namespace lisp {
         curr = tail(curr);
         if(curr) fail();
         
-        return name >>= body >>= sexpr::list();
+        return kw::def >>= name >>= body >>= sexpr::list();
         
       } catch( value::bad_cast& e) {
         fail();
@@ -43,7 +50,40 @@ namespace lisp {
     }
 
 
-    static sexpr::list quote(const ref<context>& ctx, const sexpr::list& args) {
+    struct quasiquote_visitor {
+      template<class T>
+      sexpr operator()(const T& self, const ref<context>& ctx) const {
+        return kw::quote >>= self >>= sexpr::list();
+      }
+
+      sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
+        if(self && self->head.is<symbol>() && self->head.get<symbol>() == kw::unquote) {
+
+          if(!self->tail || self->tail->tail) {
+            throw syntax_error("(unquote `expr`)");
+          }
+
+          // return unquoted/expanded
+          return expand(ctx, self->tail->head);
+        }
+
+        // (list (quasiquote self)...)
+        return symbol("list") >>= map(self, [&ctx](const sexpr& e) {
+            return e.map<sexpr>(quasiquote_visitor(), ctx);
+          });
+      }
+      
+    };
+    
+    static sexpr quasiquote(const ref<context>& ctx, const sexpr::list& args) {
+      if(!args || args->tail) throw syntax_error("(quasiquote `expr`)");
+      
+      return args->head.map<sexpr>(quasiquote_visitor(), ctx);
+    }
+
+    
+    
+    static sexpr quote(const ref<context>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(quote `expr`)");
       };
@@ -55,7 +95,7 @@ namespace lisp {
         curr = tail(curr);
         if(curr) fail();
 
-        return res >>= sexpr::list();
+        return kw::quote >>= res >>= sexpr::list();
         
       } catch( empty_list& e) {
         fail();
@@ -65,7 +105,7 @@ namespace lisp {
     }
 
     
-    static sexpr::list lambda(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr lambda(const ref<context>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(lambda (`symbol`...) `expr`)");
       };
@@ -83,7 +123,7 @@ namespace lisp {
         curr = tail(curr);
         if(curr) fail();
 
-        return vars >>= body >>= sexpr::list();
+        return kw::lambda >>= vars >>= body >>= sexpr::list();
       }
       catch( value::bad_cast& e) {
         fail();
@@ -97,19 +137,19 @@ namespace lisp {
     
 
 
-    static sexpr::list seq(const ref<context>& ctx, const sexpr::list& args) {
-      return map(args, [&ctx](const sexpr& x) {
+    static sexpr seq(const ref<context>& ctx, const sexpr::list& args) {
+      return kw::seq >>= map(args, [&](const sexpr& x) {
           return expand_seq(ctx, x);
         });
     }
 
 
-    static sexpr::list cond(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr cond(const ref<context>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(cond (`expr` `expr`)...)");
       };
       try{
-        return map(args, [&ctx](const sexpr& e) -> sexpr {
+        return kw::cond >>= map(args, [&](const sexpr& e) -> sexpr {
             sexpr::list curr = e.cast<sexpr::list>();
             
             const sexpr test = expand(ctx, head(curr));
@@ -137,7 +177,8 @@ namespace lisp {
       {kw::seq, seq},
       {kw::lambda, lambda},
       {kw::quote, quote},
-      {kw::cond, cond}
+      {kw::cond, cond},
+      {kw::quasiquote, quasiquote}
     };
 
     static const std::set<symbol> reserved = {
@@ -145,7 +186,9 @@ namespace lisp {
       kw::lambda,
       kw::quote,
       kw::cond,
-      kw::def
+      kw::def,
+      kw::quasiquote,
+      kw::unquote
     };
 
   }
@@ -175,7 +218,7 @@ namespace lisp {
 
         auto it = special::table.find(name);
         if(it != special::table.end()) {
-          return name >>= it->second(ctx, tail(self));
+          return it->second(ctx, tail(self));
         }
         
         // TODO macros
@@ -199,7 +242,7 @@ namespace lisp {
         const symbol name = head(self).get<symbol>();
 
         if(name == kw::def) {
-          return name >>= special::def(ctx, tail(self));
+          return special::def(ctx, tail(self));
         }
       }
       
@@ -210,11 +253,16 @@ namespace lisp {
   
   
   sexpr expand(const ref<context>& ctx, const sexpr& expr) {
-    return expr.map<sexpr>(expand_visitor(), ctx);
+    
+    const auto res = expr.map<sexpr>(expand_visitor(), ctx);
+    // std::clog << "expand: " << expr << " -> " << res << std::endl;
+    return res;
   }
 
   sexpr expand_seq(const ref<context>& ctx, const sexpr& expr) {
-    return expr.map<sexpr>(expand_seq_visitor(), ctx);
+    const auto res = expr.map<sexpr>(expand_seq_visitor(), ctx);
+    // std::clog << "expand: " << expr << " -> " << res << std::endl;
+    return res;
   }
   
 }

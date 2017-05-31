@@ -43,11 +43,30 @@ namespace lisp {
       }
     }  
 
+    // this is repr
     struct ostream_visitor {
 
       template<class T>
       void operator()(const T& self, std::ostream& out) const {
         out << self;
+      }
+
+      void operator()(const value::list& self, std::ostream& out) const {
+        out << '(' << self << ')';
+      }
+
+      void operator()(const symbol& self, std::ostream& out) const {
+        out << self.name();
+      }
+
+
+      void operator()(const ref<string>& self, std::ostream& out) const {
+        out << '"' << *self << '"';
+      }
+      
+      
+      void operator()(const builtin& self, std::ostream& out) const {
+        out << "#<builtin>";
       }
 
       void operator()(const ref<closure>& self, std::ostream& out) const {
