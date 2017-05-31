@@ -42,7 +42,7 @@ namespace lisp {
         });
   
     const auto atom = debug("atom") >>=
-      string | symbol | integer | real;
+      string | symbol | real | integer;
     
     struct expr_tag;
     rec<sexpr, expr_tag> expr;
