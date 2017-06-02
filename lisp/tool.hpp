@@ -17,7 +17,7 @@ namespace lisp {
         throw error("argc");
       }
 
-      try{ 
+      try{
         return ptr( first[I].template cast<Args>() ... );
       } catch( value::bad_cast& e) {
         throw type_error("bad type for builtin");
