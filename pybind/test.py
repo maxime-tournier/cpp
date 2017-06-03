@@ -1,6 +1,13 @@
 import spam
+import gc
 
 
-s = spam.gimme()
+def func():
+    s = spam.some()
 
-print(s)
+func()
+    
+spam.clear()
+
+gc.collect()
+# gc.collect()
