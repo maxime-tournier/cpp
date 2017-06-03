@@ -9,20 +9,19 @@
 class object {
   static object* start;
   
-  // we hide the mark in the low order bits of next
+  // we hide the mark flag in the low order bits of next, since malloc generally
+  // provides sufficently aligned pointers
   using mask_type = std::uintptr_t;
   static constexpr mask_type mask = mask_type(-1) << 1;
 
-  // unmarked next is the actual pointer
   object* next;
-  
 public:
 
   inline void mark() { reinterpret_cast<mask_type&>(next) |= ~mask; }
   inline void clear() { reinterpret_cast<mask_type&>(next) &= mask; }
   
   inline bool marked() const { return mask_type(next) & ~mask; }
-
+  
   inline object() : next(start) { start = this; }
   
   virtual ~object() { }
@@ -31,6 +30,8 @@ public:
     object** obj = &start;
 
     while(*obj) {
+      // note: next is never accessed while the marked flag is set
+
       if( (*obj)->marked() ) {
         // clear & move on
         (*obj)->clear();
@@ -74,12 +75,7 @@ public:
     obj->traverse();
   }
 
-
-  template<class T>
-  gc<T> cast() const {
-    return reinterpret_cast<const gc<T>&>(*this);
-  }
-  
+  // TODO provide a safe cast
 };
 
 // typed gc pointer: client types may customize gc_mark(T&) to mark sub gc
@@ -99,7 +95,7 @@ class gc : public gc_base {
 
   gc(block_type* block) : gc_base(block) { }
 
-   block_type* block() const {
+  block_type* block() const {
     return static_cast<block_type*>(obj);
   }
   
