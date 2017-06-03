@@ -13,3 +13,4 @@ build
 /pouf/pouf
 /sparse
 *.dSYM
+/gc

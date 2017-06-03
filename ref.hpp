@@ -78,20 +78,12 @@ public:
   bool operator==(const ref& other) const { return block == other.block; }
   
   T* get() const {
-    return // reinterpret_cast<T*>(block);
-      &block->value;
-  }
-
-  T* operator->() const {
-    return // reinterpret_cast<T*>(block);
-      &block->value;
-  }
-
-
-  T& operator*() const {
-    return block->value;
+    if(!block) return nullptr;
+    return &block->value;
   }
   
+  T* operator->() const { return get(); }
+  T& operator*() const { return *get(); }
   
 };
 
