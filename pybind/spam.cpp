@@ -1,31 +1,48 @@
 
 #include <Python.h>
 #include <memory>
+#include <vector>
+
+class spam {
+  PyObject* self = nullptr;
 
 
-struct spam {
-  PyObject* self;
+  
+public:
 
+  spam(PyObject* self)
+	: self(self) {
+	Py_INCREF(self);
+
+  }
+
+  
+  ~spam() {
+	Py_DECREF(self);
+	std::clog << "~spam" << std::endl;
+  }
+
+  
   using ref = std::shared_ptr<spam>;
   
-  static ref make() {
-    return std::make_shared<spam>();
-  };
-
   
   void bacon() {
     PyObject* res = PyObject_CallMethod(self, "bacon", NULL);
     Py_DECREF(res);
   }
+
+  static std::vector<ref> instances;
   
 };
+
+
 
 struct py_spam {
   PyObject_HEAD;
   spam::ref obj;
 
 
-  static PyObject* gimme(PyObject* self);
+  static PyObject* gimme(PyObject* self, PyObject* args);
   
 };
 
@@ -59,6 +76,20 @@ static PyTypeObject spam_type = {
   Py_TPFLAGS_DEFAULT,        /* tp_flags */
   "spam bacon and spam",           /* tp_doc */
 };
+
+
+PyObject* py_spam::gimme(PyObject*, PyObject* args) {
+
+  if(!PyArg_ParseTuple(args, "")) return NULL;
+  
+  PyObject* self = PyType_GenericNew(&spam_type, args, NULL);
+  py_spam* py = reinterpret_cast<py_spam*>(self);
+
+  // gc cycle here
+  py->obj = std::make_shared<spam>(self);
+
+  return self;
+}
 
 
 
