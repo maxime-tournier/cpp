@@ -12,14 +12,15 @@ public:
 
   spam(PyObject* self)
 	: self(self) {
-	Py_INCREF(self);
+	Py_XINCREF(self);
 	std::clog << "creating spam" << std::endl;
   }
 
   
   ~spam() {
-	Py_DECREF(self);
-	std::clog << "~spam" << std::endl;
+	std::clog << "~spam" << std::endl;	
+	Py_XDECREF(self);
+
   }
 
   
@@ -28,7 +29,7 @@ public:
   
   void bacon() {
     PyObject* res = PyObject_CallMethod(self, "bacon", NULL);
-    Py_DECREF(res);
+    Py_XDECREF(res);
   }
 
   
@@ -119,24 +120,31 @@ void py_spam::dealloc(py_spam* self) {
 
 #define AS_GC(o) ((PyGC_Head *)(o)-1)
 
-static std::size_t gc_refs(PyObject* self) {
+static long& gc_refs(PyObject* self) {
   PyGC_Head *gc = AS_GC(self);
   return gc->gc.gc_refs;
 }
 
+// static std::size_t force_gc(PyObject* self) {
+//   PyGC_Head *gc = AS_GC(self);
+//   _PyGCHead_SET_REFS(gc, _PyGC_REFS_TENTATIVELY_UNREACHABLE);  
+// }
+
 int py_spam::traverse(py_spam *self, visitproc visit, void *arg) {
-  std::clog << "traverse" << std::endl;
+  std::clog << "traverse: " << self  << std::endl;
 
-  std::clog << gc_refs((PyObject*) self)  << std::endl;
-  Py_VISIT(self->obj->self);
-
-  std::clog << gc_refs((PyObject*) self)  << std::endl;  
+  std::clog << std::hex << gc_refs((PyObject*) self)  << std::endl;
+  Py_VISIT(self);
+  std::clog << "tentatively unreachable: " << _PyGC_REFS_TENTATIVELY_UNREACHABLE << std::endl;  
+  std::clog << "reachable: " << _PyGC_REFS_REACHABLE << std::endl;
+  
+  std::clog << std::hex << gc_refs((PyObject*) self)  << std::endl;  
   return 0;
 }
 
 int py_spam::clear(py_spam *self) {
   std::clog << "clear" << std::endl;
-  Py_CLEAR(self->obj->self);
+  // Py_CLEAR(self->obj->self);
   return 0;
 }
 
