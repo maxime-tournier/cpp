@@ -9,5 +9,6 @@ func()
     
 spam.clear()
 
-gc.collect()
+print(gc.collect())
+# gc.collect()
 # gc.collect()

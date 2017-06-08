@@ -135,8 +135,8 @@ int py_spam::traverse(py_spam *self, visitproc visit, void *arg) {
 
   std::clog << std::hex << gc_refs((PyObject*) self)  << std::endl;
   Py_VISIT(self);
-  std::clog << "tentatively unreachable: " << _PyGC_REFS_TENTATIVELY_UNREACHABLE << std::endl;  
-  std::clog << "reachable: " << _PyGC_REFS_REACHABLE << std::endl;
+  // std::clog << "tentatively unreachable: " << _PyGC_REFS_TENTATIVELY_UNREACHABLE << std::endl;  
+  // std::clog << "reachable: " << _PyGC_REFS_REACHABLE << std::endl;
   
   std::clog << std::hex << gc_refs((PyObject*) self)  << std::endl;  
   return 0;
@@ -144,14 +144,14 @@ int py_spam::traverse(py_spam *self, visitproc visit, void *arg) {
 
 int py_spam::clear(py_spam *self) {
   std::clog << "clear" << std::endl;
-  // Py_CLEAR(self->obj->self);
+  Py_CLEAR(self->obj->self);
   return 0;
 }
 
 
 PyMODINIT_FUNC initspam(void) {
   
-  spam_type.tp_dealloc = (destructor) py_spam::dealloc;
+  // spam_type.tp_dealloc = (destructor) py_spam::dealloc;
   spam_type.tp_traverse = (traverseproc) py_spam::traverse;
 
   // noddy_NoddyType.tp_new = PyType_GenericNew;
