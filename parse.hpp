@@ -222,7 +222,7 @@ namespace parse {
 
   // character matching predicate
   template<class Pred>
-  struct character {
+  struct character_type {
 	const Pred pred;
 
 	struct negate {
@@ -231,7 +231,7 @@ namespace parse {
 	  bool operator()(char c) const { return !pred(c); }
 	};
 
-	character<negate> operator!() const { return {{pred}}; }
+	character_type<negate> operator!() const { return {{pred}}; }
     
     using value_type = char;
     
@@ -247,23 +247,53 @@ namespace parse {
     }
 
   }; 
+
+  template<class Pred>
+  static inline character_type<Pred> character(Pred pred) { return {pred}; }
+
+  namespace detail {
+    struct equals {
+      const char expected;
+      
+      bool operator()(char c) const { return c == expected; }
+    };
+
+    struct range {
+      const char lower, upper;
+      
+      bool operator()(char c) const { return c >= lower && c <= upper; }
+    };
+
+    struct in_list {
+      const char* allowed;
+      
+      bool operator()(char c) const {
+        for(const char* x = allowed; *x != 0; ++x) {
+          if(*x == c) return true;
+        }
+
+        return false;
+      }
+    };
+
+    template<int (*pred)(int) > struct adaptor {
+      bool operator()(char c) const { return pred(c); }
+    };
+
+    
+  }
+
+  static inline character_type<detail::equals> chr(char c) { return {{c}}; }
+
+
+  static inline character_type<detail::range> chr(char lower, char upper) { return {{lower, upper}}; }  
+
+
+  static inline character_type<detail::in_list> chr(const char* allowed) { return {allowed}; }  
+
+  template<int (*pred)(int)> static character_type<detail::adaptor<pred>> chr() { return {}; }
   
-  struct equals {
-	const char expected;
-
-	bool operator()(char c) const { return c == expected; }
-  };
   
-  static inline character<equals> chr(char c) { return {{c}}; }
-
-  template<int (*pred)(int) > struct adaptor {
-    bool operator()(char c) const { return pred(c); }
-  };
-
-  template<int (*pred)(int)> static character<adaptor<pred>> chr() { return {}; }
-
-
-
   // literal value
   template<class T>
   struct lit {

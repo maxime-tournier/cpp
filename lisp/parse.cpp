@@ -12,14 +12,17 @@ namespace lisp {
     const auto alpha = debug("alpha") >>= chr<std::isalpha>();
     const auto alnum = debug("alnum") >>= chr<std::isalnum>();
     const auto space = debug("space") >>= chr<std::isspace>();
-  
+
     const auto dquote = chr('"');
-  
+
+    const auto special = debug("special") >>= chr("!$%&*/:<=>?~_^@#-+");
+
+    const auto initial = alpha | special;
+    const auto subsequent = alnum | special;    
+    
     // const auto endl = chr('\n');
     // const auto comment = (chr(';'), kleene(!endl), endl);
 
-    const auto as_sexpr = cast<sexpr>();
-  
     const auto number = debug("number") >>= 
       lit<lisp::real>() >> [](lisp::real&& x) {
       integer n = x;
@@ -29,14 +32,15 @@ namespace lisp {
   
   
     const auto symbol = debug("symbol") >>=
-      no_skip(alpha >> [alnum](char first) {
-          return *alnum >> [first](std::deque<char>&& chars) {
+      no_skip(initial >> [subsequent](char first) {
+          return *subsequent >> [first](std::deque<char>&& chars) {
             chars.emplace_front(first);
             const lisp::string str(chars.begin(), chars.end());
             return pure<sexpr>( lisp::symbol(str) );
           };
         });
-    
+
+    // TODO escaped strings
     const auto string = debug("string") >>=
       no_skip( (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
           ref<lisp::string> str = make_ref<lisp::string>(chars.begin(), chars.end());

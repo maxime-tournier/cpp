@@ -91,20 +91,19 @@ namespace lisp {
     ref<context> ctx = make_ref<context>();
     
     (*ctx)
-      ("add", wrap([](integer x, integer y) -> integer { return x + y; }))
-      ("sub", wrap([](integer x, integer y) -> integer { return x - y; }))
-      ("mul", wrap([](integer x, integer y) -> integer { return x * y; }))
-      ("div", wrap([](integer x, integer y) -> integer { return x / y; }))
-      ("mod", wrap([](integer x, integer y) -> integer { return x % y; }))        
-    
+      ("+", wrap([](integer x, integer y) -> integer { return x + y; }))
+      ("-", wrap([](integer x, integer y) -> integer { return x - y; }))
+      ("*", wrap([](integer x, integer y) -> integer { return x * y; }))
+      ("/", wrap([](integer x, integer y) -> integer { return x / y; }))
+      ("%", wrap([](integer x, integer y) -> integer { return x % y; }))        
+      
       ("list", list_ctor)
       ("append", append)      
 
-      
       ("repr", ostream<repr_visitor>)
       ("print", ostream<print_visitor>)
       
-      ("eq", +[](const value* first, const value* last) -> value {
+      ("=", +[](const value* first, const value* last) -> value {
         if(last - first != 2) throw error("argc");
         if(first[0].type() != first[1].type()) return value::list();
         bool res;
