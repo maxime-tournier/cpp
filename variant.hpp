@@ -113,8 +113,10 @@ class variant {
     }
   };
 
-
-
+  static constexpr bool skip_destructor[] = {std::is_trivially_destructible<T>::value...};
+  static constexpr bool skip_copy_constructor[] = {std::is_trivially_copy_constructible<T>::value...};
+  static constexpr bool skip_move_constructor[] = {std::is_trivially_move_constructible<T>::value...};  
+  
 public:
   std::size_t type() const { return index; }
 
@@ -166,17 +168,26 @@ public:
   
   variant(const variant& other) noexcept 
     : index(other.index) {
-    apply( copy_construct(), other );
+    if(skip_copy_constructor[index]) {
+      storage = other.storage;
+    } else {
+      apply( copy_construct(), other );
+    }
   }
 
   variant(variant&& other) noexcept
     : index(other.index) {
-    apply( move_construct(), std::move(other) );
+    if(skip_move_constructor[index]) {
+      storage = std::move(other.storage);
+    } else {
+      apply( move_construct(), std::move(other) );
+    }
   }
   
   ~variant() noexcept {
-    static constexpr bool skip_destructor[] = {std::is_trivially_destructible<T>::value...};    
-    if(!skip_destructor[index]) apply( destruct() );
+    if(!skip_destructor[index]) {
+      apply( destruct() );
+    }
   }
 
 
@@ -241,6 +252,14 @@ public:
   
 };
 
+template<class ... T>
+const bool variant<T...>::skip_destructor[];
+
+template<class ... T>
+const bool variant<T...>::skip_copy_constructor[];
+
+template<class ... T>
+const bool variant<T...>::skip_move_constructor[];
 
 
 
