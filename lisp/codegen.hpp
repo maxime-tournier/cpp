@@ -8,7 +8,7 @@
 namespace lisp {
 
   namespace vm {
-    struct bytecode;
+    class bytecode;
   }
 
   namespace codegen {

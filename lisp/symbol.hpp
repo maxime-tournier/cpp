@@ -1,12 +1,11 @@
-#ifndef SYMBOL_HPP
-#define SYMBOL_HPP
+#ifndef LISP_SYMBOL_HPP
+#define LISP_SYMBOL_HPP
 
 #include <set>
 #include <string>
 
 namespace lisp {
 
-   // symbols
   class symbol {
     using table_type = std::set<std::string>;
     static table_type& table();

@@ -289,7 +289,7 @@ namespace parse {
   static inline character_type<detail::range> chr(char lower, char upper) { return {{lower, upper}}; }  
 
 
-  static inline character_type<detail::in_list> chr(const char* allowed) { return {allowed}; }  
+  static inline character_type<detail::in_list> chr(const char* allowed) { return {{allowed}}; }  
 
   template<int (*pred)(int)> static character_type<detail::adaptor<pred>> chr() { return {}; }
   
