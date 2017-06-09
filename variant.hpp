@@ -17,17 +17,18 @@ namespace impl {
   struct select<start, H, T...> : select<start + 1, T...> {
 
     using select<start + 1, T...>::index;
-    static constexpr std::size_t index(const H* ) { return start; }
+    static inline constexpr std::size_t index(const H* ) { return start; }
 
     using select<start + 1, T...>::cast;
-    static constexpr const H& cast(const H& value) { return value; }
-    static constexpr H&& cast(H&& value) { return std::move(value); }    
+    static inline constexpr const H& cast(const H& value) { return value; }
+    static inline constexpr H&& cast(H&& value) { return std::move(value); }    
     
   };
 
+  
   template<std::size_t start> struct select<start> {
-    static void index();
-    static void cast();    
+    static inline constexpr void index();
+    static inline constexpr void cast();    
   };
 
 
@@ -114,8 +115,19 @@ class variant {
   };
 
   static constexpr bool skip_destructor[] = {std::is_trivially_destructible<T>::value...};
+
   static constexpr bool skip_copy_constructor[] = {std::is_trivially_copy_constructible<T>::value...};
   static constexpr bool skip_move_constructor[] = {std::is_trivially_move_constructible<T>::value...};  
+
+  static constexpr bool skip_copy[] = {std::is_trivially_copy_assignable<T>::value...};
+  static constexpr bool skip_move[] = {std::is_trivially_move_assignable<T>::value...};  
+
+  static constexpr char skip_flags[] = { ( std::is_trivially_destructible<T>::value |
+                                           std::is_trivially_copy_constructible<T>::value << 1 |
+                                           std::is_trivially_move_constructible<T>::value << 2 |
+                                           std::is_trivially_copy_assignable<T>::value << 3 |
+                                           std::is_trivially_move_assignable<T>::value << 4) ...};
+
   
 public:
   std::size_t type() const { return index; }
@@ -192,12 +204,12 @@ public:
 
 
   variant& operator=(const variant& other) noexcept {
-    if(type() == other.type()) {
-      apply( copy(), other );
+    if(index == other.index) {
+      apply(copy(), other);
     } else {
       this->~variant();
-      index = other.index;
-      apply( copy_construct(), other );
+      index = other.index;      
+      apply(copy_construct(), other);
     }
     
     return *this;
@@ -205,11 +217,12 @@ public:
 
 
   variant& operator=(variant&& other)  noexcept{
-    if(type() == other.type()) {
+    
+    if(index == other.index) {
       apply( move(), std::move(other) );
     } else {
-      this->~variant();      
-      index = other.index;      
+      this->~variant();
+      index = other.index;
       apply( move_construct(), std::move(other) );
     }
     
@@ -260,6 +273,16 @@ const bool variant<T...>::skip_copy_constructor[];
 
 template<class ... T>
 const bool variant<T...>::skip_move_constructor[];
+
+
+template<class ... T>
+const bool variant<T...>::skip_move[];
+
+template<class ... T>
+const bool variant<T...>::skip_copy[];
+
+template<class ... T>
+const char variant<T...>::skip_flags[];
 
 
 
