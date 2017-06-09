@@ -119,15 +119,6 @@ class variant {
   static constexpr bool skip_copy_constructor[] = {std::is_trivially_copy_constructible<T>::value...};
   static constexpr bool skip_move_constructor[] = {std::is_trivially_move_constructible<T>::value...};  
 
-  static constexpr bool skip_copy[] = {std::is_trivially_copy_assignable<T>::value...};
-  static constexpr bool skip_move[] = {std::is_trivially_move_assignable<T>::value...};  
-
-  static constexpr char skip_flags[] = { ( std::is_trivially_destructible<T>::value |
-                                           std::is_trivially_copy_constructible<T>::value << 1 |
-                                           std::is_trivially_move_constructible<T>::value << 2 |
-                                           std::is_trivially_copy_assignable<T>::value << 3 |
-                                           std::is_trivially_move_assignable<T>::value << 4) ...};
-
   
 public:
   std::size_t type() const { return index; }
@@ -273,16 +264,6 @@ const bool variant<T...>::skip_copy_constructor[];
 
 template<class ... T>
 const bool variant<T...>::skip_move_constructor[];
-
-
-template<class ... T>
-const bool variant<T...>::skip_move[];
-
-template<class ... T>
-const bool variant<T...>::skip_copy[];
-
-template<class ... T>
-const char variant<T...>::skip_flags[];
 
 
 
