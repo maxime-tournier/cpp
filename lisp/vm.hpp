@@ -132,14 +132,15 @@ namespace lisp {
   
     struct machine {
       machine();
-    
+
+      // frame pointer stack
       std::vector<std::size_t> fp;
-      std::vector<value> data;
 
+      // data stack
+      std::vector<value> stack;
+      
       void run(const bytecode& code, std::size_t start = 0);
-    
-
-
+      
     };
 
     std::ostream& operator<<(std::ostream& out, const machine& self);

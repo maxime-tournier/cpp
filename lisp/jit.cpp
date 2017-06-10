@@ -9,7 +9,9 @@
 namespace lisp {
 
   jit::jit()
-    : ctx( make_ref<codegen::context>()) { }
+    : ctx( make_ref<codegen::context>()) {
+    // TODO initialize stack size?
+  }
   
   jit::~jit() { }
 
@@ -39,7 +41,7 @@ namespace lisp {
 
     for(const auto& it : env->locals) {
       ctx->add_local(it.first);
-      machine.data.push_back( it.second.map<vm::value>(import_visitor()) );
+      machine.stack.emplace_back( it.second.map<vm::value>(import_visitor()) );
     }
     
   }
@@ -58,9 +60,9 @@ namespace lisp {
     code.link(start);
 
     machine.run(code, start);
-    const vm::value res = std::move(machine.data.back());
-    machine.data.pop_back();
-    
+    const vm::value res = std::move(machine.stack.back());
+    machine.stack.pop_back();
+
     return res;
   }
 

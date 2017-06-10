@@ -257,7 +257,7 @@ namespace lisp {
       assert( start < code.size() );
       const value* op = code.data() + start;
 
-      const std::size_t init_stack_size = data.size();
+      const std::size_t init_stack_size = stack.size();
       const std::size_t init_fp_size = fp.size();    
     
       try{ 
@@ -272,17 +272,17 @@ namespace lisp {
           case opcode::STOP: return;
 
           case opcode::PUSH: 
-            data.emplace_back(*++op);
+            stack.emplace_back(*++op);
             break;
       
           case opcode::POP:
-            assert( !data.empty() );
-            data.pop_back();
+            assert( !stack.empty() );
+            stack.pop_back();
             break;
 
           case opcode::SWAP: {
-            assert( data.size() > 1 );
-            auto last = data.rbegin();
+            assert( stack.size() > 1 );
+            auto last = stack.rbegin();
             std::swap(*last, *(last + 1));
             break;
           }
@@ -302,7 +302,7 @@ namespace lisp {
             const integer addr = (++op)->get<integer>();
 
             // pop value
-            const value& top = data.back();
+            const value& top = stack.back();
 
             if(!top.is<boolean>()) {
               throw type_error("boolean expected");
@@ -310,11 +310,11 @@ namespace lisp {
             
             // jnz
             if( top.get<boolean>() ) {
-              data.pop_back();
+              stack.pop_back();
               op = code.data() + addr;
               continue;
             }
-            data.pop_back();
+            stack.pop_back();
             break;
           }
 
@@ -322,20 +322,20 @@ namespace lisp {
           case opcode::LOAD: {
             // fetch index
             const integer i = (++op)->get<integer>();
-            assert( fp.back() + i < data.size() );
-            data.emplace_back( data[fp.back() + i]);
+            assert( fp.back() + i < stack.size() );
+            stack.emplace_back( stack[fp.back() + i]);
             break;
           }
         
           case opcode::STORE: {
             // fetch index
             const integer i = (++op)->get<integer>();
-            assert( fp.back() + i < data.size() );
+            assert( fp.back() + i < stack.size() );
 
             // pop value into cell
-            value& dest = data[fp.back() + i];
-            dest = std::move(data.back());
-            data.pop_back();
+            value& dest = stack[fp.back() + i];
+            dest = std::move(stack.back());
+            stack.pop_back();
             break;
           }
 
@@ -344,9 +344,9 @@ namespace lisp {
             // fetch index
             const integer i = (++op)->get<integer>();
         
-            const ref<closure>& f = data[fp.back()].get< ref<closure> >();
+            const ref<closure>& f = stack[fp.back()].get< ref<closure> >();
             assert( i < integer(f->size) );
-            data.emplace_back( f->capture[i] );
+            stack.emplace_back( f->capture[i] );
             break;
           }
         
@@ -354,12 +354,12 @@ namespace lisp {
             // fetch index
             const integer i = (++op)->get<integer>();
         
-            const ref<closure>& f = data[fp.back()].get< ref<closure> >();
+            const ref<closure>& f = stack[fp.back()].get< ref<closure> >();
             assert( i < integer(f->size) );
             
             // pop value in capture
-            f->capture[i] = std::move(data.back());
-            data.pop_back();
+            f->capture[i] = std::move(stack.back());
+            stack.pop_back();
             break;
           }
 
@@ -368,24 +368,24 @@ namespace lisp {
           case opcode::CLOS: {
             // fetch and close over the last n variables
             const integer c = (++op)->get<integer>();
-            assert(c <= integer(data.size()));
+            assert(c <= integer(stack.size()));
 
             // argc
             const integer n = (++op)->get<integer>();
-            assert(n <= integer(data.size()));
+            assert(n <= integer(stack.size()));
         
             // fetch code address from bytecode start
             const integer addr = (++op)->get<integer>();
         
             // build closure
-            const std::size_t min = data.size() - c;
-            value* first = &data[ min ];
+            const std::size_t min = stack.size() - c;
+            value* first = &stack[ min ];
             value* last = first + c;
             
             ref<closure> res = make_closure(n, addr, first, last);
 
-            data.resize(min + 1, false);
-            data.back() = std::move(res);
+            stack.resize(min + 1, false);
+            stack.back() = std::move(res);
             break;
           }
           
@@ -397,11 +397,11 @@ namespace lisp {
           
             // fetch argc
             const integer n = (++op)->get<integer>();
-            assert( fp.back() + n + 1 <= data.size() );
+            assert( fp.back() + n + 1 <= stack.size() );
         
             // get function
-            const std::size_t start = data.size() - (n + 1);
-            const value& func = data[start];
+            const std::size_t start = stack.size() - (n + 1);
+            const value& func = stack[start];
         
             switch( func.type() ) {
             case value::type_index< ref<closure> >(): {
@@ -413,7 +413,7 @@ namespace lisp {
             
               // push return address
               const integer ret_addr = ++op - code.data();
-              data.emplace_back( ret_addr);
+              stack.emplace_back( ret_addr);
 
               // TODO typecheck instead
               if( f->argc != std::size_t(n) ) {
@@ -436,16 +436,16 @@ namespace lisp {
               {
                 // call builtin
                 const std::size_t first_index = start + 1;
-                const value* first = data.data() + first_index;
+                const value* first = stack.data() + first_index;
                 const value* last = first + n;
 
-                reinterpret_cast<lisp::value&>(data[start]) = 
+                reinterpret_cast<lisp::value&>(stack[start]) = 
                   (func.get<builtin>()
                    ( reinterpret_cast<const lisp::value*>(first),
                      reinterpret_cast<const lisp::value*>(last)));
             
                 // pop args + push result
-                data.resize( first_index, false );
+                stack.resize( first_index, false );
               }
             
               break;
@@ -459,15 +459,15 @@ namespace lisp {
           case opcode::RET: {
             // put result and pop
             const std::size_t start = fp.back();
-            data[start] = std::move(data.back());
-            data.pop_back();
+            stack[start] = std::move(stack.back());
+            stack.pop_back();
         
             // pop return address
-            const integer addr = data.back().get<integer>();
-            data.pop_back();
+            const integer addr = stack.back().get<integer>();
+            stack.pop_back();
         
             // cleanup frame
-            data.resize( fp.back() + 1, false );
+            stack.resize( fp.back() + 1, false );
 
             // pop frame pointer
             fp.pop_back();
@@ -486,7 +486,7 @@ namespace lisp {
         };
       } catch(lisp::error& e) {
         fp.resize(init_fp_size); // should be 1 anyways?
-        data.resize(init_stack_size, false);
+        stack.resize(init_stack_size, false);
         throw;
       }
       
@@ -496,7 +496,7 @@ namespace lisp {
       out << "[";
 
       bool first = true;
-      for(const value& x: self.data) {
+      for(const value& x: self.stack) {
         if( first ) first = false;
         else out << ", ";
 
