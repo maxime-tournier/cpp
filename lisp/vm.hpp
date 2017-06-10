@@ -37,11 +37,30 @@ namespace lisp {
 
   
     struct closure {
-      std::vector<value> capture;
-      std::size_t argc;
-      std::size_t addr;
+      virtual ~closure() { }
+      
+      const std::size_t argc;
+      const std::size_t addr;
+
+      const std::size_t size;      
+      value* const capture;
+
+      closure(std::size_t argc,
+              std::size_t addr,
+              std::size_t size,
+              value* capture)
+        : argc(argc),
+          addr(addr),
+          size(size),
+          capture(capture) {
+
+      }
+      
     };
 
+
+    
+    
     using lisp::integer;
     using lisp::symbol;
     using lisp::real;

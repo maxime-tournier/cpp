@@ -9,6 +9,8 @@
 #include "tool.hpp"
 #include "syntax.hpp"
 
+#include "../indices.hpp"
+
 namespace lisp {
   namespace vm {
 
@@ -70,7 +72,7 @@ namespace lisp {
       }
 
       void operator()(const ref<closure>& self, std::ostream& out) const {
-        out << "#<closure: " << self->capture.size() << ", @" << self->addr << ">";
+        out << "#<closure: @" << self->addr << ">";
       }
 
       void operator()(const opcode& self, std::ostream& out) const {
@@ -168,6 +170,77 @@ namespace lisp {
     }  
 
 
+
+    template<std::size_t N>
+    struct static_closure : closure {
+      value storage[N];
+      
+      template<std::size_t ... I>
+      static_closure(std::size_t argc,
+                     std::size_t addr,
+                     value* data,
+                     indices<I...> )
+        : closure(argc, addr, N, storage),
+          storage{ std::move(data[I])...} {
+        static_assert(sizeof...(I) == N, "index error");
+      }
+      
+    };
+
+
+
+    struct dynamic_closure : closure {
+      using storage_type = std::vector<value>;
+      storage_type storage;
+      
+      dynamic_closure(std::size_t argc,
+                      std::size_t addr,
+                      storage_type&& storage)
+        : closure(argc, addr, storage.size(), storage.data()),
+          storage(std::move(storage)) {
+            
+      }
+      
+    };
+
+
+    static constexpr std::size_t static_closure_max = 8;
+
+    template<std::size_t ... I>
+    static ref<closure> make_static_closure(std::size_t argc, std::size_t addr,
+                                            value* first, value* last,
+                                            indices<I...> ) {
+
+      using ctor_type = ref<closure> (*)(std::size_t argc, std::size_t addr, value* data);
+      
+      static const ctor_type ctor[] = {
+        [](std::size_t argc, std::size_t addr, value* data) -> ref<closure> {
+           return make_ref< static_closure<I> >(argc, addr, data, range_indices<I>() );
+        }...
+      };
+
+      const std::size_t size = last - first;
+      return ctor[size](argc, addr, first);
+    }
+
+    
+    static ref<closure> make_closure(std::size_t argc, std::size_t addr,
+                                     value* first, value* last) {
+
+      const std::size_t size = last - first;
+
+      if( size < static_closure_max ) {
+        return make_static_closure(argc, addr, first, last, range_indices<static_closure_max>());
+      }
+      
+      std::vector<value> storage( std::make_move_iterator(first),
+                                  std::make_move_iterator(last));
+
+      return make_ref<dynamic_closure>(argc, addr, std::move(storage) );
+    }
+
+    
+
     void machine::run(const bytecode& code, std::size_t start) {
 
       assert( start < code.size() );
@@ -257,7 +330,7 @@ namespace lisp {
             const integer i = (++op)->get<integer>();
         
             const ref<closure>& f = data[fp.back()].get< ref<closure> >();
-            assert( i < integer(f->capture.size()) );
+            assert( i < integer(f->size) );
             data.push_back( f->capture[i] );
             break;
           }
@@ -267,8 +340,8 @@ namespace lisp {
             const integer i = (++op)->get<integer>();
         
             const ref<closure>& f = data[fp.back()].get< ref<closure> >();
-            assert( i < integer(f->capture.size()) );
-
+            assert( i < integer(f->size) );
+            
             // pop value in capture
             f->capture[i] = std::move(data.back());
             data.pop_back();
@@ -290,17 +363,12 @@ namespace lisp {
             const integer addr = (++op)->get<integer>();
         
             // build closure
-            ref<closure> res = make_ref<closure>();
+            const std::size_t min = data.size() - c;
+            value* first = &data[ min ];
+            value* last = first + c;
+            
+            ref<closure> res = make_closure(n, addr, first, last);
 
-            res->argc = n;
-            res->addr = addr;
-            res->capture.reserve(c);
-          
-            const std::size_t size = data.size(), min = size - c;
-            for(std::size_t i = min; i < size; ++i) {
-              res->capture.emplace_back(std::move(data[i]));
-            }
-        
             data.resize(min + 1, vm::value::list());
             data.back() = std::move(res);
             break;
