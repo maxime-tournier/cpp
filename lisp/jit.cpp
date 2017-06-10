@@ -3,6 +3,9 @@
 #include "eval.hpp"
 #include "codegen.hpp"
 
+#include <iostream>
+
+
 namespace lisp {
 
   jit::jit()
@@ -41,14 +44,16 @@ namespace lisp {
     
   }
   
-  vm::value jit::eval(const lisp::sexpr& expr) {
+  vm::value jit::eval(const lisp::sexpr& expr, bool dump) {
     const std::size_t start = code.size();
 
     compile(code, ctx, expr);
     code.push_back( vm::opcode::STOP );
 
-    // std::cout << "bytecode:" << std::endl;
-    // code.dump(std::cout, start);
+    if(dump) {
+      std::cout << "bytecode:" << std::endl;
+      code.dump(std::cout, start);
+    }
     
     code.link(start);
 

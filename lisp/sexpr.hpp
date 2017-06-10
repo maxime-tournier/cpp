@@ -12,15 +12,17 @@ namespace lisp {
 
 
   struct sexpr;
-  
+
   using string = std::string;
+
+  using boolean = bool;
   using integer = long;
   using real = double; 
-
-
+  
  
 
   struct sexpr : variant< list<sexpr>,
+                          boolean,
                           integer, 
                           real,
                           symbol,

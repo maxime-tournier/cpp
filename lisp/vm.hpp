@@ -78,6 +78,7 @@ namespace lisp {
   
   
     struct value : variant< list<value> ,
+                            boolean,
                             integer, 
                             real,
                             symbol,

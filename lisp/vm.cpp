@@ -52,15 +52,24 @@ namespace lisp {
       void operator()(const T& self, std::ostream& out) const {
         out << self;
       }
-
+      
+      void operator()(const boolean& self, std::ostream& out) const {
+        if(self) out << "true";
+        else out << "false";
+      }
+      
       void operator()(const value::list& self, std::ostream& out) const {
         out << '(' << self << ')';
       }
 
       void operator()(const symbol& self, std::ostream& out) const {
-        out << self.name();
+        out << '\'' << self.name();
       }
 
+      void operator()(const label& self, std::ostream& out) const {
+        out << '@' << self.name();
+      }
+      
 
       void operator()(const ref<string>& self, std::ostream& out) const {
         out << '"' << *self << '"';
@@ -147,19 +156,18 @@ namespace lisp {
     void bytecode::dump(std::ostream& out, std::size_t start) const {
       assert( start < size() );
     
-      // TODO print labels
       std::map<integer, std::string> reverse;
       for(const auto& it : labels) {
-        reverse[it.second] += it.first.name() + ":";
+        reverse[it.second] += it.first.name() + ":\n";
       }
 
       for(std::size_t i = start; i < size(); ++i) {
         const value& x = (*this)[i];
         auto it = reverse.find(i);
         if(it != reverse.end()) {
-          out << std::endl << it->second << std::endl;
+          out << std::endl << it->second;
         }
-        out << '\t' << i << '\t' << x << std::endl;
+        out << '\t' << i << '\t' << x << '\n';
       }
     }
   
@@ -293,8 +301,12 @@ namespace lisp {
             // pop value
             const value& top = data.back();
 
+            if(!top.is<boolean>()) {
+              throw type_error("boolean expected");
+            }
+            
             // jnz
-            if( top ) {
+            if( top.get<boolean>() ) {
               data.pop_back();
               op = code.data() + addr;
               continue;

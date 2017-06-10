@@ -25,6 +25,9 @@
 
 #include "jit.hpp"
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
 
 template<class F>
 static void read_loop(const F& f) {
@@ -41,7 +44,7 @@ static void read_loop(const F& f) {
 
 
 
-static const auto evaluate = [] {
+static const auto interpretr = [] {
   const ref<lisp::context> ctx = lisp::std_env();
   
   return [ctx](lisp::sexpr&& e) {
@@ -88,17 +91,17 @@ static int process(std::istream& in, Action action) {
 
 
 
-const auto jit_compile = [] {
+const auto jit_compiler = [](bool dump) {
 
   const ref<lisp::jit> jit = make_ref<lisp::jit>();
   const ref<lisp::context> env = lisp::std_env();
   
   jit->import( env );
   
-  return [env, jit](lisp::sexpr&& e) {
+  return [env, jit, dump](lisp::sexpr&& e) {
 
     const lisp::sexpr ex = expand_seq(env, e);    
-    const lisp::vm::value val = jit->eval(ex);
+    const lisp::vm::value val = jit->eval(ex, dump);
 
     if(val) {
       if(val.is<lisp::symbol>() || val.is<lisp::vm::value::list>()) {
@@ -113,14 +116,57 @@ const auto jit_compile = [] {
 
 };
 
+namespace po = boost::program_options;
+static po::variables_map parse_options(int argc, char** argv) {
+  po::options_description desc("Allowed options");
+  desc.add_options()
+    ("help", "produce help message")
+    ("filename", po::value< std::string >(), "input file")
+
+    ("i", "interpreter")
+    ("b", "bytecode")
+    ("dump", "dump bytecode")    
+    ;
+
+  po::positional_options_description p;
+  p.add("filename", -1);
+  
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).
+            options(desc).positional(p).run(), vm);
+  
+  po::notify(vm);
+  
+  if (vm.count("help")) {
+    std::cout << desc << "\n";
+    std::exit(1);
+  }
+  
+  return vm;
+}
+
 
 int main(int argc, char** argv) {
+
+  const po::variables_map vm = parse_options(argc, argv);
+
+  using action_type = std::function< parse::any<lisp::sexpr> (lisp::sexpr&&) > ;
   
-  // const auto action = interpret();
-  const auto action = jit_compile();  
+  action_type action = nullptr;
+
   
-  if( argc > 1 ) {
-    std::ifstream file(argv[1]);
+  if( vm.count("i") ) {
+    action = interpretr();
+  } else {
+    const bool dump = vm.count("dump");    
+    action = jit_compiler(dump);
+  }
+  
+
+  
+  if( vm.count("filename") ) {
+    const std::string filename = vm["filename"].as< std::string >();
+    std::ifstream file( filename );
     
     return process(file, action );
     

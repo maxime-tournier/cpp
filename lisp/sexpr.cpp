@@ -20,6 +20,10 @@ namespace lisp {
       out << '"' << *self << '"';
     }
 
+    void operator()(const boolean& self, std::ostream& out) const {
+      if(self) out << "true";
+      else out << "false";
+    }
     
     template<class T>
     void operator()(const T& self, std::ostream& out) const {

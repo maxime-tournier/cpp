@@ -241,6 +241,11 @@ namespace lisp {
         literal(res, self);
       }
 
+      void operator()(const boolean& self, ref<context>& ctx, bytecode& res) const {
+        literal(res, self);
+      }
+
+      
       void operator()(const ref<string>& self, ref<context>& ctx, bytecode& res) const {
         literal(res, self);
       }

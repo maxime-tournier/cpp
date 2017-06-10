@@ -24,7 +24,7 @@ namespace lisp {
   using builtin = value (*)(const value* first, const value* last);
   
 
-  struct value : variant<list<value>, integer, real, symbol, ref<string>, builtin, 
+  struct value : variant<list<value>, boolean, integer, real, symbol, ref<string>, builtin, 
                          ref<lambda> > {
 
     using list = lisp::list<value>;

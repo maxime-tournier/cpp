@@ -95,17 +95,9 @@ namespace lisp {
       ("repr", ostream<repr_visitor>)
       ("print", ostream<print_visitor>)
       
-      ("=", +[](const value* first, const value* last) -> value {
-        if(last - first != 2) throw error("argc");
-        if(first[0].type() != first[1].type()) return value::list();
-        bool res;
-        first[0].apply(eq_visitor(), first[1], res);
-        if(!res) return value::list();
-        
-        return t;
-      })
-      ;
+      ("=", wrap([](integer x, integer y) -> boolean { return x == y; }))
 
+      ;
 
     return ctx;
   }

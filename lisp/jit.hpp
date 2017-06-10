@@ -18,7 +18,7 @@ namespace lisp {
     // not sure though
     void import(const ref<lisp::context>& ctx);
     
-    vm::value eval(const lisp::sexpr& expr);
+    vm::value eval(const lisp::sexpr& expr, bool dump = false);
   };
 
   

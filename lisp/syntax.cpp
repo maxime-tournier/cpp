@@ -205,6 +205,10 @@ namespace lisp {
       if(special::reserved.find(self) != special::reserved.end()) {
         throw syntax_error(self.name() + " not allowed in this context");
       }
+
+      // TODO where to put these?
+      if(self == symbol("true")) return true;
+      if(self == symbol("false")) return false;      
       
       return self; 
     }
@@ -229,6 +233,8 @@ namespace lisp {
         });
     }
 
+    
+    
   };
 
 
