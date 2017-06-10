@@ -99,13 +99,17 @@ namespace lisp {
   
 
     static value cond(const ref<context>& ctx, const sexpr::list& args) {
-      for(const sexpr& x : args) {
-        const sexpr::list& term = x.get<sexpr::list>();
+      try {
+        for(const sexpr& x : args) {
+          const sexpr::list& term = x.get<sexpr::list>();
         
-        if( eval(ctx, term->head) ) {
-          return eval(ctx, term->tail->head);
+          if( eval(ctx, term->head).cast<boolean>() ) {
+            return eval(ctx, term->tail->head);
+          }
+        
         }
-        
+      } catch( sexpr::bad_cast& e ) {
+        throw type_error("boolean expected");
       }
       
       return value::list();

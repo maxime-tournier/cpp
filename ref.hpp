@@ -74,6 +74,12 @@ public:
     other.block = nullptr;
   }
 
+  template<class Derived>
+  ref(ref<Derived>&& other) noexcept : block( other.template cast<T>().block) {
+    other.template cast<T>().block = nullptr;
+  }
+  
+  
   ref& operator=(ref&& other) noexcept {
     if(this == &other) return *this;
     
@@ -99,12 +105,21 @@ public:
 
 
   template<class Base>
-  operator const ref<Base>&() const {
+  const ref<Base>& cast() const {
     T* derived = nullptr;
     Base* check = derived;
     (void) check;
     return reinterpret_cast< const ref<Base>& >(*this);
   }
+
+  template<class Base>
+  ref<Base>& cast() {
+    T* derived = nullptr;
+    Base* check = derived;
+    (void) check;
+    return reinterpret_cast<ref<Base>& >(*this);
+  }
+
   
   bool operator==(const ref& other) const {
     return block == other.block;

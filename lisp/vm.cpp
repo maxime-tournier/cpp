@@ -16,7 +16,7 @@ namespace lisp {
 
   
     machine::machine() {
-      fp.push_back(0);
+      fp.emplace_back(0);
     }
 
     void bytecode::label(vm::label s) {
@@ -214,6 +214,11 @@ namespace lisp {
 
     static constexpr std::size_t static_closure_max = 8;
 
+    template<std::size_t I>
+    static ref<closure> make_static_closure(std::size_t argc, std::size_t addr, value* data) {
+      return make_ref< static_closure<I> >(argc, addr, data, range_indices<I>() );
+    }
+    
     template<std::size_t ... I>
     static ref<closure> make_static_closure(std::size_t argc, std::size_t addr,
                                             value* first, value* last,
@@ -222,9 +227,7 @@ namespace lisp {
       using ctor_type = ref<closure> (*)(std::size_t argc, std::size_t addr, value* data);
       
       static const ctor_type ctor[] = {
-        [](std::size_t argc, std::size_t addr, value* data) -> ref<closure> {
-           return make_ref< static_closure<I> >(argc, addr, data, range_indices<I>() );
-        }...
+        make_static_closure<I>...
       };
 
       const std::size_t size = last - first;
@@ -269,7 +272,7 @@ namespace lisp {
           case opcode::STOP: return;
 
           case opcode::PUSH: 
-            data.push_back(*++op);
+            data.emplace_back(*++op);
             break;
       
           case opcode::POP:
@@ -320,7 +323,7 @@ namespace lisp {
             // fetch index
             const integer i = (++op)->get<integer>();
             assert( fp.back() + i < data.size() );
-            data.push_back( data[fp.back() + i]);
+            data.emplace_back( data[fp.back() + i]);
             break;
           }
         
@@ -343,7 +346,7 @@ namespace lisp {
         
             const ref<closure>& f = data[fp.back()].get< ref<closure> >();
             assert( i < integer(f->size) );
-            data.push_back( f->capture[i] );
+            data.emplace_back( f->capture[i] );
             break;
           }
         
@@ -381,7 +384,7 @@ namespace lisp {
             
             ref<closure> res = make_closure(n, addr, first, last);
 
-            data.resize(min + 1, vm::value::list());
+            data.resize(min + 1, false);
             data.back() = std::move(res);
             break;
           }
@@ -406,11 +409,11 @@ namespace lisp {
               const ref<closure>& f = func.get<ref<closure>>();
             
               // push frame pointer (to the closure, to be replaced with result)
-              fp.push_back( start );
+              fp.emplace_back( start );
             
               // push return address
               const integer ret_addr = ++op - code.data();
-              data.push_back( ret_addr);
+              data.emplace_back( ret_addr);
 
               // TODO typecheck instead
               if( f->argc != std::size_t(n) ) {
@@ -442,7 +445,7 @@ namespace lisp {
                      reinterpret_cast<const lisp::value*>(last)));
             
                 // pop args + push result
-                data.resize( first_index, vm::value::list() );
+                data.resize( first_index, false );
               }
             
               break;
@@ -464,7 +467,7 @@ namespace lisp {
             data.pop_back();
         
             // cleanup frame
-            data.resize( fp.back() + 1, vm::value::list() );
+            data.resize( fp.back() + 1, false );
 
             // pop frame pointer
             fp.pop_back();
@@ -483,7 +486,7 @@ namespace lisp {
         };
       } catch(lisp::error& e) {
         fp.resize(init_fp_size); // should be 1 anyways?
-        data.resize(init_stack_size, vm::value::list());
+        data.resize(init_stack_size, false);
         throw;
       }
       

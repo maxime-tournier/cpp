@@ -44,21 +44,6 @@ static void read_loop(const F& f) {
 
 
 
-static const auto interpretr = [] {
-  const ref<lisp::context> ctx = lisp::std_env();
-  
-  return [ctx](lisp::sexpr&& e) {
-    const lisp::sexpr ex = expand_seq(ctx, e);
-    const lisp::value val = eval(ctx, ex);
-    
-    if(val) {
-      std::cout << val << std::endl;  
-    }
-    
-    return parse::pure(e);
-  };
-};
-
 
 
 
@@ -88,6 +73,23 @@ static int process(std::istream& in, Action action) {
 
   return 1;
 }
+
+
+static const auto interpreter = [] {
+  const ref<lisp::context> ctx = lisp::std_env();
+  
+  return [ctx](lisp::sexpr&& e) {
+    const lisp::sexpr ex = expand_seq(ctx, e);
+    const lisp::value val = eval(ctx, ex);
+    
+    if(val) {
+      std::cout << val << std::endl;  
+    }
+    
+    return parse::pure(e);
+  };
+};
+
 
 
 
@@ -123,8 +125,8 @@ static po::variables_map parse_options(int argc, char** argv) {
     ("help", "produce help message")
     ("filename", po::value< std::string >(), "input file")
 
-    ("i", "interpreter")
-    ("b", "bytecode")
+    ("interpreter,i", "interpreter")
+    ("bytecode,b", "bytecode")
     ("dump", "dump bytecode")    
     ;
 
@@ -155,15 +157,14 @@ int main(int argc, char** argv) {
   action_type action = nullptr;
 
   
-  if( vm.count("i") ) {
-    action = interpretr();
+  if( vm.count("interpreter") ) {
+    action = interpreter();
   } else {
     const bool dump = vm.count("dump");    
     action = jit_compiler(dump);
   }
   
 
-  
   if( vm.count("filename") ) {
     const std::string filename = vm["filename"].as< std::string >();
     std::ifstream file( filename );

@@ -63,8 +63,11 @@ class variant {
   using storage_type = typename std::aligned_union<0, T...>::type;
   storage_type storage;
 
+protected:
   using index_type = std::size_t;
   index_type index;
+
+private:
   
   using select_type = impl::select<0, T...>;
 

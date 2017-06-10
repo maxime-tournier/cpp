@@ -59,15 +59,23 @@ namespace lisp {
         const sexpr& test = chunk->head;
         const sexpr& result = chunk->tail->head;
         
-        // TODO syntax check
-
         const label then = "cond-" + std::to_string(id) + "-then-" + std::to_string(i);
         
         branch.emplace( std::make_pair(then, result) );
-        
-        compile(res, ctx, test);
-        res.push_back( opcode::JNZ );
-        res.push_back( then );
+
+        // optimize literal boolean tests
+        if(test.is<boolean>()) {
+          
+          if(test.get<boolean>()) {
+            res.push_back( opcode::JMP );
+            res.push_back( then );
+          }
+          
+        } else {
+          compile(res, ctx, test);
+          res.push_back( opcode::JNZ );
+          res.push_back( then );
+        }
         ++i;
       }
 

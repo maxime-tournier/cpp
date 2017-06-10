@@ -97,7 +97,10 @@ namespace lisp {
 
       value(const sexpr& other) : value::variant( reinterpret_cast<const variant&> (other)) { }
       value(sexpr&& other) : value::variant( reinterpret_cast<variant&&> (other)) { }    
-      
+
+      // make sure we get moves on std::vector realloc
+      static_assert(std::is_nothrow_move_constructible<variant>::value, "derp");
+      static_assert(std::is_nothrow_destructible<variant>::value, "derp");
     };
 
 
