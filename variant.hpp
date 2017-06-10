@@ -168,9 +168,9 @@ public:
   
   variant(const variant& other) noexcept 
     : index(other.index) {
-    static constexpr bool skip_copy_constructor[] = {std::is_trivially_copy_constructible<T>::value...};
+    static constexpr bool skip[] = {std::is_trivially_copy_constructible<T>::value...};
     
-    if(skip_copy_constructor[index]) {
+    if(skip[index]) {
       storage = other.storage;
     } else {
       apply( copy_construct(), other );
@@ -179,9 +179,9 @@ public:
 
   variant(variant&& other) noexcept
     : index(other.index) {
-    static constexpr bool skip_move_constructor[] = {std::is_trivially_move_constructible<T>::value...};
+    static constexpr bool skip[] = {std::is_trivially_move_constructible<T>::value...};
     
-    if(skip_move_constructor[index]) {
+    if(skip[index]) {
       storage = std::move(other.storage);
     } else {
       apply( move_construct(), std::move(other) );
@@ -189,9 +189,9 @@ public:
   }
   
   ~variant() noexcept {
-    static constexpr bool skip_destructor[] = {std::is_trivially_destructible<T>::value...};
-  
-    if(!skip_destructor[index]) {
+    static constexpr bool dont_skip[] = {!std::is_trivially_destructible<T>::value...};
+    
+    if(dont_skip[index]) {
       apply( destruct() );
     }
     
