@@ -38,7 +38,7 @@ public:
   explicit operator bool() const { return block; }
 
   // default
-  ref() : block(nullptr) { }
+  ref() noexcept : block(nullptr) { }
 
   ~ref() {
     assert(!block || block->rc );
@@ -49,7 +49,7 @@ public:
   }
 
   // copy
-  ref(const ref& other) : block(other.block) {
+  ref(const ref& other) noexcept : block(other.block) {
     if(block) ++block->rc;
   }
 
@@ -70,7 +70,7 @@ public:
 
 
   // move
-  ref(ref&& other) : block(other.block) {
+  ref(ref&& other) noexcept : block(other.block) {
     other.block = nullptr;
   }
 
