@@ -17,9 +17,12 @@ namespace detail {
     using type = indices<I1..., I2...>;
   };
 
-  template<std::size_t S, std::size_t E>
+  
+  template<std::size_t S, std::size_t E, std::size_t D = E - S>
   struct make_indices_type {
 
+    static_assert(E >= S, "bounds must be increasing");
+    
     static constexpr std::size_t pivot = (E + S) / 2;
     using lhs_type = typename make_indices_type<S, pivot>::type;
     using rhs_type = typename make_indices_type<pivot, E>::type;    
@@ -28,12 +31,13 @@ namespace detail {
   };
 
   template<std::size_t I>
-  struct make_indices_type<I, I> {
+  struct make_indices_type<I, I, 0> {
     using type = indices<>;
   };
+ 
 
-  template<std::size_t I>
-  struct make_indices_type<I, I + 1> {
+  template<std::size_t I, std::size_t J>
+  struct make_indices_type<I, J, 1> {
     using type = indices<I>;
   };
   
