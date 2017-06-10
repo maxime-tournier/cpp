@@ -6,15 +6,7 @@ namespace lisp {
 
 
   static value list_ctor(const value* first, const value* last) {
-    value::list res;
-    value::list* curr = &res;
-    
-    for(const value* it = first; it != last; ++it) {
-      *curr = *it >>= value::list();
-      curr = &(*curr)->tail;
-    }
-                                                 
-    return res;
+    return make_list<value>(first, last);
   }
 
   static value append(const value* first, const value* last) {
