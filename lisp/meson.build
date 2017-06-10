@@ -16,7 +16,7 @@ compiler = meson.get_compiler('cpp')
 
 readline = compiler.find_library('readline', required: true)
 stdcpp = compiler.find_library('stdc++', required: true)
-boost = dependency('boost', modules : ['program_options'] )
+boost = compiler.find_library('boost_program_options', required: true)
 
 if get_option('buildtype') == 'release' or get_option('buildtype') == 'debugoptimized'
   add_project_arguments('-DNDEBUG', language: 'cpp')
