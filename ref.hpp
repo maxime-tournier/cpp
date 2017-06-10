@@ -71,6 +71,10 @@ public:
   ref& operator=(ref&& other) noexcept {
     if(this == &other) return *this;
     
+    if(block && --block->rc == 0) {
+      delete block;
+    }
+    
     block = other.block;
     other.block = nullptr;
     return *this;
