@@ -29,7 +29,7 @@ namespace lisp {
  
   template<class F, class Ret, class ... Args, std::size_t ... I>
   static builtin wrap(const F& f, Ret (*ptr)(Args... args)) {
-    return wrap(f, ptr, typename tuple_indices<Args...>::type() );
+    return wrap(f, ptr, type_indices<Args...>() );
   }
   
   template<class F>
