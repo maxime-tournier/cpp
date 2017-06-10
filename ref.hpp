@@ -49,11 +49,16 @@ public:
 
 
   ref& operator=(const ref& other) noexcept {
+    if(this == &other) return *this;
+    
     if(block && (--block->rc == 0)) {
       delete block;
     }
+
+    if((block = other.block)) {
+      ++block->rc;
+    }
     
-    if((block = other.block)) ++block->rc;
     return *this;
   }
 
@@ -64,6 +69,8 @@ public:
   }
 
   ref& operator=(ref&& other) noexcept {
+    if(this == &other) return *this;
+    
     block = other.block;
     other.block = nullptr;
     return *this;
