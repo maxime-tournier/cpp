@@ -12,28 +12,29 @@ namespace detail {
   };
 
 
+  // TODO wrap integral types
   template<class T>
-  struct control_block : control_block_base {
-    T value;
-
+  struct control_block : control_block_base, T {
+    
     template<class ... Args>
     control_block(Args&& ... args) :
-      value(std::forward<Args>(args)...) {
-
+      T(std::forward<Args>(args)...) {
+      
     }
+    
   };
 }
 
 // a simple non-intrusive ref-counting pointer
 template<class T>
 class ref {
-  
-  using block_type = detail::control_block_base;
-  block_type* block;
-  
-public:
-
+protected:
+  using block_type = detail::control_block_base;  
   ref(block_type* block) : block(block) { }
+
+private:
+  block_type* block;
+public:
   
   explicit operator bool() const { return block; }
 
@@ -99,8 +100,7 @@ public:
   }
 
   T* get() const {
-    if(!block) return nullptr;
-    return &static_cast<detail::control_block<T>*>(block)->value;
+    return static_cast<detail::control_block<T>*>(block);
   }
 
 

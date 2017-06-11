@@ -11,6 +11,7 @@
 
 #include "../indices.hpp"
 
+
 namespace lisp {
   namespace vm {
 
@@ -178,76 +179,29 @@ namespace lisp {
     }  
 
 
-
-    template<std::size_t N>
-    struct static_closure : closure {
-      value storage[N];
-      
-      template<std::size_t ... I>
-      static_closure(std::size_t argc,
-                     std::size_t addr,
-                     value* data,
-                     indices<I...> )
-        : closure(argc, addr, N, storage),
-          storage{ std::move(data[I])...} {
-        static_assert(sizeof...(I) == N, "index error");
-      }
-      
-    };
-
-
-
-    struct dynamic_closure : closure {
-      using storage_type = std::vector<value>;
-      storage_type storage;
-      
-      dynamic_closure(std::size_t argc,
-                      std::size_t addr,
-                      storage_type&& storage)
-        : closure(argc, addr, storage.size(), storage.data()),
-          storage(std::move(storage)) {
-            
-      }
-      
-    };
-
-
-    static constexpr std::size_t static_closure_max = 8;
-
-    template<std::size_t I>
-    static ref<closure> make_static_closure(std::size_t argc, std::size_t addr, value* data) {
-      return make_ref< static_closure<I> >(argc, addr, data, range_indices<I>() );
-    }
     
-    template<std::size_t ... I>
-    static ref<closure> make_static_closure(std::size_t argc, std::size_t addr,
-                                            value* first, value* last,
-                                            indices<I...> ) {
+    ref<closure> make_closure(std::size_t argc, std::size_t addr,
+                              const value* first, const value* last) {
 
-      using ctor_type = ref<closure> (*)(std::size_t argc, std::size_t addr, value* data);
+
+      struct helper : ref<closure> {
+
+        using helper::ref::ref;
+
+        static ref<closure> make(std::size_t argc, std::size_t addr,
+                                 const value* first, const value* last) {
+          
+          const std::size_t size = last - first;
+          
+          // we need to instantiate control blocks ourselves
+          block_type* block = closure::create<detail::control_block<closure>>(size, argc, addr, first, last);
+          return helper(block);
+          
+        }
       
-      static const ctor_type ctor[] = {
-        make_static_closure<I>...
       };
 
-      const std::size_t size = last - first;
-      return ctor[size](argc, addr, first);
-    }
-
-    
-    static ref<closure> make_closure(std::size_t argc, std::size_t addr,
-                                     value* first, value* last) {
-
-      const std::size_t size = last - first;
-
-      if( size < static_closure_max ) {
-        return make_static_closure(argc, addr, first, last, range_indices<static_closure_max>());
-      }
-      
-      std::vector<value> storage( std::make_move_iterator(first),
-                                  std::make_move_iterator(last));
-
-      return make_ref<dynamic_closure>(argc, addr, std::move(storage) );
+      return helper::make(argc, addr, first, last);
     }
 
     
@@ -344,9 +298,9 @@ namespace lisp {
             // fetch index
             const integer i = (++op)->get<integer>();
         
-            const ref<closure>& f = stack[fp.back()].get< ref<closure> >();
-            assert( i < integer(f->size) );
-            stack.emplace_back( f->capture[i] );
+            const closure& f = *stack[fp.back()].get< ref<closure> >();
+            assert( i < integer(f.size()) );
+            stack.emplace_back( f[i] );
             break;
           }
         
@@ -354,11 +308,11 @@ namespace lisp {
             // fetch index
             const integer i = (++op)->get<integer>();
         
-            const ref<closure>& f = stack[fp.back()].get< ref<closure> >();
-            assert( i < integer(f->size) );
+            closure& f = *stack[fp.back()].get< ref<closure> >();
+            assert( i < integer(f.size()) );
             
             // pop value in capture
-            f->capture[i] = std::move(stack.back());
+            f[i] = std::move(stack.back());
             stack.pop_back();
             break;
           }
@@ -406,8 +360,8 @@ namespace lisp {
             switch( func.type() ) {
             case value::type_index< ref<closure> >(): {
 
-              const ref<closure>& f = func.get<ref<closure>>();
-            
+              const closure& f = *func.get<ref<closure>>();
+              
               // push frame pointer (to the closure, to be replaced with result)
               fp.emplace_back( start );
             
@@ -416,14 +370,14 @@ namespace lisp {
               stack.emplace_back( ret_addr);
 
               // TODO typecheck instead
-              if( f->argc != std::size_t(n) ) {
+              if( f.argc != std::size_t(n) ) {
                 std::stringstream ss;
-                ss << "bad argument count, expected: " << f->argc << ", got: " << n;
+                ss << "bad argument count, expected: " << f.argc << ", got: " << n;
                 throw lisp::error(ss.str());
               }
 
               // get function address
-              const value* addr = code.data() + f->addr;
+              const value* addr = code.data() + f.addr;
 
               // jump
               op = addr;
@@ -450,6 +404,7 @@ namespace lisp {
             
               break;
             default:
+              assert(false);
               throw type_error("function expected");
             };
           

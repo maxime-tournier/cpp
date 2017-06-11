@@ -27,9 +27,9 @@ struct base {
 };
  
   
-struct derived : base, dynamic_sized<foo, derived> {
-  int michel;
-  // using dynamic_sized<foo>::operator new;
+struct derived : base, dynamic_sized<foo> {
+  const char* name;
+  derived(const char* name) : name(name) { }
 };
 
    
@@ -38,9 +38,7 @@ struct derived : base, dynamic_sized<foo, derived> {
 
 int main(int argc, char** argv) {
 
-  // dynamic_sized<foo> test;
-  
-  base* ptr = new(4) derived;
+  base* ptr = derived::create<derived>(4, "foo");
   
   delete ptr;
     

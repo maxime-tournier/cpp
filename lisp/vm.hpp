@@ -3,6 +3,8 @@
 
 #include "eval.hpp"
 
+#include "../dynamic_sized.hpp"
+
 namespace lisp {
   namespace vm {
 
@@ -35,29 +37,8 @@ namespace lisp {
 
 
 
-  
-    struct closure {
-      virtual ~closure() { }
-      
-      const std::size_t argc;
-      const std::size_t addr;
-
-      const std::size_t size;      
-      value* const capture;
-
-      closure(std::size_t argc,
-              std::size_t addr,
-              std::size_t size,
-              value* capture)
-        : argc(argc),
-          addr(addr),
-          size(size),
-          capture(capture) {
-
-      }
-      
-    };
-
+    struct closure;
+    
 
     
     
@@ -103,6 +84,30 @@ namespace lisp {
       static_assert(std::is_nothrow_destructible<variant>::value, "derp");
     };
 
+
+    struct closure_head {
+      const std::size_t argc;
+      const std::size_t addr;
+    };
+    
+    struct closure : closure_head, dynamic_sized<value> {
+      
+      template<class Iterator>
+      closure(std::size_t argc,
+              std::size_t addr,
+              Iterator first, Iterator last)
+        : closure_head{argc, addr},
+          closure::dynamic_sized(first, last)
+      {
+        
+      }
+
+      friend ref<closure> make_closure(std::size_t argc, std::size_t addr,
+                                       const value* first, const value* last);
+      
+    };
+
+    
 
     class bytecode : public std::vector<value> {
       std::map< vm::label, integer > labels;
