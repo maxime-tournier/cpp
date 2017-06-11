@@ -14,3 +14,4 @@ build
 /sparse
 *.dSYM
 /gc
+/dynamic_sized
