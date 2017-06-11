@@ -134,7 +134,8 @@ namespace lisp {
       std::vector<std::size_t> fp;
 
       // data stack
-      std::vector<value> stack;
+      using stack_type = std::vector<value>;
+      stack_type stack;
       
       void run(const bytecode& code, std::size_t start = 0);
       

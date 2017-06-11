@@ -246,7 +246,7 @@ namespace lisp {
         
           case opcode::JMP: {
             // fetch addr
-            const integer addr = (++op)->get<integer>();
+            const integer& addr = (++op)->get<integer>();
         
             // jump
             op = code.data() + addr;
@@ -256,8 +256,8 @@ namespace lisp {
 
           case opcode::JNZ: {
             // fetch addr
-            const integer addr = (++op)->get<integer>();
-
+            const integer& addr = (++op)->get<integer>();
+            
             // pop value
             const value& top = stack.back();
 
@@ -267,7 +267,7 @@ namespace lisp {
             
             // jnz
             if( top.get<boolean>() ) {
-              stack.pop_back();
+              stack.pop_back(); // warning: top is invalidated
               op = code.data() + addr;
               continue;
             }
@@ -278,7 +278,7 @@ namespace lisp {
         
           case opcode::LOAD: {
             // fetch index
-            const integer i = (++op)->get<integer>();
+            const integer& i = (++op)->get<integer>();
             assert( fp.back() + i < stack.size() );
             stack.emplace_back( stack[fp.back() + i]);
             break;
@@ -286,7 +286,7 @@ namespace lisp {
         
           case opcode::STORE: {
             // fetch index
-            const integer i = (++op)->get<integer>();
+            const integer& i = (++op)->get<integer>();
             assert( fp.back() + i < stack.size() );
 
             // pop value into cell
@@ -299,7 +299,7 @@ namespace lisp {
 
           case opcode::LOADC: {
             // fetch index
-            const integer i = (++op)->get<integer>();
+            const integer& i = (++op)->get<integer>();
         
             const closure& f = *stack[fp.back()].get< ref<closure> >();
             assert( i < integer(f.size()) );
@@ -309,7 +309,7 @@ namespace lisp {
         
           case opcode::STOREC: {
             // fetch index
-            const integer i = (++op)->get<integer>();
+            const integer& i = (++op)->get<integer>();
         
             closure& f = *stack[fp.back()].get< ref<closure> >();
             assert( i < integer(f.size()) );
@@ -324,15 +324,15 @@ namespace lisp {
             // clos, #capture, #arg, addr
           case opcode::CLOS: {
             // fetch and close over the last n variables
-            const integer c = (++op)->get<integer>();
+            const integer& c = (++op)->get<integer>();
             assert(c <= integer(stack.size()));
 
             // argc
-            const integer n = (++op)->get<integer>();
+            const integer& n = (++op)->get<integer>();
             assert(n <= integer(stack.size()));
         
             // fetch code address from bytecode start
-            const integer addr = (++op)->get<integer>();
+            const integer& addr = (++op)->get<integer>();
         
             // build closure
             const std::size_t min = stack.size() - c;
@@ -341,7 +341,7 @@ namespace lisp {
             
             ref<closure> res = make_closure(n, addr, first, last);
 
-            stack.resize(min + 1, false);
+            stack.resize(min + 1, unit());
             stack.back() = std::move(res);
             break;
           }
@@ -367,10 +367,10 @@ namespace lisp {
               
               // push frame pointer (to the closure, to be replaced with result)
               fp.emplace_back( start );
-            
+              
               // push return address
               const integer ret_addr = ++op - code.data();
-              stack.emplace_back( ret_addr);
+              stack.emplace_back( ret_addr); // warning: func is invalidated here
 
               // TODO typecheck instead
               if( f.argc != std::size_t(n) ) {
@@ -402,7 +402,7 @@ namespace lisp {
                      reinterpret_cast<const lisp::value*>(last)));
             
                 // pop args + push result
-                stack.resize( first_index, false );
+                stack.resize( first_index, unit() ); // warning: func is invalidated
               }
             
               break;
@@ -422,14 +422,13 @@ namespace lisp {
         
             // pop return address
             const integer addr = stack.back().get<integer>();
-            stack.pop_back();
-        
+            
             // cleanup frame
-            stack.resize( fp.back() + 1, false );
+            stack.resize( fp.back() + 1, unit() );
 
             // pop frame pointer
             fp.pop_back();
-
+            
             // jump back
             op = code.data() + addr;
             continue;
@@ -444,7 +443,7 @@ namespace lisp {
         };
       } catch(lisp::error& e) {
         fp.resize(init_fp_size); // should be 1 anyways?
-        stack.resize(init_stack_size, false);
+        stack.resize(init_stack_size, unit());
         throw;
       }
       
