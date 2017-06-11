@@ -15,7 +15,10 @@ namespace lisp {
 
   using string = std::string;
 
-  struct unit {};
+  struct unit {
+    inline bool operator==(const unit&) const { return true; }
+  };
+  
   using boolean = bool;
   using integer = long;
   using real = double; 

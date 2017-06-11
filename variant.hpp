@@ -118,7 +118,14 @@ private:
   };
 
 
+  struct compare {
 
+    template<class U>
+    void operator()(const U& self, const variant& other, bool& res) const {
+      res = self == other.get<U>();
+    }
+    
+  };
   
 public:
   std::size_t type() const { return index; }
@@ -213,6 +220,12 @@ public:
     return *this;
   }
 
+  bool operator==(const variant& other) const {
+    if(type() != other.type()) return false;
+    bool cmp;
+    apply(compare(), other, cmp);
+    return cmp;
+  }
 
   variant& operator=(variant&& other)  noexcept{
     

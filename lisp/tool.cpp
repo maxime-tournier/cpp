@@ -105,7 +105,10 @@ namespace lisp {
       ("print", ostream<print_visitor>)
       
       ("=", wrap([](integer x, integer y) -> boolean { return x == y; }))
-
+      ("eq?", +[](const value* first, const value* last) -> value {
+        if((last - first) != 2) throw argument_error(last - first, 2);
+        return first[0] == first[1];
+      })
       ;
 
     return ctx;
