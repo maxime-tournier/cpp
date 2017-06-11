@@ -23,11 +23,11 @@ namespace lisp {
         throw type_error("bad type for builtin");
       }
       
-      return ptr( first[I].template get<Args>() ... );      
+      // return ptr( first[I].template get<Args>() ... );      
     };
   } 
  
-  template<class F, class Ret, class ... Args, std::size_t ... I>
+  template<class F, class Ret, class ... Args>
   static builtin wrap(const F& f, Ret (*ptr)(Args... args)) {
     return wrap(f, ptr, type_indices<Args...>() );
   }
