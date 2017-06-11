@@ -15,10 +15,13 @@ namespace lisp {
 
   struct argument_error : error {
     argument_error(std::size_t got, std::size_t expected)
-      : error("bad argument count: " + std::to_string(got) + " " + std::to_string(expected) + " <= expected"){
+      : error("bad argument count: " + std::to_string(got) + ", expected: " + std::to_string(expected)) {
       
     }
-    
+
+    static void check(std::size_t got, std::size_t expected) {
+      if(got != expected) throw argument_error(got, expected);
+    }
   };
 
   

@@ -13,10 +13,8 @@ namespace lisp {
     static Ret(*ptr)(Args...) = f;
     
     return +[](const value* first, const value* last) -> value {
-      if((last - first) != sizeof...(Args)) {
-        throw error("argc");
-      }
-
+      argument_error::check(last - first, sizeof...(Args));
+      
       try{
         return ptr( first[I].template cast<Args>() ... );
       } catch( value::bad_cast& e) {

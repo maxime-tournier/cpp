@@ -76,7 +76,7 @@ public:
 
   
   ~dynamic_sized() {
-    for(T* it = data, *last = data + count; it != last; ++it) {
+    for(T* it = data + count - 1, *last = data; it >= last; --it) {
       it->~T();
     }
   }

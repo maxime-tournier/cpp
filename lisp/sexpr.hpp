@@ -23,7 +23,6 @@ namespace lisp {
   using integer = long;
   using real = double; 
   
-
   struct sexpr : variant< unit,
                           boolean,
                           integer, 

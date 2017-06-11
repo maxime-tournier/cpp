@@ -91,7 +91,7 @@ namespace lisp {
         : closure_head{argc, addr},
           closure::dynamic_sized(first, last)
       {
-        
+
       }
 
       friend ref<closure> make_closure(std::size_t argc, std::size_t addr,
