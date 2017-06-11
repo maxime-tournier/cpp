@@ -32,9 +32,9 @@ struct derived : base, dynamic_sized<foo, derived> {
   // using dynamic_sized<foo>::operator new;
 };
 
+   
   
-  
-  
+   
 
 int main(int argc, char** argv) {
 

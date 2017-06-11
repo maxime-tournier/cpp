@@ -6,10 +6,13 @@
 
 template<class T, class Derived>
 class dynamic_sized {
-  std::size_t size;
+  const std::size_t count;
   T data[0];
+
 public:
 
+  std::size_t size() const { return count; }
+  
   T& operator[](std::size_t i) {
     assert(i < size);
     return data[i];
@@ -20,40 +23,42 @@ public:
     return data[i];
   }
   
-  void* operator new(std::size_t bytes, std::size_t size) {
-    if(!size) throw std::bad_alloc();
-    void* ptr = ::operator new(bytes + sizeof(T) * size);
-
+  void* operator new(std::size_t size, std::size_t count) {
+    if(!count) throw std::bad_alloc();
+    void* ptr = ::operator new(size + sizeof(T) * count);
+    
     // note: we need Derived here to upcast safely
     dynamic_sized* self = reinterpret_cast<Derived*>(ptr);
-    self->size = size;
+    const_cast<std::size_t&>(self->count) = count;
     
     return ptr;
   }
 
 
   template<class Iterator>
-  dynamic_sized(Iterator first, Iterator last) {
+  dynamic_sized(Iterator first, Iterator last) : count( size() ) {
     assert( last - first == size );
     std::size_t i = 0;
     for(Iterator it = first; it != last; ++it) {
       new (data + i++) T(*it);
     }
   };
+
+  dynamic_sized() : count( size() ){
+    for(std::size_t i = 0; i < count; ++i) {
+      new (data + i) T;
+    }
+  }
+
   
   ~dynamic_sized() {
-    for(std::size_t i = 0; i < size; ++i) {
-      data[size - 1 - i].~T();
+    for(std::size_t i = 0; i < count; ++i) {
+      data[count - 1 - i].~T();
     }
     
   }
 
  
-  dynamic_sized() {
-    for(std::size_t i = 0; i < size; ++i) {
-      new (data + i) T;
-    }
-  }
   
 };
 
