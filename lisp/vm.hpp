@@ -5,7 +5,12 @@
 
 #include "../dynamic_sized.hpp"
 
+// #include <iostream>
+
 namespace lisp {
+
+  class jit;
+  
   namespace vm {
 
     struct value;
@@ -47,9 +52,10 @@ namespace lisp {
     using lisp::symbol;
     using lisp::real;
     using lisp::list;
+
     using lisp::builtin;
     using lisp::string;
-  
+
     struct label : symbol {
 
       // TODO use separate symbol table
@@ -91,9 +97,13 @@ namespace lisp {
         : closure_head{argc, addr},
           closure::dynamic_sized(first, last)
       {
-
+        // std::clog << "closure created: " << addr << std::endl;
       }
 
+      ~closure() {
+        // std::clog << "closure deleted: " << addr << std::endl;
+      }
+      
       friend ref<closure> make_closure(std::size_t argc, std::size_t addr,
                                        const value* first, const value* last);
       
@@ -138,6 +148,7 @@ namespace lisp {
       stack_type stack;
       
       void run(const bytecode& code, std::size_t start = 0);
+
     };
 
     std::ostream& operator<<(std::ostream& out, const machine& self);

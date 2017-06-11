@@ -173,7 +173,10 @@ namespace lisp {
         if(it != reverse.end()) {
           out << std::endl << it->second;
         }
-        out << '\t' << i << '\t' << x << '\n';
+        out << '\t' << i << '\t';
+
+        if( !x.is<opcode>() ) out << "\t";
+        out << x << '\n';
       }
     }
   
@@ -246,7 +249,8 @@ namespace lisp {
         
           case opcode::JMP: {
             // fetch addr and jump
-            ip = code[++ip].get<integer>();
+            ++ip;
+            ip = code[ip].get<integer>();
             continue;
             break;
           }

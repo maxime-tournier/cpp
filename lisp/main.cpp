@@ -95,12 +95,47 @@ static const auto interpreter = [] {
 
 const auto jit_compiler = [](bool dump) {
 
-  const ref<lisp::jit> jit = make_ref<lisp::jit>();
-  const ref<lisp::context> env = lisp::std_env();
+  static const ref<lisp::jit> jit = make_ref<lisp::jit>();
+  static const ref<lisp::context> env = lisp::std_env();
+
+
+  (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
+      using namespace lisp::vm;
+      
+      const value* ptr = reinterpret_cast<const value*>(first);
+
+      const value::list& x = ptr->cast<value::list>();
+
+      ++ptr;
+      
+      for(const value& xi : x) {
+        jit->call(*ptr, &xi, &xi + 1);
+      }
+
+      return unit();
+    });
+
+  (*env)("map", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
+      using namespace lisp::vm;
+      
+      const value* ptr = reinterpret_cast<const value*>(first);
+      const value::list& x = ptr->cast<value::list>();
+
+      ++ptr;
+
+      value::list result = map(x, [ptr](const value& xi) {
+          return jit->call(*ptr, &xi, &xi + 1);
+        });
+
+      return reinterpret_cast<lisp::value::list&>(result);
+    });
+
+  
+
   
   jit->import( env );
   
-  return [env, jit, dump](lisp::sexpr&& e) {
+  return [dump](lisp::sexpr&& e) {
 
     const lisp::sexpr ex = expand_seq(env, e);    
     const lisp::vm::value val = jit->eval(ex, dump);

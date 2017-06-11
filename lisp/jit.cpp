@@ -10,7 +10,9 @@ namespace lisp {
 
   jit::jit()
     : ctx( make_ref<codegen::context>()) {
-    // TODO initialize stack size?
+
+    machine.stack.reserve( 2048 );
+    
   }
   
   jit::~jit() { }
@@ -53,17 +55,30 @@ namespace lisp {
     compile(code, ctx, expr);
     code.push_back( vm::opcode::STOP );
 
-    if(dump) {
+    if( dump ) {
       std::cout << "bytecode:" << std::endl;
       code.dump(std::cout, start);
     }
     
     code.link(start);
 
+    const std::size_t stack_size = machine.stack.size();
+    
     machine.run(code, start);
     const vm::value res = std::move(machine.stack.back());
     machine.stack.pop_back();
 
+    if( dump ) {
+      std::cout << "stack:" << std::endl;      
+      std::cout << machine << std::endl;
+    }
+
+    if( machine.stack.size() == stack_size ) {
+      // code chunk was expression evaluation without binding: clear
+      code.resize(start, lisp::unit());
+    }
+    
+    
     return res;
   }
 
@@ -73,39 +88,53 @@ namespace lisp {
     const std::size_t init_stack_size = machine.stack.size(); (void) init_stack_size;
 
     // TODO switch on func type
-
-    if(!func.is<ref<vm::closure>>()) throw error("jit::call: not implemented");
-
-    // call stubs
-    using stub_type = std::map<const vm::closure*, std::size_t>;
-    static stub_type stub;
+    switch( func.type() ) {
+    case vm::value::type_index< ref<vm::closure> >(): {
+      // call stubs
+      using stub_type = std::map<const vm::closure*, std::size_t>;
+      static stub_type stub;
     
-    // push callable on the stack
-    machine.stack.emplace_back(func);
+      // push callable on the stack
+      machine.stack.emplace_back(func);
     
-    // push args on the stack
-    for(const vm::value* it = first; it != last; ++it) {
-      machine.stack.emplace_back( std::move(*it) );
+      // push args on the stack
+      for(const vm::value* it = first; it != last; ++it) {
+        machine.stack.emplace_back( std::move(*it) );
+      }
+
+      const std::size_t argc = last - first;
+
+      // note: we don't want key to prevent gc here
+      const vm::closure* key = func.get<ref<vm::closure>>().get();
+      const std::size_t start = code.size();
+    
+      auto err = stub.insert( std::make_pair(key, start) );
+      if(err.second) {
+        // create call stub
+        code.emplace_back( vm::opcode::CALL );
+        code.emplace_back( vm::integer(argc) );      
+        code.emplace_back( vm::opcode::STOP );            
+      }
+    
+      machine.run(code, err.first->second);
+      vm::value result = machine.stack.back();
+      machine.stack.pop_back();
+      assert(machine.stack.size() == init_stack_size);
+      return result;
+    }
+    case vm::value::type_index< vm::builtin >(): {
+
+      const vm::builtin& ptr = func.get< vm::builtin >();
+      lisp::value result = ptr( reinterpret_cast<const lisp::value*>(first),
+                                reinterpret_cast<const lisp::value*>(last) );
+      
+      return reinterpret_cast<vm::value&>(result);
     }
 
-    const std::size_t argc = last - first;
-    
-    const vm::closure* key = func.get<ref<vm::closure>>().get();
-    const std::size_t start = code.size();
-    
-    auto err = stub.insert( std::make_pair(key, start) );
-    if(err.second) {
-      // create call stub
-      code.emplace_back( vm::opcode::CALL );
-      code.emplace_back( vm::integer(argc) );      
-      code.emplace_back( vm::opcode::STOP );            
+    default:
+      throw type_error("callable expected");
     }
     
-    machine.run(code, err.first->second);
-    vm::value result = machine.stack.back();
-    machine.stack.pop_back();
-    assert(machine.stack.size() == init_stack_size);
-    return result;
   }
    
   
