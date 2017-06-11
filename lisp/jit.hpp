@@ -19,6 +19,10 @@ namespace lisp {
     void import(const ref<lisp::context>& ctx);
     
     vm::value eval(const lisp::sexpr& expr, bool dump = false);
+
+    // note: arguments will be moved
+    vm::value call(const vm::value& func, const vm::value* first, const vm::value* last);
+    
   };
 
   

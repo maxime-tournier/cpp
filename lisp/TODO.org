@@ -1,10 +1,6 @@
 
-- wrap everything in `do` or make `def` illegal except in sequences
-
-  
-- expand/syntax pass before eval, shared between interpreter/codegen
-- clarify value type (lisp::sexpr, lisp::value, vm::value)
-
 - macros
 - packages?
-- typechecking on argc
+- a way to call bytecode compiled functions from c++ ?
+  - use integers as ip so that bytecode may be extended safely during execution
+    

@@ -188,7 +188,6 @@ namespace lisp {
     ref<closure> make_closure(std::size_t argc, std::size_t addr,
                               const value* first, const value* last) {
 
-
       struct helper : ref<closure> {
 
         using helper::ref::ref;
@@ -214,8 +213,9 @@ namespace lisp {
     void machine::run(const bytecode& code, std::size_t start) {
 
       assert( start < code.size() );
-      const value* op = code.data() + start;
 
+      std::size_t ip = start;
+      
       const std::size_t init_stack_size = stack.size();
       const std::size_t init_fp_size = fp.size();    
     
@@ -223,13 +223,13 @@ namespace lisp {
         
         while(true) {
 
-          switch(op->get<opcode>()) {
-
+          switch( code[ip].get<opcode>()) {
+            
           case opcode::NOOP: break;
           case opcode::STOP: return;
 
           case opcode::PUSH: 
-            stack.emplace_back(*++op);
+            stack.emplace_back( code[++ip] );
             break;
       
           case opcode::POP:
@@ -245,18 +245,15 @@ namespace lisp {
           }
         
           case opcode::JMP: {
-            // fetch addr
-            const integer& addr = (++op)->get<integer>();
-        
-            // jump
-            op = code.data() + addr;
+            // fetch addr and jump
+            ip = code[++ip].get<integer>();
             continue;
             break;
           }
 
           case opcode::JNZ: {
             // fetch addr
-            const integer& addr = (++op)->get<integer>();
+            const integer& addr = code[++ip].get<integer>();
             
             // pop value
             const value& top = stack.back();
@@ -268,7 +265,7 @@ namespace lisp {
             // jnz
             if( top.get<boolean>() ) {
               stack.pop_back(); // warning: top is invalidated
-              op = code.data() + addr;
+              ip = addr;
               continue;
             }
             stack.pop_back();
@@ -278,7 +275,7 @@ namespace lisp {
         
           case opcode::LOAD: {
             // fetch index
-            const integer& i = (++op)->get<integer>();
+            const integer& i = code[++ip].get<integer>();
             assert( fp.back() + i < stack.size() );
             stack.emplace_back( stack[fp.back() + i]);
             break;
@@ -286,7 +283,7 @@ namespace lisp {
         
           case opcode::STORE: {
             // fetch index
-            const integer& i = (++op)->get<integer>();
+            const integer& i = code[++ip].get<integer>();
             assert( fp.back() + i < stack.size() );
 
             // pop value into cell
@@ -299,7 +296,7 @@ namespace lisp {
 
           case opcode::LOADC: {
             // fetch index
-            const integer& i = (++op)->get<integer>();
+            const integer& i = code[++ip].get<integer>();
         
             const closure& f = *stack[fp.back()].get< ref<closure> >();
             assert( i < integer(f.size()) );
@@ -309,7 +306,7 @@ namespace lisp {
         
           case opcode::STOREC: {
             // fetch index
-            const integer& i = (++op)->get<integer>();
+            const integer& i = code[++ip].get<integer>();
         
             closure& f = *stack[fp.back()].get< ref<closure> >();
             assert( i < integer(f.size()) );
@@ -324,15 +321,15 @@ namespace lisp {
             // clos, #capture, #arg, addr
           case opcode::CLOS: {
             // fetch and close over the last n variables
-            const integer& c = (++op)->get<integer>();
+            const integer& c = code[++ip].get<integer>();
             assert(c <= integer(stack.size()));
 
             // argc
-            const integer& n = (++op)->get<integer>();
+            const integer& n = code[++ip].get<integer>();
             assert(n <= integer(stack.size()));
         
             // fetch code address from bytecode start
-            const integer& addr = (++op)->get<integer>();
+            const integer& addr = code[++ip].get<integer>();
         
             // build closure
             const std::size_t min = stack.size() - c;
@@ -345,15 +342,16 @@ namespace lisp {
             stack.back() = std::move(res);
             break;
           }
-          
-          case opcode::CALL: {
 
+            // call, #argc
+          case opcode::CALL: {
+            
             // calling convention:
             // (func, args..., retaddr, locals...)
             //   ^- fp
           
             // fetch argc
-            const integer n = (++op)->get<integer>();
+            const integer n = code[++ip].get<integer>();
             assert( fp.back() + n + 1 <= stack.size() );
         
             // get function
@@ -369,21 +367,17 @@ namespace lisp {
               fp.emplace_back( start );
               
               // push return address
-              const integer ret_addr = ++op - code.data();
-              stack.emplace_back( ret_addr); // warning: func is invalidated here
-
+              const integer return_addr = ip + 1;
+              stack.emplace_back( return_addr ); // warning: func is invalidated here
+              
               // TODO typecheck instead
               if( f.argc != std::size_t(n) ) {
-                std::stringstream ss;
-                ss << "bad argument count, expected: " << f.argc << ", got: " << n;
-                throw lisp::error(ss.str());
+                fp.pop_back();
+                throw argument_error(n, f.argc);
               }
-
-              // get function address
-              const value* addr = code.data() + f.addr;
-
-              // jump
-              op = addr;
+              
+              // jump to function address
+              ip = f.addr;
               continue;
               break;
             }
@@ -430,7 +424,7 @@ namespace lisp {
             fp.pop_back();
             
             // jump back
-            op = code.data() + addr;
+            ip = addr;
             continue;
             break;
           }
@@ -439,7 +433,7 @@ namespace lisp {
             assert(false && "unknown opcode");
           };
         
-          ++op;
+          ++ip;
         };
       } catch(lisp::error& e) {
         fp.resize(init_fp_size); // should be 1 anyways?

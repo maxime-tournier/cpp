@@ -138,7 +138,6 @@ namespace lisp {
       stack_type stack;
       
       void run(const bytecode& code, std::size_t start = 0);
-      
     };
 
     std::ostream& operator<<(std::ostream& out, const machine& self);
