@@ -5,7 +5,7 @@
 INCLUDEPATH=$(shell pkg-config --cflags eigen3)
 CXXFLAGS=-std=c++11 $(INCLUDEPATH) -Wall -g # -fuse-ld=gold #-Xlinker -icf=all
 
-ALL=rtti graph flow pcg sparse gc
+ALL=rtti graph flow pcg sparse gc dynamic_sized
 SUB=pouf lisp pybind
 
 LDLIBS += -lstdc++ -lm
