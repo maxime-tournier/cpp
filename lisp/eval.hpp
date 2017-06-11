@@ -24,9 +24,9 @@ namespace lisp {
   using builtin = value (*)(const value* first, const value* last);
   
 
-  struct value : variant<list<value>, boolean, integer, real, symbol, ref<string>, builtin, 
-                         ref<lambda> > {
-
+  struct value : variant<unit, boolean, integer, real, symbol, ref<string>, list<value>,
+                         builtin, ref<lambda> > {
+    
     using list = lisp::list<value>;
     
     using value::variant::variant;
@@ -34,11 +34,6 @@ namespace lisp {
     value(const sexpr& other) : value::variant( reinterpret_cast<const variant&> (other)) { }
     value(sexpr&& other) : value::variant( reinterpret_cast<variant&&> (other)) { }    
     
-    // nil check
-    explicit inline operator bool() const {
-      return !is<list>() || get<list>();
-    }
-
   };
 
 

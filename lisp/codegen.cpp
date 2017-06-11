@@ -30,7 +30,7 @@ namespace lisp {
       
       // def evals to nil
       res.push_back( opcode::PUSH );
-      res.push_back( vm::value::list() );
+      res.push_back( unit() );
     };
 
   
@@ -109,6 +109,12 @@ namespace lisp {
     }
 
     static void seq(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+
+      if(!args) {
+        compile(res, ctx, unit());
+        return;
+      }
+        
       const context::locals_type locals = ctx->locals;
       
       bool first = true;
@@ -241,9 +247,9 @@ namespace lisp {
 
       template<class T>
       void operator()(const T& self, ref<context>& ctx, bytecode& res) const {
-        throw lisp::error("not implemented");
+        throw lisp::error("codegen: not implemented");
       }
-
+      
       // literals
       void operator()(const integer& self, ref<context>& ctx, bytecode& res) const {
         literal(res, self);
@@ -253,6 +259,10 @@ namespace lisp {
         literal(res, self);
       }
 
+      void operator()(const unit& self, ref<context>& ctx, bytecode& res) const {
+        literal(res, self);
+      }
+      
       
       void operator()(const ref<string>& self, ref<context>& ctx, bytecode& res) const {
         literal(res, self);

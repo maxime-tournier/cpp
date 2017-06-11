@@ -4,6 +4,7 @@
 #include <map>
 
 #include <iostream>
+#include <sstream>
 
 namespace lisp {
 
@@ -203,12 +204,16 @@ namespace lisp {
 
     sexpr operator()(const symbol& self, const ref<context>& ctx) const {
       if(special::reserved.find(self) != special::reserved.end()) {
-        throw syntax_error(self.name() + " not allowed in this context");
+        std::stringstream ss;
+        ss << '`' << self.name() << "` not allowed in this context";
+        throw syntax_error(ss.str());
       }
 
       // TODO where to put these?
       if(self == symbol("true")) return true;
-      if(self == symbol("false")) return false;      
+      if(self == symbol("false")) return false;
+      
+      // if(self == symbol("unit")) return unit();            
       
       return self; 
     }

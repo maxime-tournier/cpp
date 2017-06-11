@@ -70,6 +70,11 @@ namespace lisp {
       void operator()(const label& self, std::ostream& out) const {
         out << '@' << self.name();
       }
+
+
+      void operator()(const unit& self, std::ostream& out) const {
+        out << "unit";
+      }
       
 
       void operator()(const ref<string>& self, std::ostream& out) const {
@@ -215,9 +220,7 @@ namespace lisp {
       const std::size_t init_fp_size = fp.size();    
     
       try{ 
-
-
-
+        
         while(true) {
 
           switch(op->get<opcode>()) {

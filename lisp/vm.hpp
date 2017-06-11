@@ -41,7 +41,8 @@ namespace lisp {
     
 
     
-    
+    using lisp::unit;
+    using lisp::boolean;    
     using lisp::integer;
     using lisp::symbol;
     using lisp::real;
@@ -58,12 +59,7 @@ namespace lisp {
   
   
   
-    struct value : variant< list<value> ,
-                            boolean,
-                            integer, 
-                            real,
-                            symbol,
-                            ref<string>,
+    struct value : variant< unit, boolean, integer, real, symbol, ref<string>, list<value>,
                             builtin,
                             ref<closure>,
                             opcode,
@@ -71,10 +67,6 @@ namespace lisp {
       using list = lisp::list<value>;
       
       using value::variant::variant;
-
-      inline explicit operator bool() const {
-        return !is<list>() || get<list>();
-      }
 
       value(const sexpr& other) : value::variant( reinterpret_cast<const variant&> (other)) { }
       value(sexpr&& other) : value::variant( reinterpret_cast<variant&&> (other)) { }    

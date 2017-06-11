@@ -27,6 +27,10 @@ namespace lisp {
     void operator()(const symbol& self, std::ostream& out) const {
       out << self.name();
     }
+    
+    void operator()(const unit& self, std::ostream& out) const {
+      out << "unit";
+    }
 
     void operator()(const ref<string>& self, std::ostream& out) const {
       out << *self;
@@ -94,7 +98,7 @@ namespace lisp {
       auto res = ctx->locals.emplace( std::make_pair(name, val) );
       if(!res.second) throw error(name.name() + " already defined");
       
-      return value::list();
+      return unit();
     }
   
 
@@ -112,7 +116,7 @@ namespace lisp {
         throw type_error("boolean expected");
       }
       
-      return value::list();
+      throw error("cond branches exhausted");
     }
     
  
@@ -122,7 +126,7 @@ namespace lisp {
     
     static value seq(const ref<context>& ctx, const sexpr::list& args) {
 
-      value res = value::list();
+      value res = unit();
       for(const sexpr& x : args) {
         res = eval(ctx, x);
       }
@@ -180,7 +184,7 @@ namespace lisp {
       }
       
       const value res = apply(app, stack.data() + start, stack.data() + stack.size());
-      stack.resize(start, value::list());
+      stack.resize(start, unit());
       
       return res;
     }

@@ -38,10 +38,15 @@ namespace lisp {
       out << self;
     }
 
-    void operator()(const ref<std::string>& self, std::ostream& out) const {
-      out << *self;
+    void operator()(const unit& self, std::ostream& out) const {
+      out << "unit";
     }
 
+
+    void operator()(const ref<std::string>& self, std::ostream& out) const {
+      out << '"' << *self << '"';
+    }
+    
     
     void operator()(const symbol& self, std::ostream& out) const {
       out << '\'' << self.name();
@@ -55,6 +60,10 @@ namespace lisp {
       out << self;
     }
 
+    void operator()(const unit& self, std::ostream& out) const {
+      out << "unit";
+    }
+    
     void operator()(const ref<string>& self, std::ostream& out) const {
       out << *self;
     }
@@ -72,7 +81,7 @@ namespace lisp {
       it->apply(Visitor(), std::cout);
     }
     std::cout << std::endl;
-    return value::list();
+    return unit();
   };
 
   static symbol t("t");

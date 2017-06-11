@@ -15,26 +15,23 @@ namespace lisp {
 
   using string = std::string;
 
+  struct unit {};
   using boolean = bool;
   using integer = long;
   using real = double; 
   
- 
 
-  struct sexpr : variant< list<sexpr>,
+  struct sexpr : variant< unit,
                           boolean,
                           integer, 
                           real,
                           symbol,
-                          ref<string> > {
+                          ref<string>,
+                          list<sexpr> > {
 
     using list = lisp::list<sexpr>;
     
     using sexpr::variant::variant;
-    
-    explicit operator bool() const {
-      return !is<list>() || get<list>();
-    }
     
   };
   

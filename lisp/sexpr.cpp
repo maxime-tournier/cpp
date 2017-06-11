@@ -24,6 +24,12 @@ namespace lisp {
       if(self) out << "true";
       else out << "false";
     }
+
+
+    void operator()(const unit& self, std::ostream& out) const {
+      out << "unit";
+    }
+
     
     template<class T>
     void operator()(const T& self, std::ostream& out) const {

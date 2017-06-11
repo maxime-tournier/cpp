@@ -82,7 +82,7 @@ static const auto interpreter = [] {
     const lisp::sexpr ex = expand_seq(ctx, e);
     const lisp::value val = eval(ctx, ex);
     
-    if(val) {
+    if(!val.is<lisp::unit>()) {
       std::cout << val << std::endl;  
     }
     
@@ -105,7 +105,7 @@ const auto jit_compiler = [](bool dump) {
     const lisp::sexpr ex = expand_seq(env, e);    
     const lisp::vm::value val = jit->eval(ex, dump);
 
-    if(val) {
+    if(!val.is<lisp::unit>()) {
       if(val.is<lisp::symbol>() || val.is<lisp::vm::value::list>()) {
         std::cout << "'";
       }
