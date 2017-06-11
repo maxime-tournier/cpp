@@ -64,9 +64,9 @@ namespace lisp {
       }
 
       void operator()(const symbol& self, std::ostream& out) const {
-        out << '\'' << self.name();
+        out << self.name();
       }
-
+      
       void operator()(const label& self, std::ostream& out) const {
         out << '@' << self.name();
       }
