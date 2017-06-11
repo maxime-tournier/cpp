@@ -2,6 +2,7 @@
 #define LISP_ERROR_HPP
 
 #include <stdexcept>
+#include <string>
 
 namespace lisp {
 
