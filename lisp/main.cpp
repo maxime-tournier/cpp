@@ -101,30 +101,31 @@ const auto jit_compiler = [](bool dump) {
 
   (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
       using namespace lisp::vm;
+
+      const auto args = lisp::unpack_args<2>( (value*)first, (value*)last);
       
-      const value* ptr = reinterpret_cast<const value*>(first);
-
-      const value::list& x = ptr->cast<value::list>();
-
-      ++ptr;
+      const value::list& x = args[0].get<value::list>();
+      const value& func = args[1];
       
       for(const value& xi : x) {
-        jit->call(*ptr, &xi, &xi + 1);
+        jit->call(func, &xi, &xi + 1);
       }
-
+      
       return unit();
     });
+  
 
   (*env)("map", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
       using namespace lisp::vm;
+
+      const auto args = lisp::unpack_args<2>( (value*)first, (value*)last);
+
+      const value::list& x = args[0].get<value::list>();
+      const value& func = args[1];
+
       
-      const value* ptr = reinterpret_cast<const value*>(first);
-      const value::list& x = ptr->cast<value::list>();
-
-      ++ptr;
-
-      value::list result = map(x, [ptr](const value& xi) {
-          return jit->call(*ptr, &xi, &xi + 1);
+      value::list result = map(x, [&](const value& xi) {
+          return jit->call(func, &xi, &xi + 1);
         });
 
       return reinterpret_cast<lisp::value::list&>(result);

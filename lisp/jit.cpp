@@ -11,7 +11,7 @@ namespace lisp {
   jit::jit()
     : ctx( make_ref<codegen::context>()) {
 
-    machine.stack.reserve( 2048 );
+    // machine.stack.reserve( 2048 );
     
   }
   

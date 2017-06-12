@@ -21,7 +21,8 @@ namespace lisp {
     vm::value eval(const lisp::sexpr& expr, bool dump = false);
 
     // note: arguments will be moved
-    vm::value call(const vm::value& func, const vm::value* first, const vm::value* last);
+    vm::value call(const vm::value& func,
+                   const vm::value* first, const vm::value* last);
     
   };
 

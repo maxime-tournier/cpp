@@ -389,6 +389,8 @@ namespace lisp {
             case value::type_index< builtin >():
 
               {
+                // TODO problem here if calling builtin triggers stack growth
+                
                 // call builtin
                 const std::size_t first_index = start + 1;
                 const value* first = stack.data() + first_index;

@@ -16,7 +16,7 @@ namespace lisp {
       argument_error::check(last - first, sizeof...(Args));
       
       try{
-        return ptr( first[I].template cast<Args>() ... );
+        return ptr( std::move(first[I].template cast<Args>()) ... );
       } catch( value::bad_cast& e) {
         throw type_error("bad type for builtin");
       }
@@ -35,6 +35,21 @@ namespace lisp {
     return wrap(f, +f);
   }
 
+  template<std::size_t ...I, class Value>
+  static std::array<Value, sizeof...(I)> unpack_args(const Value* first, 
+                                                     const Value* last,
+                                                     indices<I...> ) {
+    argument_error::check(last - first, sizeof...(I));
+    return {{std::move(first[I])...}};
+  }
+
+  
+  template<std::size_t N, class Value>
+  static std::array<Value, N> unpack_args(const Value* first, const Value* last) {
+    return unpack_args(first, last, range_indices<N>());
+  }
+
+  
 
   // standard environment
   ref<context> std_env(int argc = 0, char** argv = nullptr);
