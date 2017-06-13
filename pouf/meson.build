@@ -2,10 +2,10 @@
 project('pouf', 'cpp', default_options : ['cpp_std=c++11'])
 
 eigen = dependency('eigen3')
+
+boost = dependency('boost', modules : ['graph', 'python'], version : '>=1.63')
+
 python = dependency('python')
-boost = dependency('boost', modules : ['python', 'graph'], version : '>=1.63')
-
-
 
 python_sources = ['python.cpp',	
 		'python/module.cpp',
@@ -14,8 +14,6 @@ python_sources = ['python.cpp',
 		'python/metric.cpp',
 		'python/func.cpp',
 		'python/graph.cpp',
-
-
 ]		
 
 sources = [	'uniform.cpp' ]
@@ -23,7 +21,7 @@ sources = [	'uniform.cpp' ]
 r = run_command('python', '-c', 'import numpy; print numpy.get_include()')
 
 numpy_include = r.stdout().strip()
-message(numpy_include)
+message('numpy include: ' + numpy_include)
 numpy = declare_dependency( include_directories : include_directories(numpy_include) )
 
 deps = [eigen, python, boost, numpy]
