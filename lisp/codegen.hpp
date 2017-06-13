@@ -2,8 +2,9 @@
 #define LISP_CODEGEN_HPP
 
 #include <map>
-#include "eval.hpp"
 
+#include "eval.hpp"
+#include "context.hpp"
 
 namespace lisp {
 
@@ -13,18 +14,13 @@ namespace lisp {
 
   namespace codegen {
 
-    struct context {
-      ref<context> parent;
-
-      context(const ref<context>& parent = {})
-        : parent(parent) { }
-
-      using locals_type = std::map<symbol, integer>;
-      locals_type locals;
-      std::map< symbol, integer > captures;    
+    
+    struct context : lisp::context<std::size_t> {
+      
+      locals_type captured;
 
       const symbol* defining = nullptr;
-    
+
       integer add_local(symbol s) {
         auto res = locals.insert( std::make_pair(s, locals.size()));
         if(!res.second) throw lisp::error("duplicate local");

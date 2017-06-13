@@ -58,7 +58,7 @@ namespace lisp {
 
   
   
-  struct context {
+  struct environment : lisp::context<value> {
     
     ref<context> parent;
     context(const ref<context>& parent = {}) 
