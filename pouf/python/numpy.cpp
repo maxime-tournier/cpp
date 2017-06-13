@@ -7,7 +7,9 @@ namespace python {
 
   void numpy::module() {
 	// numpy requires this
-	import_array();
+    [] {
+      import_array();
+    }();
   }
 
   boost::python::object numpy::ndarray(double* data, shape_type shape) {
