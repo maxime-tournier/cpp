@@ -6,6 +6,7 @@
 
 #include "error.hpp"
 #include "sexpr.hpp"
+#include "context.hpp"
 
 namespace lisp {
 
@@ -17,7 +18,7 @@ namespace lisp {
 
   struct value;
   
-  struct context;
+  struct environment;
   struct lambda;
   
   // TODO pass ctx ?
@@ -43,13 +44,13 @@ namespace lisp {
   // lambda
   struct lambda {
 
-    ref<context> ctx;
+    ref<environment> ctx;
     using args_type = std::vector<symbol>;
     args_type args;
     sexpr body;
 
 
-    lambda(const ref<context>& ctx,
+    lambda(const ref<environment>& ctx,
            args_type&& args,
            const sexpr& body);
     
@@ -58,35 +59,27 @@ namespace lisp {
 
   
   
-  struct environment : lisp::context<value> {
-    
-    ref<context> parent;
-    context(const ref<context>& parent = {}) 
-      : parent(parent) { }
-    
-    using locals_type = std::map< symbol, value >;
-    locals_type locals;
+  struct environment : lisp::context<environment, value> {
 
+    using context::context;
+    
     using macros_type = std::map< symbol, value >;
     macros_type macros;
     
-    value& find(const symbol& name);
-
-    context& operator()(const symbol& name, const value& expr);
-    
+    environment& operator()(const symbol& name, const value& expr);
   };
 
 
   template<class Iterator>
-  static ref<context> extend(const ref<context>& parent, Iterator first, Iterator last) {
-    ref<context> res = make_ref<context>(parent);
+  static ref<environment> extend(const ref<environment>& parent, Iterator first, Iterator last) {
+    ref<environment> res = make_ref<environment>(parent);
     res->locals.insert(first, last);
     
     return res;
   }
 
 
-  value eval(const ref<context>& ctx, const sexpr& expr);
+  value eval(const ref<environment>& ctx, const sexpr& expr);
   value apply(const value& app, const value* first, const value* last);
   
 }

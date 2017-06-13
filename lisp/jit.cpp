@@ -9,7 +9,7 @@
 namespace lisp {
 
   jit::jit()
-    : ctx( make_ref<codegen::context>()) {
+    : ctx( make_ref<codegen::variables>()) {
 
     // machine.stack.reserve( 2048 );
     
@@ -39,7 +39,7 @@ namespace lisp {
 
   
   
-  void jit::import(const ref<lisp::context>& env) {
+  void jit::import(const ref<lisp::environment>& env) {
 
     for(const auto& it : env->locals) {
       ctx->add_local(it.first);

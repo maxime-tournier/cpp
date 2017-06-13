@@ -9,14 +9,14 @@ namespace lisp {
   class jit {
     vm::machine machine;
     vm::bytecode code;
-    ref<codegen::context> ctx;
+    ref<codegen::variables> ctx;
   public:
     
     jit();
     ~jit();
 
     // not sure though
-    void import(const ref<lisp::context>& ctx);
+    void import(const ref<lisp::environment>& ctx);
     
     vm::value eval(const lisp::sexpr& expr, bool dump = false);
 

@@ -21,9 +21,9 @@ namespace lisp {
   
   namespace special {
 
-    using type = sexpr (*)(const ref<context>&, const sexpr::list& args);
+    using type = sexpr (*)(const ref<environment>&, const sexpr::list& args);
     
-    static sexpr def(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr def(const ref<environment>& ctx, const sexpr::list& args) {
 
       static const auto fail = [] {
         throw syntax_error("(def `symbol` `expr`)");
@@ -53,11 +53,11 @@ namespace lisp {
 
     struct quasiquote_visitor {
       template<class T>
-      sexpr operator()(const T& self, const ref<context>& ctx) const {
+      sexpr operator()(const T& self, const ref<environment>& ctx) const {
         return kw::quote >>= self >>= sexpr::list();
       }
 
-      sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
+      sexpr operator()(const sexpr::list& self, const ref<environment>& ctx) const {
         if(self && self->head.is<symbol>() && self->head.get<symbol>() == kw::unquote) {
 
           if(!self->tail || self->tail->tail) {
@@ -76,7 +76,7 @@ namespace lisp {
       
     };
     
-    static sexpr quasiquote(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr quasiquote(const ref<environment>& ctx, const sexpr::list& args) {
       if(!args || args->tail) throw syntax_error("(quasiquote `expr`)");
       
       return args->head.map<sexpr>(quasiquote_visitor(), ctx);
@@ -84,7 +84,7 @@ namespace lisp {
 
     
     
-    static sexpr quote(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr quote(const ref<environment>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(quote `expr`)");
       };
@@ -106,7 +106,7 @@ namespace lisp {
     }
 
     
-    static sexpr lambda(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr lambda(const ref<environment>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(lambda (`symbol`...) `expr`)");
       };
@@ -138,14 +138,14 @@ namespace lisp {
     
 
 
-    static sexpr seq(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr seq(const ref<environment>& ctx, const sexpr::list& args) {
       return kw::seq >>= map(args, [&ctx](const sexpr& x) {
           return expand_seq(ctx, x);
         });
     }
 
 
-    static sexpr cond(const ref<context>& ctx, const sexpr::list& args) {
+    static sexpr cond(const ref<environment>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(cond (`expr` `expr`)...)");
       };
@@ -198,14 +198,14 @@ namespace lisp {
   struct expand_visitor {
 
     template<class T>
-    sexpr operator()(const T& self, const ref<context>& ctx) const {
+    sexpr operator()(const T& self, const ref<environment>& ctx) const {
       return self;
     }
 
-    sexpr operator()(const symbol& self, const ref<context>& ctx) const {
+    sexpr operator()(const symbol& self, const ref<environment>& ctx) const {
       if(special::reserved.find(self) != special::reserved.end()) {
         std::stringstream ss;
-        ss << '`' << self.name() << "` not allowed in this context";
+        ss << '`' << self.name() << "` not allowed in this environment";
         throw syntax_error(ss.str());
       }
 
@@ -220,7 +220,7 @@ namespace lisp {
 
 
 
-    sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
+    sexpr operator()(const sexpr::list& self, const ref<environment>& ctx) const {
 
       if(self && head(self).is<symbol>()) {
         const symbol name = head(self).get<symbol>();
@@ -248,7 +248,7 @@ namespace lisp {
 
     using expand_visitor::operator();
     
-    sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
+    sexpr operator()(const sexpr::list& self, const ref<environment>& ctx) const {
       if(self && head(self).is<symbol>() ) {
         const symbol name = head(self).get<symbol>();
 
@@ -263,14 +263,14 @@ namespace lisp {
   };
   
   
-  sexpr expand(const ref<context>& ctx, const sexpr& expr) {
+  sexpr expand(const ref<environment>& ctx, const sexpr& expr) {
     
     const auto res = expr.map<sexpr>(expand_visitor(), ctx);
     // std::clog << "expand: " << expr << " -> " << res << std::endl;
     return res;
   }
 
-  sexpr expand_seq(const ref<context>& ctx, const sexpr& expr) {
+  sexpr expand_seq(const ref<environment>& ctx, const sexpr& expr) {
     const auto res = expr.map<sexpr>(expand_seq_visitor(), ctx);
     // std::clog << "expand: " << expr << " -> " << res << std::endl;
     return res;

@@ -11,11 +11,11 @@ namespace lisp {
     using vm::opcode;
 
 
-    using special = void (*)(bytecode& res, ref<context>&, const sexpr::list&);
+    using special = void (*)(bytecode& res, ref<variables>&, const sexpr::list&);
 
   
 
-    static void def(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+    static void def(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       sexpr::list curr = args;
       const symbol name = curr->head.get<symbol>();
       ctx->add_local(name);
@@ -40,7 +40,7 @@ namespace lisp {
     }
 
 
-    static void cond(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+    static void cond(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       const integer id = unique();
 
       const label start = "cond-" + std::to_string(id) + "-start";
@@ -104,18 +104,18 @@ namespace lisp {
    
   
 
-    static void quote(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+    static void quote(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       literal(res, args->head);
     }
 
-    static void seq(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+    static void seq(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
 
       if(!args) {
         compile(res, ctx, unit());
         return;
       }
         
-      const context::locals_type locals = ctx->locals;
+      const variables::locals_type locals = ctx->locals;
       
       bool first = true;
       for(const sexpr& arg : args) {
@@ -144,15 +144,15 @@ namespace lisp {
       }
     }
 
-    static void lambda(bytecode& res, ref<context>& ctx, const sexpr::list& args) {
+    static void lambda(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       sexpr::list curr = args;
       const sexpr::list vars = head(curr).cast<sexpr::list>();
 
       curr = tail(curr);
       const sexpr& body = head(curr);
       
-      // sub context
-      ref<context> sub = make_ref<context>(ctx);
+      // sub variables
+      ref<variables> sub = make_ref<variables>(ctx);
 
       // populate sub with locals for self + args
       if(ctx->defining) {
@@ -180,7 +180,7 @@ namespace lisp {
       res.push_back( opcode::JMP ); 
       res.push_back( end );      
 
-      // generate function body in sub context      
+      // generate function body in sub variables      
       res.label(start);
       compile(res, sub, body);
       res.push_back( opcode::RET );
@@ -189,9 +189,9 @@ namespace lisp {
       res.label(end);
 
       // order sub captures and extend current ones
-      std::vector< symbol > ordered(sub->captures.size());
+      std::vector< symbol > ordered(sub->captured.size());
       
-      for(const auto& it : sub->captures) {
+      for(const auto& it : sub->captured) {
         const symbol& name = it.first;
         ordered[it.second] = name;
         
@@ -216,7 +216,7 @@ namespace lisp {
   
   
 
-    static void app(bytecode& res, ref<context>& ctx, const sexpr& func, const sexpr::list& args) {
+    static void app(bytecode& res, ref<variables>& ctx, const sexpr& func, const sexpr::list& args) {
 
       // compile function
       compile(res, ctx, func);
@@ -246,48 +246,48 @@ namespace lisp {
     struct compile_visitor {
 
       template<class T>
-      void operator()(const T& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const T& self, ref<variables>& ctx, bytecode& res) const {
         throw lisp::error("codegen: not implemented");
       }
       
       // literals
-      void operator()(const integer& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const integer& self, ref<variables>& ctx, bytecode& res) const {
         literal(res, self);
       }
 
-      void operator()(const boolean& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const boolean& self, ref<variables>& ctx, bytecode& res) const {
         literal(res, self);
       }
 
-      void operator()(const unit& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const unit& self, ref<variables>& ctx, bytecode& res) const {
         literal(res, self);
       }
       
       
-      void operator()(const ref<string>& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const ref<string>& self, ref<variables>& ctx, bytecode& res) const {
         literal(res, self);
       }
     
     
-      void operator()(const real& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const real& self, ref<variables>& ctx, bytecode& res) const {
         literal(res, self);
       }
 
 
-      void operator()(const builtin& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const builtin& self, ref<variables>& ctx, bytecode& res) const {
         literal(res, self);
       }
     
 
       // vars
-      void operator()(const symbol& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const symbol& self, ref<variables>& ctx, bytecode& res) const {
 
         // locals
         {
           auto it = ctx->locals.find(self);
           if(it != ctx->locals.end()) {
             res.push_back( opcode::LOAD );
-            res.push_back( it->second );
+            res.push_back( integer(it->second) );
             return;
           }
         }
@@ -302,7 +302,7 @@ namespace lisp {
       }
 
       // forms
-      void operator()(const sexpr::list& self, ref<context>& ctx, bytecode& res) const {
+      void operator()(const sexpr::list& self, ref<variables>& ctx, bytecode& res) const {
         const sexpr& h = self->head;
         
         if(h.is<symbol>()) {
@@ -322,7 +322,7 @@ namespace lisp {
     };
   }
   
-  void compile(vm::bytecode& res, ref<codegen::context>& ctx, const lisp::sexpr& e) {
+  void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const lisp::sexpr& e) {
     e.apply(codegen::compile_visitor(), ctx, res);
   }
   

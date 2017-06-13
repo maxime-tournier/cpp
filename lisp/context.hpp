@@ -6,10 +6,10 @@
 
 namespace lisp {
 
-  template<class Value>
+  template<class Derived, class Value>
   class context {
   protected:
-    ref<context> parent;
+    ref<Derived> parent;
   public:
     
     using value_type = Value;
@@ -17,13 +17,16 @@ namespace lisp {
     using locals_type = std::map<symbol, value_type>;
     locals_type locals;
     
-    context(const ref<context>& parent = {}) 
-      : parent(parent) { }
+    context(const ref<Derived>& parent = {}) 
+      : parent(parent) {
+      context* check = (Derived*) nullptr;
+      (void) check;
+    }
     
     value_type* find(symbol key) {
-      auto it = data.find(key);
+      auto it = locals.find(key);
       
-      if(it != data.end()) return &it->second;
+      if(it != locals.end()) return &it->second;
       if(parent) return parent->find(key);
       return nullptr;
     }

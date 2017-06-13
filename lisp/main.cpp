@@ -76,7 +76,7 @@ static int process(std::istream& in, Action action) {
 
 
 static const auto interpreter = [] {
-  const ref<lisp::context> ctx = lisp::std_env();
+  const ref<lisp::environment> ctx = lisp::std_env();
   
   return [ctx](lisp::sexpr&& e) {
     const lisp::sexpr ex = expand_seq(ctx, e);
@@ -96,7 +96,7 @@ static const auto interpreter = [] {
 const auto jit_compiler = [](bool dump) {
 
   static const ref<lisp::jit> jit = make_ref<lisp::jit>();
-  static const ref<lisp::context> env = lisp::std_env();
+  static const ref<lisp::environment> env = lisp::std_env();
 
 
   (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {

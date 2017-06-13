@@ -15,7 +15,9 @@ namespace lisp {
   namespace codegen {
 
     
-    struct context : lisp::context<std::size_t> {
+    struct variables : lisp::context<variables, std::size_t> {
+
+      using context::context;
       
       locals_type captured;
 
@@ -30,7 +32,7 @@ namespace lisp {
       integer capture(symbol s) {
         if(!parent) throw lisp::unbound_variable(s);
       
-        auto res = captures.insert( std::make_pair(s, captures.size()));
+        auto res = captured.insert( std::make_pair(s, captured.size()));
         return res.first->second;
       }
     
@@ -38,7 +40,7 @@ namespace lisp {
 
   }
   
-  void compile(vm::bytecode& res, ref<codegen::context>& ctx, const lisp::sexpr& e);
+  void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const lisp::sexpr& e);
   
 
 }

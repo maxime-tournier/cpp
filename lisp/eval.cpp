@@ -9,7 +9,7 @@ namespace lisp {
     : error("unbound variable: " + s.name()) { }
   
 
-  lambda::lambda(const ref<context>& ctx,
+  lambda::lambda(const ref<environment>& ctx,
                  args_type&& args,
                  const sexpr& body)
     : ctx(ctx),
@@ -56,23 +56,17 @@ namespace lisp {
   }
   
   
-  context& context::operator()(const symbol& name, const value& expr) {
+  environment& environment::operator()(const symbol& name, const value& expr) {
     locals.emplace( std::make_pair(name, expr) );
     return *this;
   }
 
 
-  value& context::find(const symbol& name){
-    auto it = locals.find(name);
-    if(it != locals.end()) return it->second;
-    if(parent) return parent->find(name);
-    throw unbound_variable(name);
-  }  
-  
   namespace special {
-    using type = value (*)(const ref<context>&, const sexpr::list& args);
     
-    static value lambda(const ref<context>& ctx, const sexpr::list& args) {
+    using type = value (*)(const ref<environment>&, const sexpr::list& args);
+    
+    static value lambda(const ref<environment>& ctx, const sexpr::list& args) {
       const sexpr::list& var_list = args->head.get<sexpr::list>();
       const sexpr& body = args->tail->head;
       
@@ -86,7 +80,7 @@ namespace lisp {
     }
 
     
-    static value def(const ref<context>& ctx, const sexpr::list& args) {
+    static value def(const ref<environment>& ctx, const sexpr::list& args) {
       sexpr::list curr = args;
 
       const symbol name = curr->head.get<symbol>();
@@ -102,7 +96,7 @@ namespace lisp {
     }
   
 
-    static value cond(const ref<context>& ctx, const sexpr::list& args) {
+    static value cond(const ref<environment>& ctx, const sexpr::list& args) {
       try {
         for(const sexpr& x : args) {
           const sexpr::list& term = x.get<sexpr::list>();
@@ -120,11 +114,11 @@ namespace lisp {
     }
     
  
-    static value quote(const ref<context>& ctx, const sexpr::list& args) {
+    static value quote(const ref<environment>& ctx, const sexpr::list& args) {
       return args->head;
     }
     
-    static value seq(const ref<context>& ctx, const sexpr::list& args) {
+    static value seq(const ref<environment>& ctx, const sexpr::list& args) {
 
       value res = unit();
       for(const sexpr& x : args) {
@@ -151,15 +145,20 @@ namespace lisp {
 
     static std::vector< value > stack;
     
-    value operator()(const symbol& self, const ref<context>& ctx) const {
+    value operator()(const symbol& self, const ref<environment>& ctx) const {
       if(special::table.find(self) != special::table.end()) {
         throw error(self.name() + " not allowed in this context");
       }
-      return ctx->find(self);
+      
+      if(value* res = ctx->find(self)) {
+        return *res;
+      }
+      
+      throw unbound_variable(self);
     }
 
     
-    value operator()(const sexpr::list& self, const ref<context>& ctx) const {
+    value operator()(const sexpr::list& self, const ref<environment>& ctx) const {
       if(!self) throw error("empty list in application");
 
       const sexpr& first = self->head;
@@ -191,7 +190,7 @@ namespace lisp {
     
     
     template<class T>
-    value operator()(const T& self, const ref<context>& ctx) const {
+    value operator()(const T& self, const ref<environment>& ctx) const {
       return self; 
     }
     
@@ -200,7 +199,7 @@ namespace lisp {
   // not quite sure where does this belong
   std::vector<value> eval_visitor::stack;
   
-  value eval(const ref<context>& ctx, const sexpr& expr) {
+  value eval(const ref<environment>& ctx, const sexpr& expr) {
     return expr.map<value>( eval_visitor(), ctx );
   }
 
@@ -241,7 +240,7 @@ namespace lisp {
       iterator pair_last = {self->args.end(), last};
 
       try {
-        ref<context> sub = extend(self->ctx, pair_first, pair_last);
+        ref<environment> sub = extend(self->ctx, pair_first, pair_last);
         return eval(sub, self->body);
       } catch( argc_error& e ) {
         std::stringstream ss;

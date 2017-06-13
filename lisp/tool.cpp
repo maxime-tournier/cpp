@@ -87,9 +87,9 @@ namespace lisp {
   static symbol t("t");
   
 
-  ref<context> std_env(int argc, char** argv) {
+  ref<environment> std_env(int argc, char** argv) {
     
-    ref<context> ctx = make_ref<context>();
+    ref<environment> ctx = make_ref<environment>();
     
     (*ctx)
       ("+", wrap([](integer x, integer y) -> integer { return x + y; }))

@@ -52,7 +52,7 @@ namespace lisp {
   
 
   // standard environment
-  ref<context> std_env(int argc = 0, char** argv = nullptr);
+  ref<environment> std_env(int argc = 0, char** argv = nullptr);
   
 }
 
