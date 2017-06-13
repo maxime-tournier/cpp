@@ -114,7 +114,7 @@ namespace lisp {
       sexpr::list curr = args;
       try {
 
-        const sexpr::list vars = map(head(curr).cast<sexpr::list>(), [](const sexpr& x) {
+        const sexpr::list vars = map(head(curr).cast<sexpr::list>(), [](const sexpr& x) -> sexpr {
             return x.cast<symbol>();
           });
         
@@ -222,7 +222,11 @@ namespace lisp {
 
     sexpr operator()(const sexpr::list& self, const ref<environment>& ctx) const {
 
-      if(self && head(self).is<symbol>()) {
+      if(!self) {
+        throw syntax_error("empty list in application");
+      }
+      
+      if(head(self).is<symbol>()) {
         const symbol name = head(self).get<symbol>();
 
         auto it = special::table.find(name);
@@ -233,6 +237,8 @@ namespace lisp {
         // TODO macros
       }
 
+
+      
       return map(self, [&ctx](const sexpr& e) {
           return expand(ctx, e);
         });

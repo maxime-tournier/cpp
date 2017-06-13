@@ -25,6 +25,9 @@
 
 #include "jit.hpp"
 
+#include "types.hpp"
+
+
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
@@ -98,7 +101,8 @@ const auto jit_compiler = [](bool dump) {
   static const ref<lisp::jit> jit = make_ref<lisp::jit>();
   static const ref<lisp::environment> env = lisp::std_env();
 
-
+  static const ref<lisp::types::context> tc = make_ref<lisp::types::context>();
+  
   (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
       using namespace lisp::vm;
 
@@ -135,17 +139,23 @@ const auto jit_compiler = [](bool dump) {
 
   
   jit->import( env );
-  
-  return [dump](lisp::sexpr&& e) {
 
-    const lisp::sexpr ex = expand_seq(env, e);    
-    const lisp::vm::value val = jit->eval(ex, dump);
+  using namespace lisp;  
+  return [dump](sexpr&& s) {
+    
+    const sexpr e = expand_seq(env, s);
 
-    if(!val.is<lisp::unit>()) {
-      if(val.is<lisp::symbol>() || val.is<lisp::vm::value::list>()) {
+    const types::scheme t = types::check(tc, e);
+    std::cout << " : " << t << " = ";
+
+    
+    const vm::value v = jit->eval(e, dump);
+    
+    if(!v.is<lisp::unit>()) {
+      if(v.is<lisp::symbol>() || v.is<lisp::vm::value::list>()) {
         std::cout << "'";
       }
-      std::cout << val << std::endl;  
+      std::cout << v << std::endl;  
     }
     return parse::pure(e);
   };

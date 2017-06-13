@@ -10,10 +10,10 @@ namespace lisp {
   
 
   lambda::lambda(const ref<environment>& ctx,
-                 args_type&& args,
+                 vars_type&& vars,
                  const sexpr& body)
     : ctx(ctx),
-      args(std::move(args)),
+      vars(std::move(vars)),
       body(body) {
 
   }
@@ -213,7 +213,7 @@ namespace lisp {
       };
       
       struct iterator {
-        lambda::args_type::iterator it_name;
+        lambda::vars_type::iterator it_name;
         const value* it_arg;
 
         iterator& operator++() {
@@ -236,15 +236,15 @@ namespace lisp {
         
       };
 
-      iterator pair_first = {self->args.begin(), first};
-      iterator pair_last = {self->args.end(), last};
+      iterator pair_first = {self->vars.begin(), first};
+      iterator pair_last = {self->vars.end(), last};
 
       try {
         ref<environment> sub = extend(self->ctx, pair_first, pair_last);
         return eval(sub, self->body);
       } catch( argc_error& e ) {
         std::stringstream ss;
-        ss << "argument error, got " << last - first << ", expected: " << self->args.size();
+        ss << "argument error, got " << last - first << ", expected: " << self->vars.size();
         throw error(ss.str());
       }
     }

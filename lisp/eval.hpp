@@ -45,13 +45,13 @@ namespace lisp {
   struct lambda {
 
     ref<environment> ctx;
-    using args_type = std::vector<symbol>;
-    args_type args;
+    using vars_type = std::vector<symbol>;
+    vars_type vars;
     sexpr body;
-
+    
 
     lambda(const ref<environment>& ctx,
-           args_type&& args,
+           vars_type&& vars,
            const sexpr& body);
     
     

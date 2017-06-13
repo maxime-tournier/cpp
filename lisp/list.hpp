@@ -51,12 +51,28 @@ namespace lisp {
   template<class Head>
   static inline typename cell<Head>::iterator end(const list<Head>& self) { return { nullptr }; }
 
+  
   template<class Head, class F>
-  static inline list<Head> map(const list<Head>& self, const F& f) {
-    if(!self) return self;
+  static inline list< typename std::result_of< F(Head) >::type > map(const list<Head>& self, const F& f) {
+    if(!self) return {};
     return f(self->head) >>= map(self->tail, f);
   }
 
+
+  template<class Head, class F, class Init = Head>
+  static inline Init foldr(const Init& init, const list<Head>& self, const F& f) {
+    if(!self) return init;
+    return f(self->head, foldr(init, self->tail, f));
+  }
+
+
+  template<class Head, class F, class Init = Head>
+  static inline Init foldl(const Init& init, const list<Head>& self, const F& f) {
+    if(!self) return init;
+    return foldl( f(init, self->head), self->tail, f);
+  }
+  
+  
   
   
   template<class H, class Iterator>

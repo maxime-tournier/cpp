@@ -2,7 +2,7 @@
 #define REF_HPP
 
 #include <utility>
-
+#include <cassert>
 
 namespace detail {
   
@@ -124,6 +124,11 @@ public:
   bool operator==(const ref& other) const {
     return block == other.block;
   }
+
+  bool operator<(const ref& other) const {
+    return block < other.block;
+  }
+
   
   T* operator->() const { return get(); }
   T& operator*() const { return *get(); }

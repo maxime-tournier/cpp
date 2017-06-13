@@ -1,14 +1,18 @@
 #ifndef LISP_CONTEXT_HPP
 #define LISP_CONTEXT_HPP
 
+#include <map>
+
 #include "symbol.hpp"
 #include "../ref.hpp"
+
 
 namespace lisp {
 
   template<class Derived, class Value>
   class context {
   protected:
+    using base = context;
     ref<Derived> parent;
   public:
     
