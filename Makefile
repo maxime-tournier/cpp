@@ -6,18 +6,15 @@ INCLUDEPATH=$(shell pkg-config --cflags eigen3)
 CXXFLAGS=-std=c++11 $(INCLUDEPATH) -Wall -g # -fuse-ld=gold #-Xlinker -icf=all
 
 ALL=rtti graph flow pcg sparse gc dynamic_sized
-SUB=pouf lisp pybind
 
 LDLIBS += -lstdc++ -lm
 
 first: all
 
-all: $(ALL) $(SUB)
+all: $(ALL) ninja
 
 clean:
 	rm -f $(ALL) *.o
-
-
 
 debug: CXXFLAGS += -g
 debug: all
@@ -25,14 +22,10 @@ debug: all
 release: CXXFLAGS += -O3 -DNDEBUG
 release: all
 
-pouf: FORCE
-	ninja -C $@/build/
+ninja: $(shell find . -name build.ninja)
 
-lisp: FORCE
-	ninja -C $@/build/
-
-pybind: FORCE
-	ninja -C $@/build/
+%/build.ninja: FORCE
+	ninja -C $*
 
 
 FORCE:
