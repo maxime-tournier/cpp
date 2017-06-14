@@ -58,51 +58,70 @@ namespace lisp {
     };
     
 
+    using ostream_map = std::map< ref<variable>, char >;
+    
     struct ostream_visitor {
 
-      void operator()(const constant& self, std::ostream& out) const {
+      void operator()(const constant& self, std::ostream& out, ostream_map& osm) const {
         out << self.name;
       }
 
-      void operator()(const application& self, std::ostream& out) const {
+      void operator()(const application& self, std::ostream& out, ostream_map& osm) const {
         if(self.ctor == func_ctor) {
           bool first = true;
           for(const mono& t : self.args) {
             if(first) first = false;
             else out << " -> ";
-            out << t;
+            t.apply(ostream_visitor(), out, osm);
           }
           
         } else {
           out << self.ctor.name();
           
           if(self.args.empty()) return;
-          out << ' ';
-          
-          out << make_list<mono>(self.args.begin(), self.args.end());
+
+          for(const mono& t : self.args) {
+            out << ' ';
+            t.apply(ostream_visitor(), out, osm);
+          }
         }
         
       }
 
 
-      void operator()(const ref<variable>& self, std::ostream& out) const {
-        // TODO we need some context
-        out << "#<var: " << self.get() << ">";
+      void operator()(const ref<variable>& self, std::ostream& out, ostream_map& osm) const {
+        auto err = osm.emplace( std::make_pair(self, osm.size()) );
+        
+        out << char('a' + err.first->second);
       }
       
     };
 
     
-    std::ostream& operator<<(std::ostream& out, const mono& self) {
-      self.apply(ostream_visitor(), out);
-      return out;
-    }
+    // std::ostream& operator<<(std::ostream& out, const mono& self) {
+    //   self.apply(ostream_visitor(), out);
+    //   return out;
+    // }
 
 
 
     std::ostream& operator<<(std::ostream& out, const scheme& self) {
-      // TODO build context
-      return out << self.body;
+      ostream_map osm;
+
+      for(const ref<variable>& var : self.vars) {
+        osm.emplace( std::make_pair(var, osm.size() ) );
+      }
+
+      if( !osm.empty() ) {
+        out << "forall";
+        for(const auto& it : osm) {
+          out << ' ' << char('a' + it.second);
+        }
+        out << ". ";
+      }
+      
+      self.body.apply( ostream_visitor(), out, osm );
+      return out;
     }
 
 
@@ -172,7 +191,7 @@ namespace lisp {
     
     scheme mono::generalize(std::size_t depth) const {
 
-      scheme res = map<mono>(nice(), uf);
+      scheme res(map<mono>(nice(), uf));
       
       const vars_type all = res.body.vars();
 
@@ -191,9 +210,11 @@ namespace lisp {
     constructor::table_type constructor::table;
     
     using special_type = mono (*)(const ref<context>& ctx, const sexpr::list& terms);
+
+    static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms);
     
     static std::map<symbol, special_type> special = {
-
+      {kw::lambda, check_lambda}
     };
 
     const constructor func_ctor("->", 2);
@@ -256,8 +277,8 @@ namespace lisp {
             rhs.apply(occurs_check(), self);
           } catch( occurs_error ) {
             std::stringstream ss;
-            ss << "type: " << self << " occurs in: " << rhs;
-            throw type_error(ss.str());
+            // ss << "type: " << self << " occurs in: " << rhs;
+            throw type_error("occurs check error"); // ss.str());
           }
         }
 
@@ -290,6 +311,43 @@ namespace lisp {
     };
 
 
+    static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms) {
+
+      // sub-context
+      ref<context> sub = make_ref<context>(ctx);
+
+      ref<variable> result_type = variable::fresh(ctx->depth);
+
+      struct none {};
+      using maybe = variant<none, application>;
+      maybe init = none();
+
+      const sexpr::list& vars = terms->head.get<sexpr::list>();
+
+      // build application type
+      const application app_type = foldr(init, vars, [&](const sexpr& lhs, const maybe& rhs) {
+          
+          // create variable types and fill sub-context
+          ref<variable> var_type = variable::fresh(ctx->depth);
+          sub->def(lhs.get<symbol>(), var_type);
+          
+          if(rhs.is<none>()) {
+            return var_type >>= result_type;
+          } 
+          
+          return var_type >>= rhs.get<application>();
+        }).get<application>();
+
+      
+      // infer body type in sub-context
+      const sexpr& body = terms->tail->head;
+
+      // unify with result type
+      unify(result_type, check_expr(sub, body));
+
+      return app_type;
+    }
+    
 
 
     static void unify(const mono& lhs, const mono& rhs) {
@@ -314,13 +372,12 @@ namespace lisp {
       
       const mono app_type = foldr(init, args_type, [&result_type](const mono& lhs, const maybe& rhs) {
           if(rhs.is<none>()) {
-            return application(func_ctor, {lhs, result_type});
-          }
-          
-          return application(func_ctor, {lhs, rhs.get<application>()});
+            return lhs >>= result_type;
+          } 
+
+          return lhs >>= rhs.get<application>();
         }).get<application>();
       
-      // TODO + uf?
       unify(func_type, app_type);
 
       return result_type;

@@ -130,7 +130,7 @@ namespace lisp {
 
     
 
-    std::ostream& operator<<(std::ostream& out, const mono& self);
+    // std::ostream& operator<<(std::ostream& out, const mono& self);
 
     
     struct scheme {
@@ -138,7 +138,7 @@ namespace lisp {
       
       mono body;
 
-      scheme(const mono& body) : body(body) { }
+      explicit scheme(const mono& body) : body(body) { }
       
       mono instantiate(std::size_t depth) const;
     };
