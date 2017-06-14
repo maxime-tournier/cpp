@@ -51,7 +51,7 @@ namespace lisp {
   template<class Head>
   static inline typename cell<Head>::iterator end(const list<Head>& self) { return { nullptr }; }
 
-  
+
   template<class Head, class F>
   static inline list< typename std::result_of< F(Head) >::type > map(const list<Head>& self, const F& f) {
     if(!self) return {};

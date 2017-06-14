@@ -102,6 +102,12 @@ const auto jit_compiler = [](bool dump) {
   static const ref<lisp::environment> env = lisp::std_env();
 
   static const ref<lisp::types::context> tc = make_ref<lisp::types::context>();
+
+  {
+    using namespace lisp::types;
+    tc->def("+", integer_type >>= integer_type);
+  }
+           
   
   (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
       using namespace lisp::vm;
@@ -148,7 +154,6 @@ const auto jit_compiler = [](bool dump) {
     const types::scheme t = types::check(tc, e);
     std::cout << " : " << t << " = ";
 
-    
     const vm::value v = jit->eval(e, dump);
     
     if(!v.is<lisp::unit>()) {

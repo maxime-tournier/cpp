@@ -20,14 +20,14 @@ public:
     
     // path compression
     if(res != it->second) {
-      parent[value] = res;
+      parent.emplace( std::make_pair(value, res) );
     }
     
     return res;
   }
 
   void link(const T& from, const T& to) {
-    parent[from] = to;
+    parent.emplace( std::make_pair(from, to) );
   }
   
 };

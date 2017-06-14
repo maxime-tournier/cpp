@@ -121,10 +121,19 @@ private:
   struct compare {
 
     template<class U>
-    void operator()(const U& self, const variant& other, bool& res) const {
-      res = self == other.get<U>();
+    bool operator()(const U& self, const variant& other) const {
+      return self == other.get<U>();
     }
-    
+
+  };
+
+  struct less {
+
+    template<class U>
+    bool operator()(const U& self, const variant& other) const {
+      return self < other.get<U>();
+    }
+     
   };
   
 public:
@@ -222,11 +231,20 @@ public:
 
   bool operator==(const variant& other) const {
     if(type() != other.type()) return false;
-    bool cmp;
-    apply(compare(), other, cmp);
-    return cmp;
+    return map<bool>(compare(), other);
   }
 
+  bool operator!=(const variant& other) const {
+    return !operator==(other);
+  }
+
+  
+  bool operator<(const variant& other) const {
+    return index < other.index || (index == other.index && map<bool>(less(), other));
+  }
+
+  
+  
   variant& operator=(variant&& other)  noexcept{
     
     if(index == other.index) {

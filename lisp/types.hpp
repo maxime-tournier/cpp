@@ -18,18 +18,23 @@ namespace lisp {
     // monotypes
     struct mono;
 
-
+    
     struct constant {
       symbol name;
       constant(symbol name) : name(name) { }
+
+      bool operator==(const constant& other) const { return name == other.name; }
+      bool operator<(const constant& other) const { return name < other.name; }      
     };
+
+    extern const constant unit_type, boolean_type, integer_type, real_type, string_type;
 
     
     struct variable {
       const std::size_t depth;
-      variable(std::size_t depth) : depth(depth) { }
-
-      static ref<variable> fresh(std::size_t depth) {
+      variable(std::size_t depth = 0) : depth(depth) { }
+      
+      static ref<variable> fresh(std::size_t depth = 0) {
         return make_ref<variable>(depth);
       }
     };
@@ -56,9 +61,21 @@ namespace lisp {
 
       symbol name() const { return iterator->first; }      
       std::size_t argc() const { return iterator->second; }
+
+      bool operator==(const constructor& other) const {
+        return iterator == other.iterator;
+      }
+
+      bool operator<(const constructor& other) const {
+        // mmhhh
+        return &*iterator < &*other.iterator;
+      }
+
       
     };
 
+    extern const constructor func_ctor;
+    
   
     struct application {
       constructor ctor;
@@ -74,6 +91,15 @@ namespace lisp {
         }
       }
 
+      bool operator==(const application& other) const {
+        return ctor == other.ctor && args == other.args;
+      }
+
+      bool operator<(const application& other) const {
+        return ctor < other.ctor || (ctor == other.ctor && args < other.args);
+      }
+
+      
     };
 
     template<class F>
@@ -97,12 +123,16 @@ namespace lisp {
 
       vars_type vars() const;
       scheme generalize(std::size_t depth = 0) const;
+
     };
 
+    application operator>>=(const mono& lhs, const mono& rhs);
+
+    
 
     std::ostream& operator<<(std::ostream& out, const mono& self);
 
-
+    
     struct scheme {
       vars_type vars;
       
@@ -124,12 +154,25 @@ namespace lisp {
         depth( parent ? parent->depth + 1 : 0 ) {
         
       }
+
+
+      context& def(symbol id, mono t) {
+        // TODO nice?
+        locals.emplace(id, t.generalize(depth));
+        return *this;
+      }
       
     };
 
 
     scheme check(const ref<context>& ctx, const sexpr& e);
+
     
+    template<class T>
+    static bool operator!=(const T& lhs, const T& rhs) {
+      return !(lhs == rhs);
+    }
+     
   }
 }
 

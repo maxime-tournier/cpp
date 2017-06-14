@@ -3,7 +3,10 @@
 #include <algorithm>
 
 #include "syntax.hpp"
+#include "../union_find.hpp"
 
+
+#include <iostream>
 
 
 namespace lisp {
@@ -13,38 +16,45 @@ namespace lisp {
     template<class T>
     struct traits;
 
+    const constant unit_type("unit"),
+      boolean_type("boolean"),
+      integer_type("integer"),
+      real_type("real"),
+      string_type("string"),
+      symbol_type("symbol");
 
+    
     template<>
-    struct traits< unit > {
-      static symbol name() { return "unit"; }
+    struct traits< lisp::unit > {
+      static constant type() { return unit_type; }
     };
 
     
     template<>
-    struct traits< boolean > {
-      static symbol name() { return "boolean"; }
+    struct traits< lisp::boolean > {
+      static constant type() { return boolean_type; }      
     };
 
 
     template<>
-    struct traits< integer > {
-      static symbol name() { return "integer"; }
+    struct traits< lisp::integer > {
+      static constant type() { return integer_type; }            
     };
 
     template<>
-    struct traits< real > {
-      static symbol name() { return "real"; }
+    struct traits< lisp::real > {
+      static constant type() { return real_type; }
     };
 
 
     template<>
-    struct traits< ref<string> > {
-      static symbol name() { return "string"; }
+    struct traits< ref<lisp::string> > {
+      static constant type() { return string_type; }                  
     };
 
     template<>
-    struct traits< symbol > {
-      static symbol name() { return "symbol"; }
+    struct traits< lisp::symbol > {
+      static constant type() { return symbol_type; }                        
     };
     
 
@@ -55,12 +65,23 @@ namespace lisp {
       }
 
       void operator()(const application& self, std::ostream& out) const {
-        out << self.ctor.name();
-
-        if(self.args.empty()) return;
-        out << ' ';
-
-        out << make_list<mono>(self.args.begin(), self.args.end());
+        if(self.ctor == func_ctor) {
+          bool first = true;
+          for(const mono& t : self.args) {
+            if(first) first = false;
+            else out << " -> ";
+            out << t;
+          }
+          
+        } else {
+          out << self.ctor.name();
+          
+          if(self.args.empty()) return;
+          out << ' ';
+          
+          out << make_list<mono>(self.args.begin(), self.args.end());
+        }
+        
       }
 
 
@@ -135,13 +156,98 @@ namespace lisp {
 
     };
 
-    static const constructor func("->", 2);
+    const constructor func_ctor("->", 2);
+    
+    static mono check_expr(const ref<context>& ctx, const sexpr& e);
+    static void unify(const mono& lhs, const mono& rhs);
+
+    
+    struct unification_error : type_error {
+      unification_error(const mono& lhs, const mono& rhs) 
+        : type_error("unification error") { }
+    };
+
+    using uf_type = union_find<mono>;
+
+    
+    struct nice {
+      
+      mono operator()(const constant& self, uf_type& uf) const {
+        return self;
+      }
+
+      mono operator()(const ref<variable>& self, uf_type& uf) const {
+        mono res = uf.find(self);
+        if(res != mono(self)) {
+          return res.map<mono>(nice(), uf);
+        }
+        
+        return res;
+      }
+
+
+      mono operator()(const application& self, uf_type& uf) const {
+        mono res = uf.find(self);
+
+        if(res != mono(self)) {
+          return res.map<mono>(nice(), uf);
+        }
+        
+      }
+      
+      
+      
+    };
     
 
-    static mono check_expr(const ref<context>& ctx, const sexpr& e);
 
+
+    
+    
+    struct unify_visitor {
+
+      template<class T>
+      void operator()(const T& self, const mono& rhs, uf_type& uf) const {
+        // double dispatch
+        return rhs.apply( unify_visitor(), self, uf);
+      }
+      
+      void operator()(const ref<variable>& self, const mono& rhs, uf_type& uf) const {
+        // rhs.apply(occurs_check(), self);
+
+        mono s = uf.find(self);
+        mono r = uf.find(rhs);
+        
+        uf.link(s, r);
+      }
+
+      
+      void operator()(const constant& lhs, const constant& rhs, uf_type& uf) const {
+        if( lhs != rhs ) {
+          throw unification_error(lhs, rhs);
+        }
+      }
+      
+
+      void operator()(const application& lhs, const application& rhs, uf_type& uf) const {
+        if( lhs.ctor != rhs.ctor ) {
+          throw unification_error(lhs, rhs);
+        }
+
+        for(std::size_t i = 0, n = lhs.ctor.argc(); i < n; ++i) {
+          unify(lhs.args[i], rhs.args[i]);
+        }
+        
+      }
+
+      
+    };
+
+    
     static void unify(const mono& lhs, const mono& rhs) {
-      throw error("unify: not implemented");
+      static union_find<mono> uf;
+
+      lhs.apply( unify_visitor(), rhs, uf );
     }
     
 
@@ -162,13 +268,13 @@ namespace lisp {
       
       const mono app_type = foldr(init, args_type, [&result_type](const mono& lhs, const maybe& rhs) {
           if(rhs.is<none>()) {
-            return application(func, {lhs, result_type});
+            return application(func_ctor, {lhs, result_type});
           }
           
-          return application(func, {lhs, rhs.get<application>()});
+          return application(func_ctor, {lhs, rhs.get<application>()});
         }).get<application>();
       
-      // TODO + uf
+      // TODO + uf?
       unify(func_type, app_type);
 
       return result_type;
@@ -216,7 +322,7 @@ namespace lisp {
       // literals
       template<class T>
       mono operator()(const T& self, const ref<context>& ctx) const {
-        return constant( traits<T>::name() );
+        return traits<T>::type();
       }
 
       // variables
@@ -258,6 +364,12 @@ namespace lisp {
       return check_expr(ctx, e).generalize();
     }
 
+
+
+    application operator>>=(const mono& lhs, const mono& rhs) {
+      return application(func_ctor, {lhs, rhs});
+    }
+    
   }
 
 }
