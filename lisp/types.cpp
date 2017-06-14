@@ -4,6 +4,8 @@
 
 #include "syntax.hpp"
 
+
+
 namespace lisp {
 
   namespace types {
@@ -153,17 +155,19 @@ namespace lisp {
         });
 
       const ref<variable> result_type = ctx->fresh();
+
+      struct none{};
+      using maybe = variant<none, application>;
+      maybe init = none();
       
-      static const application init( constructor("__init__", 0), {});
-      
-      const mono app_type = foldr(init, args_type, [&result_type](const mono& lhs, const application& rhs) {
-          if(&rhs == &init) {
+      const mono app_type = foldr(init, args_type, [&result_type](const mono& lhs, const maybe& rhs) {
+          if(rhs.is<none>()) {
             return application(func, {lhs, result_type});
           }
           
-          return application(func, {lhs, rhs});
-        });
-
+          return application(func, {lhs, rhs.get<application>()});
+        }).get<application>();
+      
       // TODO + uf
       unify(func_type, app_type);
 
