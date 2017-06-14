@@ -87,7 +87,7 @@ namespace lisp {
 
       void operator()(const ref<variable>& self, std::ostream& out) const {
         // TODO we need some context
-        out << "#<var: " << self << ">";
+        out << "#<var: " << self.get() << ">";
       }
       
     };
@@ -192,10 +192,12 @@ namespace lisp {
         if(res != mono(self)) {
           return res.map<mono>(nice(), uf);
         }
+
+        return map(self, [&](const mono& t) {
+            return t.map<mono>(nice(), uf);
+          });
         
       }
-      
-      
       
     };
     
@@ -206,10 +208,18 @@ namespace lisp {
     
     struct unify_visitor {
 
+      bool call_reverse = true;
+      
       template<class T>
       void operator()(const T& self, const mono& rhs, uf_type& uf) const {
+        // std::clog << "unifying: " << self << " and: " << rhs << std::endl;
+        
         // double dispatch
-        return rhs.apply( unify_visitor(), self, uf);
+        if( call_reverse ) {
+          return rhs.apply( unify_visitor{false}, self, uf);
+        } else {
+          throw unification_error(self, rhs);
+        }
       }
       
       void operator()(const ref<variable>& self, const mono& rhs, uf_type& uf) const {
@@ -243,10 +253,10 @@ namespace lisp {
       
     };
 
-    
-    static void unify(const mono& lhs, const mono& rhs) {
-      static union_find<mono> uf;
 
+    static union_find<mono> uf;    
+
+    static void unify(const mono& lhs, const mono& rhs) {
       lhs.apply( unify_visitor(), rhs, uf );
     }
     
@@ -280,6 +290,7 @@ namespace lisp {
       return result_type;
     }
 
+    
 
     struct instantiate_visitor {
       using map_type = std::map< ref<variable>, ref<variable> >;
@@ -361,7 +372,7 @@ namespace lisp {
 
     scheme check(const ref<context>& ctx, const sexpr& e) {
       // TODO check toplevel
-      return check_expr(ctx, e).generalize();
+      return check_expr(ctx, e).map<mono>(nice(), uf).generalize();
     }
 
 

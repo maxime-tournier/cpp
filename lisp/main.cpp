@@ -105,7 +105,7 @@ const auto jit_compiler = [](bool dump) {
 
   {
     using namespace lisp::types;
-    tc->def("+", integer_type >>= integer_type);
+    tc->def("+", integer_type >>= integer_type >>= integer_type);
   }
            
   
@@ -141,9 +141,6 @@ const auto jit_compiler = [](bool dump) {
       return reinterpret_cast<lisp::value::list&>(result);
     });
 
-  
-
-  
   jit->import( env );
 
   using namespace lisp;  
