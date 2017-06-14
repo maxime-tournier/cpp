@@ -1,5 +1,5 @@
 
-project('lisp', 'cpp', default_options : ['cpp_std=c++11'])
+project('lisp', 'cpp', default_options : ['std=c++11'])
 
 sources = ['main.cpp',
            'symbol.cpp',
@@ -16,7 +16,6 @@ sources = ['main.cpp',
 compiler = meson.get_compiler('cpp')
 
 readline = compiler.find_library('readline', required: true)
-stdcpp = compiler.find_library('stdc++', required: true)
 boost = dependency('boost', modules : ['program_options'], required: true)
 
 if get_option('buildtype') == 'release' or get_option('buildtype') == 'debugoptimized'
@@ -25,6 +24,6 @@ endif
 
 
 executable('lisp', sources, 
-		   dependencies : [readline, stdcpp, boost],
+		   dependencies : [readline, boost],
 		   install: true,
 		   install_dir: meson.source_root() )

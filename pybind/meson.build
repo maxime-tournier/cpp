@@ -1,6 +1,6 @@
 
 
-project('spam', 'cpp', default_options : ['cpp_std=c++11'])
+project('spam', 'cpp', default_options : ['std=c++11'])
 
 
 sources = ['spam.cpp']

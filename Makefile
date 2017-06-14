@@ -9,11 +9,13 @@ ALL=rtti graph flow pcg sparse gc dynamic_sized
 
 LDLIBS += -lstdc++ -lm
 
+NINJA_BUILD=$(shell find . -name build.ninja)
+
 first: all
 
 all: $(ALL) ninja
 
-clean:
+clean: ninja-clean
 	rm -f $(ALL) *.o
 
 debug: CXXFLAGS += -g
@@ -22,11 +24,10 @@ debug: all
 release: CXXFLAGS += -O3 -DNDEBUG
 release: all
 
-ninja: $(shell find . -name build.ninja)
+ninja: $(NINJA_BUILD)
 
 %/build.ninja: FORCE
 	ninja -C $*
-
 
 FORCE:
 
