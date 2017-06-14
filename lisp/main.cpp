@@ -106,6 +106,11 @@ const auto jit_compiler = [](bool dump) {
   {
     using namespace lisp::types;
     tc->def("+", integer_type >>= integer_type >>= integer_type);
+    tc->def("-", integer_type >>= integer_type >>= integer_type);
+    tc->def("/", integer_type >>= integer_type >>= integer_type);
+    tc->def("*", integer_type >>= integer_type >>= integer_type);
+    tc->def("%", integer_type >>= integer_type >>= integer_type);
+    tc->def("=", integer_type >>= integer_type >>= boolean_type);                    
   }
            
   

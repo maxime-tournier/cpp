@@ -58,7 +58,19 @@ namespace lisp {
     };
     
 
-    using ostream_map = std::map< ref<variable>, char >;
+    struct var_repr {
+      std::size_t index;
+      bool quantified;
+    };
+
+    static std::ostream& operator<<(std::ostream& out, const var_repr& self) {
+      if( self.quantified ) out << "'";
+      else out << "!";
+      return out << char('a' + self.index);
+    }
+
+    
+    using ostream_map = std::map< ref<variable>, var_repr >;
     
     struct ostream_visitor {
 
@@ -90,36 +102,21 @@ namespace lisp {
 
 
       void operator()(const ref<variable>& self, std::ostream& out, ostream_map& osm) const {
-        auto err = osm.emplace( std::make_pair(self, osm.size()) );
+        auto err = osm.emplace( std::make_pair(self, var_repr{osm.size(), false} ));
         
-        out << char('a' + err.first->second);
+        out << err.first->second;
       }
-      
+
     };
 
     
-    // std::ostream& operator<<(std::ostream& out, const mono& self) {
-    //   self.apply(ostream_visitor(), out);
-    //   return out;
-    // }
-
-
-
     std::ostream& operator<<(std::ostream& out, const scheme& self) {
       ostream_map osm;
 
       for(const ref<variable>& var : self.vars) {
-        osm.emplace( std::make_pair(var, osm.size() ) );
+        osm.emplace( std::make_pair(var, var_repr{osm.size(), true} ) );
       }
 
-      if( !osm.empty() ) {
-        out << "forall";
-        for(const auto& it : osm) {
-          out << ' ' << char('a' + it.second);
-        }
-        out << ". ";
-      }
-      
       self.body.apply( ostream_visitor(), out, osm );
       return out;
     }
@@ -223,30 +220,34 @@ namespace lisp {
     static void unify(const mono& lhs, const mono& rhs);
 
     
-    struct unification_error : type_error {
-      unification_error(const mono& lhs, const mono& rhs) 
-        : type_error("unification error") { }
+    struct unification_error {
+      unification_error(mono lhs, mono rhs) : lhs(lhs), rhs(rhs) { }
+      mono lhs, rhs;
     };
-
     
 
-    struct occurs_error { };
+    struct occurs_error {
+      ref<variable> var;
+      application app;
+    };
     
     struct occurs_check {
 
-      void operator()(const constant& self, const ref<variable>& var) const { }
+      bool operator()(const constant& self, const ref<variable>& var) const {
+        return false;
+      }
 
-      void operator()(const ref<variable>& self, const ref<variable>& var) const {
-        if(self != var) return;
-
-        throw occurs_error();
+      bool operator()(const ref<variable>& self, const ref<variable>& var) const {
+        return self == var;
       }
 
 
-      void operator()(const application& self, const ref<variable>& var) const {
+      bool operator()(const application& self, const ref<variable>& var) const {
         for(const mono& t : self.args) {
-          t.apply(occurs_check(), var);
+          if( t.map<bool>(occurs_check(), var) ) return true;
         }
+        
+        return false;
       }
       
     };
@@ -270,16 +271,8 @@ namespace lisp {
       
       void operator()(const ref<variable>& self, const mono& rhs, uf_type& uf) const {
 
-        if(rhs.is<application>()) {
-
-          // TODO should we lookup types first?
-          try {
-            rhs.apply(occurs_check(), self);
-          } catch( occurs_error ) {
-            std::stringstream ss;
-            // ss << "type: " << self << " occurs in: " << rhs;
-            throw type_error("occurs check error"); // ss.str());
-          }
+        if(rhs.is<application>() && rhs.map<bool>(occurs_check(), self)) {
+          throw occurs_error{self, rhs.get<application>()};
         }
 
         mono s = uf.find(self);
@@ -343,8 +336,8 @@ namespace lisp {
       const sexpr& body = terms->tail->head;
 
       // unify with result type
-      unify(result_type, check_expr(sub, body));
-
+      uf.link(result_type, check_expr(sub, body));
+      
       return app_type;
     }
     
@@ -377,9 +370,19 @@ namespace lisp {
 
           return lhs >>= rhs.get<application>();
         }).get<application>();
-      
-      unify(func_type, app_type);
 
+      try {
+        unify(func_type, app_type);
+      } catch( unification_error& e) {
+        std::stringstream ss;
+        ss << "cannot unify " << e.lhs.generalize(ctx->depth) << " with " << e.rhs.generalize(ctx->depth);
+        throw type_error(ss.str());
+      } catch( occurs_error& e ) {
+        std::stringstream ss;
+        ss << mono(e.var).generalize(ctx->depth) << " occurs in " << mono(e.app).generalize(ctx->depth);
+        throw type_error(ss.str());
+      }
+      
       return result_type;
     }
 
