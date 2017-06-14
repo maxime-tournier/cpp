@@ -7,7 +7,7 @@
 
 
 #include <iostream>
-
+#include <sstream>
 
 namespace lisp {
 
@@ -106,69 +106,9 @@ namespace lisp {
     }
 
 
-    struct vars_visitor {
-
-      void operator()(const constant&, std::set< ref<variable> >& res) const {
-
-      }
-      
-      void operator()(const ref<variable>& self, std::set< ref<variable> >& res) const {
-        res.insert(self);
-      }
-
-
-      void operator()(const application& self, std::set< ref<variable> >& res) const {
-        for(const mono& t: self.args) {
-          t.apply(vars_visitor(), res);
-        }
-      }
-
-    };
-    
-
-    vars_type mono::vars() const {
-      vars_type res;
-      apply(vars_visitor(), res);
-      return res;
-    }
-    
-    scheme mono::generalize(std::size_t depth) const {
-
-      scheme res = *this;      
-      
-      const vars_type all = vars();
-
-      // copy free variables (i.e. instantiated at a larger depth)
-      auto out = std::inserter(res.vars, res.vars.begin());
-      std::copy_if(all.begin(), all.end(), out, [depth](const ref<variable>& v) {
-          return v->depth >= depth;
-        });
-      
-      return res;
-    }
-
-
-    constructor::table_type constructor::table;
-    
-    using special_type = mono (*)(const ref<context>& ctx, const sexpr::list& terms);
-    
-    static std::map<symbol, special_type> special = {
-
-    };
-
-    const constructor func_ctor("->", 2);
-    
-    static mono check_expr(const ref<context>& ctx, const sexpr& e);
-    static void unify(const mono& lhs, const mono& rhs);
-
-    
-    struct unification_error : type_error {
-      unification_error(const mono& lhs, const mono& rhs) 
-        : type_error("unification error") { }
-    };
 
     using uf_type = union_find<mono>;
-
+    static union_find<mono> uf;
     
     struct nice {
       
@@ -200,10 +140,96 @@ namespace lisp {
       }
       
     };
+
+
     
 
+    struct vars_visitor {
+
+      void operator()(const constant&, std::set< ref<variable> >& res) const {
+
+      }
+      
+      void operator()(const ref<variable>& self, std::set< ref<variable> >& res) const {
+        res.insert(self);
+      }
 
 
+      void operator()(const application& self, std::set< ref<variable> >& res) const {
+        for(const mono& t: self.args) {
+          t.apply(vars_visitor(), res);
+        }
+      }
+
+    };
+    
+
+    vars_type mono::vars() const {
+      vars_type res;
+      apply(vars_visitor(), res);
+      return res;
+    }
+    
+    scheme mono::generalize(std::size_t depth) const {
+
+      scheme res = map<mono>(nice(), uf);
+      
+      const vars_type all = res.body.vars();
+
+      // copy free variables (i.e. instantiated at a larger depth)
+      auto out = std::inserter(res.vars, res.vars.begin());
+      std::copy_if(all.begin(), all.end(), out, [depth](const ref<variable>& v) {
+          return v->depth >= depth;
+        });
+      
+      return res;
+    }
+
+
+
+    
+    constructor::table_type constructor::table;
+    
+    using special_type = mono (*)(const ref<context>& ctx, const sexpr::list& terms);
+    
+    static std::map<symbol, special_type> special = {
+
+    };
+
+    const constructor func_ctor("->", 2);
+    
+    static mono check_expr(const ref<context>& ctx, const sexpr& e);
+    static void unify(const mono& lhs, const mono& rhs);
+
+    
+    struct unification_error : type_error {
+      unification_error(const mono& lhs, const mono& rhs) 
+        : type_error("unification error") { }
+    };
+
+    
+
+    struct occurs_error { };
+    
+    struct occurs_check {
+
+      void operator()(const constant& self, const ref<variable>& var) const { }
+
+      void operator()(const ref<variable>& self, const ref<variable>& var) const {
+        if(self != var) return;
+
+        throw occurs_error();
+      }
+
+
+      void operator()(const application& self, const ref<variable>& var) const {
+        for(const mono& t : self.args) {
+          t.apply(occurs_check(), var);
+        }
+      }
+      
+    };
+    
     
     
     struct unify_visitor {
@@ -212,7 +238,6 @@ namespace lisp {
       
       template<class T>
       void operator()(const T& self, const mono& rhs, uf_type& uf) const {
-        // std::clog << "unifying: " << self << " and: " << rhs << std::endl;
         
         // double dispatch
         if( call_reverse ) {
@@ -223,7 +248,18 @@ namespace lisp {
       }
       
       void operator()(const ref<variable>& self, const mono& rhs, uf_type& uf) const {
-        // rhs.apply(occurs_check(), self);
+
+        if(rhs.is<application>()) {
+
+          // TODO should we lookup types first?
+          try {
+            rhs.apply(occurs_check(), self);
+          } catch( occurs_error ) {
+            std::stringstream ss;
+            ss << "type: " << self << " occurs in: " << rhs;
+            throw type_error(ss.str());
+          }
+        }
 
         mono s = uf.find(self);
         mono r = uf.find(rhs);
@@ -254,7 +290,7 @@ namespace lisp {
     };
 
 
-    static union_find<mono> uf;    
+
 
     static void unify(const mono& lhs, const mono& rhs) {
       lhs.apply( unify_visitor(), rhs, uf );
@@ -372,7 +408,7 @@ namespace lisp {
 
     scheme check(const ref<context>& ctx, const sexpr& e) {
       // TODO check toplevel
-      return check_expr(ctx, e).map<mono>(nice(), uf).generalize();
+      return check_expr(ctx, e).generalize();
     }
 
 
