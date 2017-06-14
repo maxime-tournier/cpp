@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <set>
+#include <algorithm>
 
 #include "context.hpp"
 #include "sexpr.hpp"
@@ -27,6 +28,10 @@ namespace lisp {
     struct variable {
       const std::size_t depth;
       variable(std::size_t depth) : depth(depth) { }
+
+      static ref<variable> fresh(std::size_t depth) {
+        return make_ref<variable>(depth);
+      }
     };
 
   
@@ -57,16 +62,29 @@ namespace lisp {
   
     struct application {
       constructor ctor;
-      std::vector<mono> args;
 
-      application(constructor ctor, const std::vector<mono>& args)
+      // TODO use a list instead?
+      using args_type = std::vector<mono>;
+      args_type args;
+
+      application(constructor ctor, const args_type& args)
         : ctor(ctor), args(args) {
         if(args.size() != ctor.argc()) {
           throw error("constructor argc error");
         }
       }
+
     };
 
+    template<class F>
+    static application map(const application& self, const F& f) {
+      application::args_type args; args.reserve(self.args.size());
+
+      std::transform(self.args.begin(), self.args.end(), std::back_inserter(args), f);
+
+      return application(self.ctor, args);
+    }
+    
 
     struct scheme;
 
@@ -107,9 +125,6 @@ namespace lisp {
         
       }
       
-      ref<variable> fresh() const {
-        return make_ref<variable>(depth);
-      }
     };
 
 

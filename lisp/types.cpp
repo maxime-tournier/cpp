@@ -154,8 +154,8 @@ namespace lisp {
           return check_expr(ctx, e);
         });
 
-      const ref<variable> result_type = ctx->fresh();
-
+      const ref<variable> result_type = variable::fresh(ctx->depth);
+      
       struct none{};
       using maybe = variant<none, application>;
       maybe init = none();
@@ -175,8 +175,39 @@ namespace lisp {
     }
 
 
+    struct instantiate_visitor {
+      using map_type = std::map< ref<variable>, ref<variable> >;
+      
+      mono operator()(const constant& self, const map_type& m) const {
+        return self;
+      }
+
+      mono operator()(const ref<variable>& self, const map_type& m) const {
+        auto it = m.find(self);
+        if(it == m.end()) return self;
+        return it->second;
+      }
+
+      mono operator()(const application& self, const map_type& m) const {
+        return map(self, [&m](const mono& t) -> mono {
+            return t.map<mono>(instantiate_visitor(), m);
+          });
+      }
+      
+    };
+    
+
     mono scheme::instantiate(std::size_t depth) const {
-      throw error("instantiate not implemented");
+      std::map< ref<variable>, ref<variable> > map;
+
+      // associate each bound variable to a fresh one
+      auto out = std::inserter(map, map.begin());
+      std::transform(vars.begin(), vars.end(), out, [&](const ref<variable>& v) {
+          return std::make_pair(v, variable::fresh(depth));
+        });
+
+      // replace each bound variable with its fresh one
+      return body.map<mono>( instantiate_visitor(), map ); 
     }
     
     
