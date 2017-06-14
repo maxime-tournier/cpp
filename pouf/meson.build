@@ -1,5 +1,5 @@
 
-project('pouf', 'cpp', default_options : ['std=c++11'])
+project('pouf', 'cpp', default_options : ['cpp_std=c++11'])
 
 eigen = dependency('eigen3')
 

@@ -256,14 +256,17 @@ namespace lisp {
     
     struct unify_visitor {
 
-      bool call_reverse = true;
+      bool call_reverse;
+      
+      unify_visitor(bool call_reverse = true) 
+        : call_reverse(call_reverse) { }
       
       template<class T>
       void operator()(const T& self, const mono& rhs, uf_type& uf) const {
         
         // double dispatch
         if( call_reverse ) {
-          return rhs.apply( unify_visitor{false}, self, uf);
+          return rhs.apply( unify_visitor(false), self, uf);
         } else {
           throw unification_error(self, rhs);
         }
@@ -318,7 +321,7 @@ namespace lisp {
       const sexpr::list& vars = terms->head.get<sexpr::list>();
 
       // build application type
-      const application app_type = foldr(init, vars, [&](const sexpr& lhs, const maybe& rhs) {
+      const application app_type = foldr(init, vars, [&ctx, &sub, &result_type](const sexpr& lhs, const maybe& rhs) {
           
           // create variable types and fill sub-context
           ref<variable> var_type = variable::fresh(ctx->depth);
