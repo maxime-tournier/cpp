@@ -4,7 +4,7 @@
    ;; y should not be generalized here
    (def y (cons nil x))
 
-   ;; otherwise both become possible
+   ;; otherwise both are allowed
    (pure (cons (cons 1 nil) y))
    (pure (cons (cons "true" nil) y))   
   ))
