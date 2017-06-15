@@ -119,8 +119,25 @@ const auto jit_compiler = [](bool dump) {
 
     {
       ref<variable> a = tc->fresh();
+      tc->def("set", ref_ctor(a) >>= a >>=io_ctor(unit_type));
+    }
+
+    {
+      ref<variable> a = tc->fresh();
+      tc->def("get", ref_ctor(a) >>= a);
+    }
+    
+    
+    {
+      ref<variable> a = tc->fresh();
       tc->def("nil", list_ctor(a));
     }
+
+    {
+      ref<variable> a = tc->fresh();
+      tc->def("cons", a >>= list_ctor(a) >>= list_ctor(a) );
+    }
+
   }
   
   
