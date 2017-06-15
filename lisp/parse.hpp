@@ -7,6 +7,8 @@
 namespace lisp {
 
   struct sexpr;
+
+  parse::any<sexpr> skipper();  
   parse::any<sexpr> parser();
   
 }

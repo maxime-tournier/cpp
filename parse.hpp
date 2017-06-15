@@ -465,6 +465,75 @@ namespace parse {
   template<class Parser, bool = use_debug>
   struct debug_type;
 
+
+  template<class Skipper, class Parser>
+  struct skip_after_type {
+    const Skipper skipper;
+    const Parser parser;
+    
+    using value_type = typename traits<Parser>::value_type;
+    
+    maybe<value_type> operator()(std::istream& in) const {
+      const auto impl = parser >> [&](value_type&& value) {
+        return skipper >> then( pure(value) );
+      };
+      
+      return impl(in);
+    }
+    
+  };
+
+
+  template<class Skipper, class Parser>
+  struct skip_before_type {
+    const Skipper skipper;
+    const Parser parser;
+    
+    using value_type = typename traits<Parser>::value_type;
+    
+    maybe<value_type> operator()(std::istream& in) const {
+      const auto impl = skipper >> then(parser);
+      
+      return impl(in);
+    }
+    
+  };
+  
+  
+
+  template<class Skipper>
+  struct tokenize_type {
+    const Skipper skipper;
+    
+    template<class Parser>
+    skip_after_type<Skipper, Parser> operator>>=(Parser parser) const {
+      return {skipper, parser};
+    }
+  };
+
+
+  template<class Skipper>
+  static tokenize_type<Skipper> tokenize(Skipper skipper) {
+    return {skipper};
+  }
+
+  template<class Skipper>
+  struct start_type {
+    const Skipper skipper;
+    
+    template<class Parser>
+    skip_before_type<Skipper, Parser> operator>>=(Parser parser) const {
+      return {skipper, parser};
+    }
+  };
+
+
+  template<class Skipper>
+  static start_type<Skipper> start(Skipper skipper) {
+    return {skipper};
+  }
+
+  
   
   template<class Parser>
   struct debug_type<Parser, true> {

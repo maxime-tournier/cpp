@@ -29,6 +29,11 @@ namespace lisp {
     }
 
 
+    vm::value operator()(const lisp::value::list& self) const {
+      return reinterpret_cast<const vm::value::list&>(self);
+    }
+    
+
     template<class T>
     vm::value operator()(const T& self) const {
       throw error("cannot import values of this type");

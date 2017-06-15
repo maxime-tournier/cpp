@@ -53,7 +53,8 @@ static void read_loop(const F& f) {
 template<class Action>
 static int process(std::istream& in, Action action) {
   
-  const auto parse = *( lisp::parser() >> action | parse::error<lisp::sexpr>() );
+  const auto parse = parse::start( lisp::skipper() ) >>=
+    *( lisp::parser() >> action | parse::error<lisp::sexpr>() );
   
   try{
     parse(in);
@@ -127,8 +128,12 @@ const auto jit_compiler = [](bool dump) {
       ref<variable> a = tc->fresh();
       tc->def(kw::get, ref_ctor(a) >>= a);
     }
-    
-    
+
+    {
+      ref<variable> a = tc->fresh();
+      tc->def("pure", a >>= io_ctor(a));
+    }
+
     {
       ref<variable> a = tc->fresh();
       tc->def("nil", list_ctor(a));
@@ -139,8 +144,11 @@ const auto jit_compiler = [](bool dump) {
       tc->def("cons", a >>= list_ctor(a) >>= list_ctor(a) );
     }
 
+    
+    
   }
-  
+
+  (*env)("nil", lisp::value::list());
   
   (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
       using namespace lisp::vm;
@@ -184,7 +192,8 @@ const auto jit_compiler = [](bool dump) {
     const types::scheme t = types::check(tc, e);
     std::cout << " : " << t;
 
-    if( t.body == types::unit_type ) std::cout << std::endl;
+    if( t.body == types::unit_type ||
+        t.body == types::io_ctor(types::unit_type) ) std::cout << std::endl;
     else std::cout << " = ";
 
     const vm::value v = jit->eval(e, dump);

@@ -5,13 +5,23 @@
 
 namespace lisp {
 
+  using namespace parse;
+  
+  static const auto space = debug("space") >>= chr<std::isspace>();
+  static const auto endl = chr('\n');
+  static const auto comment = no_skip(( chr(';'), kleene(!endl), endl));
+
+  static const auto skip = *(space | comment);
+  
+
+  parse::any<sexpr> skipper() {
+    return skip >> then(pure( sexpr(unit()) ));
+  }
+  
   parse::any<sexpr> parser() {
     
-    using namespace parse;
-
     const auto alpha = debug("alpha") >>= chr<std::isalpha>();
     const auto alnum = debug("alnum") >>= chr<std::isalnum>();
-    const auto space = debug("space") >>= chr<std::isspace>();
 
     const auto dquote = chr('"');
 
@@ -20,10 +30,10 @@ namespace lisp {
     const auto initial = alpha | special;
     const auto subsequent = alnum | special;    
     
-    // const auto endl = chr('\n');
-    // const auto comment = (chr(';'), kleene(!endl), endl);
-
-    const auto number = debug("number") >>= 
+    const auto token = parse::tokenize(skip);
+    
+    const auto number = debug("number") >>=
+      token >>=
       lit<lisp::real>() >> [](lisp::real&& x) {
       integer n = x;
       if(n == x) return pure<sexpr>(n);
@@ -32,6 +42,7 @@ namespace lisp {
   
   
     const auto symbol = debug("symbol") >>=
+      token >>=
       no_skip(initial >> [subsequent](char first) {
           return *subsequent >> [first](std::deque<char>&& chars) {
             chars.emplace_front(first);
@@ -42,22 +53,28 @@ namespace lisp {
 
     // TODO escaped strings
     const auto string = debug("string") >>=
+      token >>=
       no_skip( (dquote, *!dquote) >> [dquote](std::deque<char>&& chars) {
           ref<lisp::string> str = make_ref<lisp::string>(chars.begin(), chars.end());
           return dquote, pure<sexpr>(str);
         });
   
     const auto atom = debug("atom") >>=
-      string | symbol | number;
+      (string | symbol | number);
     
     struct expr_tag;
     rec<sexpr, expr_tag> expr;
-  
+
+
+    const auto lparen = token >>= chr('(');
+    const auto rparen = token >>= chr(')');    
+    
     const auto list = debug("list") >>=
-      no_skip( (chr('('), *space, expr % +space) >> [space](std::deque<sexpr>&& terms) {
-          return *space, chr(')'), pure<sexpr>(lisp::make_list<sexpr>(terms.begin(), terms.end()));
+      no_skip( (lparen, *expr) >> [rparen](std::deque<sexpr>&& terms) {
+          return rparen, pure<sexpr>(lisp::make_list<sexpr>(terms.begin(), terms.end()));
         });
 
+    
     const auto quote = chr('\'');
     const auto backquote = chr('`');
     const auto comma = chr(',');        
