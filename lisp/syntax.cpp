@@ -76,34 +76,37 @@ namespace lisp {
       }
       
     };
+
     
     static sexpr quasiquote(const ref<environment>& ctx, const sexpr::list& args) {
-      if(!args || args->tail) throw syntax_error("(quasiquote `expr`)");
+      if(size(args) != 1) {
+        throw syntax_error("(quasiquote `expr`)");
+      }
       
       return args->head.map<sexpr>(quasiquote_visitor(), ctx);
     }
 
+
+    static sexpr let(const ref<environment>& ctx, const sexpr::list& args) {
+      if(size(args) != 3 || !args->head.is<symbol>()) {
+        throw syntax_error("(let `symbol` `expr` `expr`)");
+      }
+      
+      return kw::let
+        >>= args->head
+        >>= expand(ctx, args->tail->head)
+        >>= expand(ctx, args->tail->tail->head)
+        >>= sexpr::list();
+    }
+    
     
     
     static sexpr quote(const ref<environment>& ctx, const sexpr::list& args) {
-      static const auto fail = [] {
+        if(size(args) != 1) {
         throw syntax_error("(quote `expr`)");
-      };
-      
-      sexpr::list curr = args;
-      try {
-        const sexpr& res = head(curr);
-
-        curr = tail(curr);
-        if(curr) fail();
-
-        return kw::quote >>= res >>= sexpr::list();
-        
-      } catch( empty_list& e) {
-        fail();
       }
 
-      throw;
+      return kw::quote >>= args;
     }
 
     
@@ -111,31 +114,19 @@ namespace lisp {
       static const auto fail = [] {
         throw syntax_error("(lambda (`symbol`...) `expr`)");
       };
+
+      if(size(args) != 2 || !args->head.is<sexpr::list>() ) {
+        fail();
+      }
       
-      sexpr::list curr = args;
-      try {
-
-        const sexpr::list vars = map(head(curr).cast<sexpr::list>(), [](const sexpr& x) -> sexpr {
-            return x.cast<symbol>();
-          });
-        
-        curr = tail(curr);
-        const sexpr body = expand(ctx, head(curr));
-        
-        curr = tail(curr);
-        if(curr) fail();
-
-        return kw::lambda >>= vars >>= body >>= sexpr::list();
-      }
-      catch( value::bad_cast& e) {
-        fail();
-      }
-      catch( empty_list& e) {
-        fail();
+      for(const sexpr& e : args->head.get<sexpr::list>()) {
+        if(!e.is<symbol>()) fail();
       }
 
-      throw;
+      // expand lambda body
+      return kw::lambda >>= args->head >>= expand(ctx, args->tail->head) >>= sexpr::list();
     }
+
     
 
 
@@ -180,7 +171,8 @@ namespace lisp {
       {kw::lambda, lambda},
       {kw::quote, quote},
       {kw::cond, cond},
-      {kw::quasiquote, quasiquote}
+      {kw::quasiquote, quasiquote},
+      {kw::let, let},
     };
 
     static const std::set<symbol> reserved = {
@@ -190,7 +182,8 @@ namespace lisp {
       kw::cond,
       kw::def,
       kw::quasiquote,
-      kw::unquote
+      kw::unquote,
+      kw::let,
     };
 
   }
