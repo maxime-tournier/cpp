@@ -284,7 +284,8 @@ namespace lisp {
             stack.emplace_back( stack[fp.back() + i]);
             break;
           }
-        
+
+            // store, #index
           case opcode::STORE: {
             // fetch index
             const integer& i = code[++ip].get<integer>();

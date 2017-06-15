@@ -223,7 +223,7 @@ namespace lisp {
       {kw::cond, check_cond},
       {kw::seq, check_seq},
       {kw::def, check_def},
-      {symbol("var"), check_var},
+      {kw::var, check_var},
     };
     
     const constructor func_ctor("->", 2);

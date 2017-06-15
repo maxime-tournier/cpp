@@ -104,6 +104,7 @@ const auto jit_compiler = [](bool dump) {
   static const ref<lisp::types::context> tc = make_ref<lisp::types::context>();
 
   {
+    using namespace lisp;
     using namespace lisp::types;
     tc->def("+", integer_type >>= integer_type >>= integer_type);
     tc->def("-", integer_type >>= integer_type >>= integer_type);
@@ -114,17 +115,17 @@ const auto jit_compiler = [](bool dump) {
 
     {
       ref<variable> a = tc->fresh();
-      tc->def("ref", a >>= io_ctor(ref_ctor(a)));
+      tc->def(kw::ref, a >>= io_ctor(ref_ctor(a)));
     }
 
     {
       ref<variable> a = tc->fresh();
-      tc->def("set", ref_ctor(a) >>= a >>=io_ctor(unit_type));
+      tc->def(kw::set, ref_ctor(a) >>= a >>=io_ctor(unit_type));
     }
 
     {
       ref<variable> a = tc->fresh();
-      tc->def("get", ref_ctor(a) >>= a);
+      tc->def(kw::get, ref_ctor(a) >>= a);
     }
     
     

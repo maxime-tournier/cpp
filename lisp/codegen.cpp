@@ -1,6 +1,8 @@
 #include "codegen.hpp"
 #include "vm.hpp"
 
+#include "syntax.hpp"
+
 namespace lisp {
 
   // codegen
@@ -144,6 +146,32 @@ namespace lisp {
       }
     }
 
+    static void get(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
+      return compile(res, ctx, args->head);
+    }
+
+    
+    static void set(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
+      const symbol& name = args->head.get<symbol>();
+      const sexpr& value = args->tail->head;
+
+      compile(res, ctx, value);
+
+      if( std::size_t* index = ctx->find(name) ) {
+
+        res.push_back(opcode::STORE);
+        res.push_back( integer(*index) );
+
+        return compile(res, ctx, args->head);
+        
+      } 
+
+      // this should not happen with typechecking
+      throw unbound_variable(name);
+    }
+
+    
+    
     static void lambda(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       sexpr::list curr = args;
       const sexpr::list vars = head(curr).cast<sexpr::list>();
@@ -236,13 +264,19 @@ namespace lisp {
   
   
     static std::map<symbol, special> table = {
-      {"def", def},
-      {"lambda", lambda},
-      {"cond", cond},
-      {"quote", quote},
-      {"do", seq},    
+      { kw::def, def},
+      { kw::lambda, lambda},
+      { kw::cond, cond},
+      { kw::quote, quote},
+      { kw::seq, seq},
+      { kw::get, get},
+      { kw::set, set},      
+      { kw::var, def},
+      { kw::ref, get},
     };
 
+    
+    
     struct compile_visitor {
 
       template<class T>

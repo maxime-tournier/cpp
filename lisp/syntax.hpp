@@ -16,6 +16,8 @@ namespace lisp {
   
   namespace kw {
     const extern symbol def, lambda, seq, cond, quote, unquote, quasiquote;
+
+    const extern symbol var, ref, get, set;
   }
   
 }
