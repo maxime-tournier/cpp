@@ -77,7 +77,7 @@ namespace lisp {
       
     };
 
-    extern const constructor func_ctor, io_ctor;
+    extern const constructor func_ctor, io_ctor, ref_ctor, list_ctor;
     
   
     struct application {
@@ -170,6 +170,10 @@ namespace lisp {
         // TODO nice?
         locals.emplace(id, t.generalize(depth));
         return *this;
+      }
+
+      ref<variable> fresh() const {
+        return variable::fresh(depth);
       }
       
     };

@@ -15,7 +15,7 @@ namespace lisp {
   sexpr expand_seq(const ref<environment>& ctx, const sexpr& expr);
   
   namespace kw {
-    const extern symbol def, lambda, seq, cond, quote, unquote, quasiquote, let;
+    const extern symbol def, lambda, seq, cond, quote, unquote, quasiquote;
   }
   
 }

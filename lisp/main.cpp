@@ -110,9 +110,19 @@ const auto jit_compiler = [](bool dump) {
     tc->def("/", integer_type >>= integer_type >>= integer_type);
     tc->def("*", integer_type >>= integer_type >>= integer_type);
     tc->def("%", integer_type >>= integer_type >>= integer_type);
-    tc->def("=", integer_type >>= integer_type >>= boolean_type);                    
+    tc->def("=", integer_type >>= integer_type >>= boolean_type);
+
+    {
+      ref<variable> a = tc->fresh();
+      tc->def("ref", a >>= io_ctor(ref_ctor(a)));
+    }
+
+    {
+      ref<variable> a = tc->fresh();
+      tc->def("nil", list_ctor(a));
+    }
   }
-           
+  
   
   (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
       using namespace lisp::vm;

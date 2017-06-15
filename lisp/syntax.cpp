@@ -15,8 +15,7 @@ namespace lisp {
       cond = "cond",
       quote = "quote",
       quasiquote = "quasiquote",
-      unquote = "unquote",
-      let = "let";
+      unquote = "unquote";
   }
 
   
@@ -87,17 +86,17 @@ namespace lisp {
     }
 
 
-    static sexpr let(const ref<environment>& ctx, const sexpr::list& args) {
-      if(size(args) != 3 || !args->head.is<symbol>()) {
-        throw syntax_error("(let `symbol` `expr` `expr`)");
-      }
+    // static sexpr let(const ref<environment>& ctx, const sexpr::list& args) {
+    //   if(size(args) != 3 || !args->head.is<symbol>()) {
+    //     throw syntax_error("(let `symbol` `expr` `expr`)");
+    //   }
       
-      return kw::let
-        >>= args->head
-        >>= expand(ctx, args->tail->head)
-        >>= expand(ctx, args->tail->tail->head)
-        >>= sexpr::list();
-    }
+    //   return kw::let
+    //     >>= args->head
+    //     >>= expand(ctx, args->tail->head)
+    //     >>= expand(ctx, args->tail->tail->head)
+    //     >>= sexpr::list();
+    // }
     
     
     
@@ -126,7 +125,6 @@ namespace lisp {
       // expand lambda body
       return kw::lambda >>= args->head >>= expand(ctx, args->tail->head) >>= sexpr::list();
     }
-
     
 
 
@@ -172,7 +170,6 @@ namespace lisp {
       {kw::quote, quote},
       {kw::cond, cond},
       {kw::quasiquote, quasiquote},
-      {kw::let, let},
     };
 
     static const std::set<symbol> reserved = {
@@ -183,7 +180,6 @@ namespace lisp {
       kw::def,
       kw::quasiquote,
       kw::unquote,
-      kw::let,
     };
 
   }
