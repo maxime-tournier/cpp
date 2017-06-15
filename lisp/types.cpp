@@ -562,13 +562,12 @@ namespace lisp {
       // bind values in the io monad
       mono value_type = variable::fresh(ctx->depth);
       
+      unify(io_ctor(value_type), check_expr(ctx, value));
+
       // value_type should remain monomorphic
       ++ctx->depth;
-
       ctx->def(name, value_type);
       assert(ctx->find(name)->vars.empty());
-      
-      unify(io_ctor(value_type), check_expr(ctx, value));
       
       return io_ctor(unit_type);
     }
