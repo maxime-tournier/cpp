@@ -15,7 +15,8 @@ namespace lisp {
       cond = "cond",
       quote = "quote",
       quasiquote = "quasiquote",
-      unquote = "unquote";
+      unquote = "unquote",
+      let = "let";
   }
 
   

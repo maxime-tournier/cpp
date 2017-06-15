@@ -39,6 +39,7 @@ namespace lisp {
       }
     };
 
+    struct application;
   
     class constructor {
       using table_type = std::map<symbol, std::size_t>;
@@ -71,10 +72,12 @@ namespace lisp {
         return &*iterator < &*other.iterator;
       }
 
+      template<class ... Args>
+      application operator()(Args&& ... args) const;
       
     };
 
-    extern const constructor func_ctor;
+    extern const constructor func_ctor, io_ctor;
     
   
     struct application {
@@ -99,9 +102,10 @@ namespace lisp {
         return ctor < other.ctor || (ctor == other.ctor && args < other.args);
       }
 
-      
     };
 
+
+    
     template<class F>
     static application map(const application& self, const F& f) {
       application::args_type args; args.reserve(self.args.size());
@@ -112,6 +116,12 @@ namespace lisp {
     }
     
 
+   template<class ... Args>
+   application constructor::operator()(Args&& ... args) const {
+     return application(*this, { std::forward<Args>(args)... });
+   }
+
+    
     struct scheme;
 
     
@@ -147,7 +157,7 @@ namespace lisp {
 
     
     struct context : lisp::context< context, scheme > {
-      const std::size_t depth;
+      std::size_t depth;
       
       context(const ref<context>& parent = {})
         : base::base(parent),

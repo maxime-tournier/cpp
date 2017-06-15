@@ -213,13 +213,16 @@ namespace lisp {
 
     static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms);
     static mono check_cond(const ref<context>& ctx, const sexpr::list& terms);
+    static mono check_let(const ref<context>& ctx, const sexpr::list& terms);    
     
     static std::map<symbol, special_type> special = {
       {kw::lambda, check_lambda},
       {kw::cond, check_cond},
+      {kw::let, check_let},
     };
 
     const constructor func_ctor("->", 2);
+    const constructor io_ctor("io", 1);    
     
     static mono check_expr(const ref<context>& ctx, const sexpr& e);
     static void unify(const mono& lhs, const mono& rhs);
@@ -448,7 +451,9 @@ namespace lisp {
 
 
 
-    
+    struct unbound_variable : type_error {
+      unbound_variable(symbol id) : type_error("unbound variable " + id.name()) { }
+    };
     
     struct expr_visitor {
       
@@ -520,20 +525,51 @@ namespace lisp {
     }
 
 
+    static mono check_let(const ref<context>& ctx, const sexpr::list& terms) {
+      const symbol& name = terms->head.get<symbol>();
+      const sexpr& value = terms->tail->head;
+      const sexpr& body = terms->tail->tail->head;      
+
+      ref<variable> value_type = variable::fresh(ctx->depth);
+
+      ref<context> sub = make_ref<context>(ctx);
+
+      // note: value_type is bound in sub-context (i.e. monomorphic)
+      sub->def(name, value_type);
+      assert(sub->find(name)->vars.empty());
+
+      unify(value_type, check_expr(sub, value));
+
+      // generalize in current context
+      ctx->def(name, value_type);
+
+      // infer body type
+      return check_expr(ctx, body);
+    }
+
+
+    
 
     static mono check_def(const ref<context>& ctx, const sexpr::list& terms) {
       const symbol& name = terms->head.get<symbol>();
       const sexpr& value = terms->tail->head;
 
-      // TODO value type should be io and we bind
-      const mono value_type = check_expr(ctx, value);
-      ctx->def(name, value_type);
+      // TODO value type should be io and we should bind
+      ref<variable> value_type = variable::fresh(ctx->depth);
 
+      // define value_type as monomorphic
+      ++ctx->depth;
+      ctx->def(name, value_type);
+      
+      assert(ctx->find(name)->vars.empty());
+      
+      unify(value_type, check_expr(ctx, value));
+      
       // TODO this should be io
-      return unit_type;
+      return io_ctor(unit_type);
     }
 
-                          
+    
 
 
     struct toplevel_visitor {
