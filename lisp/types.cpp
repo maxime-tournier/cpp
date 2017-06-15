@@ -109,16 +109,19 @@ namespace lisp {
 
     };
 
-    
-    std::ostream& operator<<(std::ostream& out, const scheme& self) {
-      ostream_map osm;
 
+    static std::ostream& ostream(std::ostream& out, const scheme& self, ostream_map& osm) {
       for(const ref<variable>& var : self.vars) {
         osm.emplace( std::make_pair(var, var_repr{osm.size(), true} ) );
       }
-
+      
       self.body.apply( ostream_visitor(), out, osm );
       return out;
+    }
+
+    std::ostream& operator<<(std::ostream& out, const scheme& self) {
+      ostream_map osm;
+      return ostream(out, self, osm);
     }
 
 
@@ -209,9 +212,11 @@ namespace lisp {
     using special_type = mono (*)(const ref<context>& ctx, const sexpr::list& terms);
 
     static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms);
+    static mono check_cond(const ref<context>& ctx, const sexpr::list& terms);
     
     static std::map<symbol, special_type> special = {
-      {kw::lambda, check_lambda}
+      {kw::lambda, check_lambda},
+      {kw::cond, check_cond},
     };
 
     const constructor func_ctor("->", 2);
@@ -273,15 +278,14 @@ namespace lisp {
       }
       
       void operator()(const ref<variable>& self, const mono& rhs, uf_type& uf) const {
-
+        assert( uf.find(self) == self );
+        assert( uf.find(rhs) == rhs );        
+        
         if(rhs.is<application>() && rhs.map<bool>(occurs_check(), self)) {
           throw occurs_error{self, rhs.get<application>()};
         }
-
-        mono s = uf.find(self);
-        mono r = uf.find(rhs);
         
-        uf.link(s, r);
+        uf.link(self, rhs);
       }
 
       
@@ -321,18 +325,19 @@ namespace lisp {
       const sexpr::list& vars = terms->head.get<sexpr::list>();
 
       // build application type
-      const application app_type = foldr(init, vars, [&ctx, &sub, &result_type](const sexpr& lhs, const maybe& rhs) {
+      const application app_type =
+        foldr(init, vars, [&ctx, &sub, &result_type](const sexpr& lhs, const maybe& rhs) {
           
-          // create variable types and fill sub-context
-          ref<variable> var_type = variable::fresh(ctx->depth);
-          sub->def(lhs.get<symbol>(), var_type);
+            // create variable types and fill sub-context
+            ref<variable> var_type = variable::fresh(ctx->depth);
+            sub->def(lhs.get<symbol>(), var_type);
           
-          if(rhs.is<none>()) {
-            return var_type >>= result_type;
-          } 
+            if(rhs.is<none>()) {
+              return var_type >>= result_type;
+            } 
           
-          return var_type >>= rhs.get<application>();
-        }).get<application>();
+            return var_type >>= rhs.get<application>();
+          }).get<application>();
 
       
       // infer body type in sub-context
@@ -346,9 +351,33 @@ namespace lisp {
     
 
 
+
     static void unify(const mono& lhs, const mono& rhs) {
-      lhs.apply( unify_visitor(), rhs, uf );
+      mono l = uf.find(lhs);
+      mono r = uf.find(rhs);
+        
+      l.apply( unify_visitor(), r, uf );
     }
+
+
+
+    static mono check_cond(const ref<context>& ctx, const sexpr::list& items) {
+
+      ref<variable> result_type = variable::fresh(ctx->depth);
+      
+      for(const sexpr& i : items ) {
+        const sexpr::list& pair = i.get<sexpr::list>();
+
+        const sexpr& test = pair->head;
+        const sexpr& value = pair->tail->head;
+
+        unify(boolean_type, check_expr(ctx, test));
+        unify(result_type, check_expr(ctx, value));        
+      }
+      
+      return result_type;
+    }
+
     
 
     static mono check_app(const ref<context>& ctx, const sexpr::list& self) {
@@ -374,17 +403,7 @@ namespace lisp {
           return lhs >>= rhs.get<application>();
         }).get<application>();
 
-      try {
-        unify(func_type, app_type);
-      } catch( unification_error& e) {
-        std::stringstream ss;
-        ss << "cannot unify " << e.lhs.generalize(ctx->depth) << " with " << e.rhs.generalize(ctx->depth);
-        throw type_error(ss.str());
-      } catch( occurs_error& e ) {
-        std::stringstream ss;
-        ss << mono(e.var).generalize(ctx->depth) << " occurs in " << mono(e.app).generalize(ctx->depth);
-        throw type_error(ss.str());
-      }
+      unify(func_type, app_type);
       
       return result_type;
     }
@@ -425,6 +444,10 @@ namespace lisp {
       // replace each bound variable with its fresh one
       return body.map<mono>( instantiate_visitor(), map ); 
     }
+
+
+
+
     
     
     struct expr_visitor {
@@ -465,16 +488,82 @@ namespace lisp {
 
 
     static mono check_expr(const ref<context>& ctx, const sexpr& e) {
-      return e.map<mono>(expr_visitor(), ctx);
+      try {
+        
+        return e.map<mono>(expr_visitor(), ctx);
+        
+      } catch( unification_error& e) {
+        std::stringstream ss;
+        scheme lhs = e.lhs.generalize(), rhs = e.rhs.generalize();
+
+        ostream_map osm;
+
+        ss << "cannot unify ";
+        ostream(ss, lhs, osm) << " with ";
+        ostream(ss, rhs, osm);
+
+        throw type_error(ss.str());
+        
+      } catch( occurs_error& e ) {
+        std::stringstream ss;
+        scheme var = mono(e.var).generalize(), app = mono(e.app).generalize();
+
+        ostream_map osm;
+        
+        ostream(ss, var, osm) << " occurs in ";
+        ostream(ss, app, osm);
+
+        throw type_error(ss.str());
+      }
+      
+      
+    }
+
+
+
+    static mono check_def(const ref<context>& ctx, const sexpr::list& terms) {
+      const symbol& name = terms->head.get<symbol>();
+      const sexpr& value = terms->tail->head;
+
+      // TODO value type should be io and we bind
+      const mono value_type = check_expr(ctx, value);
+      ctx->def(name, value_type);
+
+      // TODO this should be io
+      return unit_type;
+    }
+
+                          
+
+
+    struct toplevel_visitor {
+
+      mono operator()(const sexpr::list& self, const ref<context>& ctx) const {
+        if(self && self->head.get<symbol>() == kw::def ){
+          return check_def(ctx, self->tail);
+        }
+        
+        return check_expr(ctx, self);
+      }
+      
+      template<class T>
+      mono operator()(const T& self, const ref<context>& ctx) const {
+        return check_expr(ctx, self);
+      }
+      
+    };
+
+    static mono check_toplevel(const ref<context>& ctx, const sexpr& e) {
+      return e.map<mono>(toplevel_visitor(), ctx);
+    }
+
+
+      
+    
+    scheme check(const ref<context>& ctx, const sexpr& e) {
+      return check_toplevel(ctx, e).generalize();
     }
     
-
-    scheme check(const ref<context>& ctx, const sexpr& e) {
-      // TODO check toplevel
-      return check_expr(ctx, e).generalize();
-    }
-
-
 
     application operator>>=(const mono& lhs, const mono& rhs) {
       return application(func_ctor, {lhs, rhs});

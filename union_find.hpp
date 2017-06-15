@@ -12,7 +12,7 @@ public:
   const T& find(const T& value) const {
 
     auto it = parent.find(value);
-    if(it == parent.end()) {
+    if(it == parent.end() ) {
       return value;
     }
     
@@ -27,7 +27,7 @@ public:
   }
 
   void link(const T& from, const T& to) {
-    parent.emplace( std::make_pair(from, to) );
+    if(from != to) parent.emplace( std::make_pair(from, to) );
   }
   
 };

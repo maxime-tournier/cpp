@@ -154,7 +154,10 @@ const auto jit_compiler = [](bool dump) {
     const sexpr e = expand_seq(env, s);
 
     const types::scheme t = types::check(tc, e);
-    std::cout << " : " << t << " = ";
+    std::cout << " : " << t;
+
+    if( t.body == types::unit_type ) std::cout << std::endl;
+    else std::cout << " = ";
 
     const vm::value v = jit->eval(e, dump);
     
