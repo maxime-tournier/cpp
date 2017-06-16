@@ -65,7 +65,7 @@ namespace lisp {
 
     static std::ostream& operator<<(std::ostream& out, const var_repr& self) {
       if( self.quantified ) out << "'";
-      else out << "!";
+      else out << "_";
       return out << char('a' + self.index);
     }
 
@@ -248,18 +248,27 @@ namespace lisp {
     
     struct occurs_check {
 
-      bool operator()(const constant& self, const ref<variable>& var) const {
+      bool operator()(const constant& self, const ref<variable>& var, uf_type& uf) const {
         return false;
       }
 
-      bool operator()(const ref<variable>& self, const ref<variable>& var) const {
+      bool operator()(const ref<variable>& self, const ref<variable>& var, uf_type& uf) const {
+
+        if(self->depth > var->depth) {
+          // we are trying to unify var with app( ... self ... ) but var has
+          // lower depth: we need to "lower" self to var's depth so that self
+          // generalizes just like var
+          ref<variable> lower = variable::fresh(var->depth);
+          uf.link(uf.find(self), lower);
+        }
+        
         return self == var;
       }
 
 
-      bool operator()(const application& self, const ref<variable>& var) const {
+      bool operator()(const application& self, const ref<variable>& var, uf_type& uf) const {
         for(const mono& t : self.args) {
-          if( t.map<bool>(occurs_check(), var) ) return true;
+          if( uf.find(t).map<bool>(occurs_check(), var, uf) ) return true;
         }
         
         return false;
@@ -291,7 +300,7 @@ namespace lisp {
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
         
-        if(rhs.is<application>() && rhs.map<bool>(occurs_check(), self)) {
+        if(rhs.is<application>() && rhs.map<bool>(occurs_check(), self, uf)) {
           throw occurs_error{self, rhs.get<application>()};
         }
         
@@ -360,13 +369,33 @@ namespace lisp {
     }
     
 
-
+    static std::ostream& indent(std::ostream& out, std::size_t n) {
+      for(std::size_t i = 0; i < n; ++i) out << "  ";
+      return out;
+    }
+    
 
     static void unify(const mono& lhs, const mono& rhs) {
+
+      static std::size_t level = 0;
+
+      static ostream_map osm;
+      
+      // indent(std::clog, level++ ) << "unifying (";
+      // lhs.apply( ostream_visitor(), std::clog, osm );
+      // std::clog << ") with (";
+      // rhs.apply( ostream_visitor(), std::clog, osm);
+      // std::clog << ")" << std::endl;
+      
       mono l = uf.find(lhs);
       mono r = uf.find(rhs);
-        
+
       l.apply( unify_visitor(), r, uf );
+
+      // indent(std::clog,  --level ) << "result: ";
+      // uf.find(l).apply(ostream_visitor(), std::clog, osm);
+      // std::clog << std::endl;
+      
     }
 
 
