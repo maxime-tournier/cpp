@@ -1,6 +1,11 @@
 
-- macros
-- packages?
-- a way to call bytecode compiled functions from c++ ?
-  - use integers as ip so that bytecode may be extended safely during execution
+
+- runST-like monad escape https://stackoverflow.com/questions/39725024/runst-with-hindley-milner-type-system
+- algebraic datatypes
+- row-polymorphism
+
+- macros?
+- modules?
+
+
     
