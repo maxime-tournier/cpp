@@ -186,7 +186,8 @@ namespace lisp {
     static bool operator!=(const T& lhs, const T& rhs) {
       return !(lhs == rhs);
     }
-     
+
+
   }
 }
 

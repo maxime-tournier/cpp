@@ -126,6 +126,7 @@ namespace lisp {
 
 
 
+    // TODO fixme global uf
     using uf_type = union_find<mono>;
     static union_find<mono> uf;
     
@@ -633,9 +634,21 @@ namespace lisp {
     
 
 
-    
+    // toplevel check
     scheme check(const ref<context>& ctx, const sexpr& e) {
-      mono res = check_expr(ctx, e);
+      static mono thread = variable::fresh(ctx->depth);
+
+      // TODO FIXME global uf
+      const mono res = check_expr(ctx, e).map<mono>(nice(), uf);
+      
+      if(res.is<application>() && res.get<application>().ctor == io_ctor) {
+
+        // toplevel io happens in toplevel thread
+        const mono fresh = variable::fresh(ctx->depth);
+        unify( io_ctor(fresh, thread), res);
+        
+      }
+      
       return res.generalize(ctx->depth);
     }
     
