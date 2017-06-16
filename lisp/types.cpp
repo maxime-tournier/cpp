@@ -369,33 +369,45 @@ namespace lisp {
     }
     
 
-    static std::ostream& indent(std::ostream& out, std::size_t n) {
-      for(std::size_t i = 0; i < n; ++i) out << "  ";
+
+    struct debug {
+      debug(const mono& type) : type(type) { }
+      const mono& type;
+    };
+
+    static std::ostream& operator<<(std::ostream& out, const debug& self) {
+      static ostream_map osm;
+      self.type.apply( ostream_visitor(), out, osm );
       return out;
     }
-    
 
+
+    struct indent {
+      indent(std::size_t level) : level(level) { }
+      const std::size_t level;
+    };
+
+    static std::ostream& operator<<(std::ostream& out, const indent& self) {
+      for(std::size_t i = 0; i < self.level; ++i) out << "  ";
+      return out;
+    }
+
+    
+    
     static void unify(const mono& lhs, const mono& rhs) {
 
       static std::size_t level = 0;
 
-      static ostream_map osm;
+      std::clog << indent(level++) << "unifying ("
+                << debug(lhs) << ") with ("
+                << debug(rhs) << std::endl;
       
-      // indent(std::clog, level++ ) << "unifying (";
-      // lhs.apply( ostream_visitor(), std::clog, osm );
-      // std::clog << ") with (";
-      // rhs.apply( ostream_visitor(), std::clog, osm);
-      // std::clog << ")" << std::endl;
-      
-      mono l = uf.find(lhs);
-      mono r = uf.find(rhs);
+      const mono l = uf.find(lhs);
+      const mono r = uf.find(rhs);
 
       l.apply( unify_visitor(), r, uf );
 
-      // indent(std::clog,  --level ) << "result: ";
-      // uf.find(l).apply(ostream_visitor(), std::clog, osm);
-      // std::clog << std::endl;
-      
+      std::clog << indent(--level) << "result: " << debug( uf.find(l) ) << std::endl;
     }
 
 
