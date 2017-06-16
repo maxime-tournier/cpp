@@ -65,7 +65,7 @@ namespace lisp {
 
     static std::ostream& operator<<(std::ostream& out, const var_repr& self) {
       if( self.quantified ) out << "'";
-      else out << "_";
+      else out << "!";
       return out << char('a' + self.index);
     }
 
