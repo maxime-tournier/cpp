@@ -272,7 +272,10 @@ namespace lisp {
       { kw::get, get},
       { kw::set, set},      
       { kw::var, def},
+
+      // these are only aliases
       { kw::ref, get},
+      { kw::pure, get},      
     };
 
     
