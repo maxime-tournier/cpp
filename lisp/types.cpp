@@ -227,7 +227,7 @@ namespace lisp {
     };
     
     const constructor func_ctor("->", 2);
-    const constructor io_ctor("io", 1);
+    const constructor io_ctor("io", 2);
     const constructor ref_ctor("ref", 1);
     const constructor list_ctor("list", 1);            
     
@@ -573,12 +573,15 @@ namespace lisp {
     }
 
 
+
+    
     static mono check_def(const ref<context>& ctx, const sexpr::list& terms) {
       const symbol& name = terms->head.get<symbol>();
       const sexpr& value = terms->tail->head;
       
-      ref<variable> value_type = variable::fresh(ctx->depth);
-
+      mono value_type = variable::fresh(ctx->depth);
+      mono thread = variable::fresh(ctx->depth);
+      
       ref<context> sub = make_ref<context>(ctx);
 
       // note: value_type is bound in sub-context (i.e. monomorphic)
@@ -590,7 +593,7 @@ namespace lisp {
       // generalize in current context
       ctx->def(name, value_type);
 
-      return io_ctor(unit_type);
+      return io_ctor(unit_type, thread);
     }
 
 
@@ -602,26 +605,27 @@ namespace lisp {
 
       // bind values in the io monad
       mono value_type = variable::fresh(ctx->depth);
+      mono thread = variable::fresh(ctx->depth);
       
-      unify(io_ctor(value_type), check_expr(ctx, value));
+      unify(io_ctor(value_type, thread), check_expr(ctx, value));
 
       // value_type should remain monomorphic
       ++ctx->depth;
       ctx->def(name, value_type);
       assert(ctx->find(name)->vars.empty());
       
-      return io_ctor(unit_type);
+      return io_ctor(unit_type, thread);
     }
 
 
     static mono check_seq(const ref<context>& ctx, const sexpr::list& items) {
-      mono res = io_ctor( unit_type );
+
+      mono thread = variable::fresh(ctx->depth);
+      mono res = io_ctor( unit_type, thread );
       
       for(const sexpr& e : items) {
-
-        res = io_ctor( variable::fresh(ctx->depth) );
+        res = io_ctor( variable::fresh(ctx->depth), thread );
         unify(res, check_expr(ctx, e));
-        
       }
       
       return res;

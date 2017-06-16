@@ -116,12 +116,14 @@ const auto jit_compiler = [](bool dump) {
 
     {
       ref<variable> a = tc->fresh();
-      tc->def(kw::ref, a >>= io_ctor(ref_ctor(a)));
+      ref<variable> thread = tc->fresh();      
+      tc->def(kw::ref, a >>= io_ctor(ref_ctor(a), thread));
     }
 
     {
       ref<variable> a = tc->fresh();
-      tc->def(kw::set, ref_ctor(a) >>= a >>=io_ctor(unit_type));
+      ref<variable> thread = tc->fresh();            
+      tc->def(kw::set, ref_ctor(a) >>= a >>= io_ctor(unit_type, thread));
     }
 
     {
@@ -131,7 +133,8 @@ const auto jit_compiler = [](bool dump) {
 
     {
       ref<variable> a = tc->fresh();
-      tc->def("pure", a >>= io_ctor(a));
+      ref<variable> thread = tc->fresh();      
+      tc->def("pure", a >>= io_ctor(a, thread));
     }
 
     {
@@ -192,13 +195,13 @@ const auto jit_compiler = [](bool dump) {
     const types::scheme t = types::check(tc, e);
     std::cout << " : " << t;
 
-    if( t.body == types::unit_type ||
-        t.body == types::io_ctor(types::unit_type) ) std::cout << std::endl;
-    else std::cout << " = ";
-
     const vm::value v = jit->eval(e, dump);
     
-    if(!v.is<lisp::unit>()) {
+    if(v.is<lisp::unit>()) {
+      std::cout << std::endl;
+    } else {
+      std::cout << " = ";
+      
       if(v.is<lisp::symbol>() || v.is<lisp::vm::value::list>()) {
         std::cout << "'";
       }

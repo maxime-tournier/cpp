@@ -159,9 +159,12 @@ namespace lisp {
 
       if( std::size_t* index = ctx->find(name) ) {
 
-        res.push_back(opcode::STORE);
+        res.push_back( opcode::STORE );
         res.push_back( integer(*index) );
 
+        res.push_back(opcode::PUSH );
+        res.push_back( unit() );        
+        
         return compile(res, ctx, args->head);
         
       } 
