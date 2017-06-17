@@ -147,6 +147,15 @@ const auto jit_compiler = [](bool dump) {
       tc->def("cons", a >>= list_ctor(a) >>= list_ctor(a) );
     }
 
+
+    {
+      // TODO typeclasses
+      ref<variable> a = tc->fresh();
+      ref<variable> thread = tc->fresh();      
+
+      tc->def("print", a >>= io_ctor( unit_type, thread));
+    }
+    
     
     
   }
@@ -193,9 +202,9 @@ const auto jit_compiler = [](bool dump) {
     const sexpr e = expand_seq(env, s);
 
     const types::scheme t = types::check(tc, e);
-    std::cout << " : " << t;
-
     const vm::value v = jit->eval(e, dump);
+
+    std::cout << " : " << t; 
     
     if(v.is<lisp::unit>()) {
       std::cout << std::endl;

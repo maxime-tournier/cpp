@@ -276,7 +276,7 @@ namespace lisp {
       { kw::set, set},      
       { kw::var, def},
 
-      // these are only aliases
+      // these are only aliases and return their first argument
       { kw::ref, get},
       { kw::pure, get},      
     };

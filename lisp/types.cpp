@@ -637,13 +637,14 @@ namespace lisp {
     // toplevel check
     scheme check(const ref<context>& ctx, const sexpr& e) {
       static mono thread = variable::fresh(ctx->depth);
-
+      static std::size_t init = ctx->depth++; (void) init;
+      
       // TODO FIXME global uf
       const mono res = check_expr(ctx, e).map<mono>(nice(), uf);
       
       if(res.is<application>() && res.get<application>().ctor == io_ctor) {
 
-        // toplevel io happens in toplevel thread
+        // toplevel io must happen in toplevel thread
         const mono fresh = variable::fresh(ctx->depth);
         unify( io_ctor(fresh, thread), res);
         
