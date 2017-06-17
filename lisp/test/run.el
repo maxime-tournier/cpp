@@ -2,17 +2,13 @@
 
 (run
  (var x (ref 0))
- (var *x (get x))
- (pure *x)
- )
+ (get x))
 
 
-
-(var y (ref 0))
 (run
- (var *y (get y))
- (pure *y))
-
+ (var y (ref 0))
+ (pure y))
+     
 
 
 ;; (do

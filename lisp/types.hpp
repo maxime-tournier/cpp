@@ -42,14 +42,21 @@ namespace lisp {
     struct application;
   
     class constructor {
-      using table_type = std::map<symbol, std::size_t>;
+
+      struct data {
+        symbol name;
+        std::size_t argc;
+        std::size_t phantom;
+      };
+      
+      using table_type = std::map<symbol, data>;
       static table_type table;
 
-      table_type::iterator iterator;
+      table_type::const_iterator iterator;
     public:
       
-      constructor(symbol name, std::size_t argc) {
-        auto err = table.insert( std::make_pair(name, argc) );
+      constructor(symbol name, std::size_t argc, std::size_t phantom = 0) {
+        auto err = table.emplace( std::make_pair(name, data{name, argc, phantom}) );
         if(!err.second) throw error("type constructor already defined");
         iterator = err.first;
       }
@@ -60,9 +67,11 @@ namespace lisp {
         iterator = it;
       }
 
-      symbol name() const { return iterator->first; }      
-      std::size_t argc() const { return iterator->second; }
 
+      const data* operator->() const {
+        return &iterator->second;
+      }
+      
       bool operator==(const constructor& other) const {
         return iterator == other.iterator;
       }
@@ -89,7 +98,7 @@ namespace lisp {
 
       application(constructor ctor, const args_type& args)
         : ctor(ctor), args(args) {
-        if(args.size() != ctor.argc()) {
+        if(args.size() != ctor->argc) {
           throw error("constructor argc error");
         }
       }

@@ -23,6 +23,16 @@ namespace lisp {
       string_type("string"),
       symbol_type("symbol");
 
+
+    constructor::table_type constructor::table;
+    
+    const constructor func_ctor("->", 2);
+    const constructor list_ctor("list", 1);            
+
+    const constructor io_ctor("io", 2);
+    const constructor ref_ctor("ref", 2);
+
+    
     
     template<>
     struct traits< lisp::unit > {
@@ -88,7 +98,7 @@ namespace lisp {
           }
           
         } else {
-          out << self.ctor.name();
+          out << self.ctor->name;
           
           if(self.args.empty()) return;
 
@@ -209,8 +219,6 @@ namespace lisp {
 
 
     
-    constructor::table_type constructor::table;
-    
     using special_type = mono (*)(const ref<context>& ctx, const sexpr::list& terms);
 
     static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms);
@@ -232,11 +240,6 @@ namespace lisp {
       {kw::run, check_run},
     };
     
-    const constructor func_ctor("->", 2);
-    const constructor list_ctor("list", 1);            
-
-    const constructor io_ctor("io", 2);
-    const constructor ref_ctor("ref", 2);
 
     
     static mono check_expr(const ref<context>& ctx, const sexpr& e);
@@ -328,7 +331,7 @@ namespace lisp {
           throw unification_error(lhs, rhs);
         }
 
-        for(std::size_t i = 0, n = lhs.ctor.argc(); i < n; ++i) {
+        for(std::size_t i = 0, n = lhs.ctor->argc; i < n; ++i) {
           unify(lhs.args[i], rhs.args[i]);
         }
         
