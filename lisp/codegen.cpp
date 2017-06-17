@@ -276,9 +276,9 @@ namespace lisp {
       { kw::pure, pure},
       { kw::run, seq},
       
-      // // these are only aliases
-      // { kw::ref, get},
-      // { kw::get, get},
+      // these are only aliases
+      { kw::ref, pure},
+      { kw::get, pure},
       
     };
 

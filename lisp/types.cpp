@@ -219,7 +219,6 @@ namespace lisp {
     
     static mono check_seq(const ref<context>& ctx, const sexpr::list& terms);    
     static mono check_var(const ref<context>& ctx, const sexpr::list& terms);
-    static mono check_set(const ref<context>& ctx, const sexpr::list& terms);
     static mono check_run(const ref<context>& ctx, const sexpr::list& terms);    
 
     
@@ -231,7 +230,6 @@ namespace lisp {
       {kw::seq, check_seq},
       {kw::var, check_var},
       {kw::run, check_run},
-      {kw::set, check_set},
     };
     
     const constructor func_ctor("->", 2);
@@ -637,17 +635,6 @@ namespace lisp {
       return check_bind(ctx, terms);
     }
 
-    static mono check_set(const ref<context>& ctx, const sexpr::list& terms) {
-      const symbol& name = terms->head.get<symbol>();
-      if(!ctx->find_local(name)) {
-        throw unbound_variable(name);
-      }
-      
-      return check_bind(ctx, terms);
-    }
-
-    
-    
     // monadic sequencing
     static mono check_seq(const ref<context>& ctx, const sexpr::list& items) {
 

@@ -114,23 +114,23 @@ const auto jit_compiler = [](bool dump) {
     tc->def("%", integer_type >>= integer_type >>= integer_type);
     tc->def("=", integer_type >>= integer_type >>= boolean_type);
 
-    // {
-    //   ref<variable> a = tc->fresh();
-    //   ref<variable> thread = tc->fresh();      
-    //   tc->def(kw::ref, a >>= io_ctor(ref_ctor(a, thread), thread));
-    // }
+    {
+      ref<variable> a = tc->fresh();
+      ref<variable> thread = tc->fresh();      
+      tc->def(kw::ref, a >>= io_ctor(ref_ctor(a, thread), thread));
+    }
 
-    // {
-    //   ref<variable> a = tc->fresh();
-    //   ref<variable> thread = tc->fresh();            
-    //   tc->def(kw::set, ref_ctor(a, thread) >>= a >>= io_ctor(unit_type, thread));
-    // }
+    {
+      ref<variable> a = tc->fresh();
+      ref<variable> thread = tc->fresh();            
+      tc->def(kw::set, ref_ctor(a, thread) >>= a >>= io_ctor(unit_type, thread));
+    }
 
-    // {
-    //   ref<variable> a = tc->fresh();
-    //   ref<variable> thread = tc->fresh();
-    //   tc->def(kw::get, ref_ctor(a, thread) >>= io_ctor(a, thread));
-    // }
+    {
+      ref<variable> a = tc->fresh();
+      ref<variable> thread = tc->fresh();
+      tc->def(kw::get, ref_ctor(a, thread) >>= io_ctor(a, thread));
+    }
 
     {
       ref<variable> a = tc->fresh();
