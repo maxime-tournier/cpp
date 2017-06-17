@@ -17,7 +17,7 @@ namespace lisp {
       quasiquote = "quasiquote",
       unquote = "unquote";
 
-    const symbol var = "var", ref = "ref", get = "get", set = "set", pure = "pure";
+    const symbol var = "var", ref = "ref", get = "get", set = "set", pure = "pure", run = "run";
   }
 
   

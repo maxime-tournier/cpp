@@ -146,7 +146,7 @@ namespace lisp {
       }
     }
 
-    static void get(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
+    static void pure(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       return compile(res, ctx, args->head);
     }
 
@@ -154,21 +154,18 @@ namespace lisp {
     static void set(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       const symbol& name = args->head.get<symbol>();
       const sexpr& value = args->tail->head;
-
-      compile(res, ctx, value);
-
+      
       if( std::size_t* index = ctx->find(name) ) {
 
+        compile(res, ctx, value);
+        
         res.push_back( opcode::STORE );
         res.push_back( integer(*index) );
 
         res.push_back(opcode::PUSH );
         res.push_back( unit() );        
         
-        return compile(res, ctx, args->head);
-        
-      } 
-
+      }
       // this should not happen with typechecking
       throw unbound_variable(name);
     }
@@ -272,13 +269,17 @@ namespace lisp {
       { kw::cond, cond},
       { kw::quote, quote},
       { kw::seq, seq},
-      { kw::get, get},
+
       { kw::set, set},      
       { kw::var, def},
-
-      // these are only aliases and return their first argument
-      { kw::ref, get},
-      { kw::pure, get},      
+      
+      { kw::pure, pure},
+      { kw::run, seq},
+      
+      // // these are only aliases
+      // { kw::ref, get},
+      // { kw::get, get},
+      
     };
 
     

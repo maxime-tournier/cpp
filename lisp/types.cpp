@@ -215,22 +215,31 @@ namespace lisp {
 
     static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms);
     static mono check_cond(const ref<context>& ctx, const sexpr::list& terms);
+    static mono check_def(const ref<context>& ctx, const sexpr::list& terms);
+    
+    static mono check_seq(const ref<context>& ctx, const sexpr::list& terms);    
     static mono check_var(const ref<context>& ctx, const sexpr::list& terms);
-    static mono check_seq(const ref<context>& ctx, const sexpr::list& terms);
-    static mono check_def(const ref<context>& ctx, const sexpr::list& terms);            
+    static mono check_set(const ref<context>& ctx, const sexpr::list& terms);
+    static mono check_run(const ref<context>& ctx, const sexpr::list& terms);    
+
     
     static std::map<symbol, special_type> special = {
       {kw::lambda, check_lambda},
       {kw::cond, check_cond},
-      {kw::seq, check_seq},
       {kw::def, check_def},
+
+      {kw::seq, check_seq},
       {kw::var, check_var},
+      {kw::run, check_run},
+      {kw::set, check_set},
     };
     
     const constructor func_ctor("->", 2);
-    const constructor io_ctor("io", 2);
-    const constructor ref_ctor("ref", 1);
     const constructor list_ctor("list", 1);            
+
+    const constructor io_ctor("io", 2);
+    const constructor ref_ctor("ref", 2);
+
     
     static mono check_expr(const ref<context>& ctx, const sexpr& e);
     static void unify(const mono& lhs, const mono& rhs);
@@ -244,7 +253,7 @@ namespace lisp {
 
     struct occurs_error {
       ref<variable> var;
-      application app;
+      mono type;
     };
     
     struct occurs_check {
@@ -301,10 +310,10 @@ namespace lisp {
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
         
-        if(rhs.is<application>() && rhs.map<bool>(occurs_check(), self, uf)) {
+        if( mono(self) != rhs && rhs.map<bool>(occurs_check(), self, uf)) {
           throw occurs_error{self, rhs.get<application>()};
         }
-        
+
         uf.link(self, rhs);
       }
 
@@ -560,16 +569,15 @@ namespace lisp {
         
       } catch( occurs_error& e ) {
         std::stringstream ss;
-        scheme var = mono(e.var).generalize(), app = mono(e.app).generalize();
+        scheme var = mono(e.var).generalize(), type = e.type.generalize();
 
         ostream_map osm;
         
         ostream(ss, var, osm) << " occurs in ";
-        ostream(ss, app, osm);
+        ostream(ss, type, osm);
 
         throw type_error(ss.str());
       }
-      
       
     }
 
@@ -599,14 +607,14 @@ namespace lisp {
 
 
     
-
-    static mono check_var(const ref<context>& ctx, const sexpr::list& terms) {
+    // monadic binding
+    static mono check_bind(const ref<context>& ctx, const sexpr::list& terms) {
       const symbol& name = terms->head.get<symbol>();
       const sexpr& value = terms->tail->head;
 
       // bind values in the io monad
-      mono value_type = variable::fresh(ctx->depth);
-      mono thread = variable::fresh(ctx->depth);
+      const mono value_type = variable::fresh(ctx->depth);
+      const mono thread = variable::fresh(ctx->depth);
       
       unify(io_ctor(value_type, thread), check_expr(ctx, value));
 
@@ -614,15 +622,37 @@ namespace lisp {
       ++ctx->depth;
       ctx->def(name, value_type);
       assert(ctx->find(name)->vars.empty());
-      
+
+      // if no further computation happens, this is unit
       return io_ctor(unit_type, thread);
     }
 
 
+    static mono check_var(const ref<context>& ctx, const sexpr::list& terms) {
+      const symbol& name = terms->head.get<symbol>();
+      if(ctx->find_local(name)) {
+        throw type_error("variable redefinition: " + name.name());
+      }
+
+      return check_bind(ctx, terms);
+    }
+
+    static mono check_set(const ref<context>& ctx, const sexpr::list& terms) {
+      const symbol& name = terms->head.get<symbol>();
+      if(!ctx->find_local(name)) {
+        throw unbound_variable(name);
+      }
+      
+      return check_bind(ctx, terms);
+    }
+
+    
+    
+    // monadic sequencing
     static mono check_seq(const ref<context>& ctx, const sexpr::list& items) {
 
       mono thread = variable::fresh(ctx->depth);
-      mono res = io_ctor( unit_type, thread );
+      mono res = io_ctor( unit_type, thread ); // TODO const impossible here ?
       
       for(const sexpr& e : items) {
         res = io_ctor( variable::fresh(ctx->depth), thread );
@@ -633,6 +663,30 @@ namespace lisp {
     }
     
 
+    // runST-like monad escape
+    static mono check_run(const ref<context>& ctx, const sexpr::list& items) {
+      const mono thread = variable::fresh(ctx->depth);
+      const mono value_type = variable::fresh(ctx->depth);      
+
+      ref<context> sub = make_ref<context>(ctx);
+
+      unify( io_ctor(value_type, thread), check_seq(sub, items));
+
+      // try to generalize thread
+      const scheme gen = uf.find(thread).generalize(ctx->depth);
+
+      if(gen.vars.empty()) {
+        // thread variable is bound: computation can access outer state and
+        // maybe unpure
+        throw type_error("thread escape");
+      }
+      
+      return value_type;
+    }
+
+
+
+    
 
     // toplevel check
     scheme check(const ref<context>& ctx, const sexpr& e) {

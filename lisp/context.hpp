@@ -26,12 +26,17 @@ namespace lisp {
       context* check = (Derived*) nullptr;
       (void) check;
     }
+
+    value_type* find_local(symbol key) {
+      auto it = locals.find(key);
+      if(it != locals.end()) return &it->second;
+      return nullptr;
+    }
     
     value_type* find(symbol key) {
-      auto it = locals.find(key);
-      
-      if(it != locals.end()) return &it->second;
-      if(parent) return parent->find(key);
+      value_type* res = find_local(key);
+      if( res ) return res;
+      if( parent ) return parent->find(key);
       return nullptr;
     }
 
