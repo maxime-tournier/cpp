@@ -200,7 +200,7 @@ namespace slip {
     }
 
 
-
+    static typed_sexpr check_app(const ref<context>& ctx, const sexpr::list& self);
     
     using special_type = mono (*)(const ref<context>& ctx, const sexpr::list& terms);
 
@@ -416,20 +416,26 @@ namespace slip {
 
     
 
-    static mono check_app(const ref<context>& ctx, const sexpr::list& self) {
-      assert(self);
-
-      const mono func_type = check_expr(ctx, self->head).type;
+    static typed_sexpr check_app(const ref<context>& ctx, const sexpr::list& self) {
+      const typed_sexpr func = check_expr(ctx, self->head);
       
       const mono result_type = variable::fresh(ctx->depth);
 
-      const mono app_type = foldr(result_type, self->tail, [&ctx](const sexpr& e, mono rhs) {
-          return check_expr(ctx, e).type >>= rhs;
+      const list<typed_sexpr> args = map(self->tail, [&ctx](const sexpr& e) {
+          return check_expr(ctx, e);
+        });
+
+      const mono app_type = foldr(result_type, args, [&ctx](const typed_sexpr& e, mono rhs) {
+          return e.type >>= rhs;
         });
       
-      unify(func_type, app_type);
+      unify(func.type, app_type);
+
+      // TODO currying
+      return {result_type, func.expr >>= map(args, [](const typed_sexpr& e) {
+            return e.expr;
+          })};
       
-      return result_type;
     }
 
     
@@ -508,7 +514,7 @@ namespace slip {
 
         }
 
-        return {check_app(ctx, self), self};
+        return check_app(ctx, self);
       }
       
     };
