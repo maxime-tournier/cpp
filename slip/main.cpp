@@ -119,10 +119,13 @@ struct helper {
     
     const types::mono result_type = types::traits<Ret>::type();
     
-    const types::mono app = foldr(result_type, arg_types, [](types::mono lhs, types::mono rhs) -> types::mono {
+    types::mono app = foldr(result_type, arg_types, [](types::mono lhs, types::mono rhs) -> types::mono {
         return lhs >>= rhs;
       });
 
+    // remember true argc
+    app.get<types::application>().info = sizeof...(Args);
+    
     static Ret (*ptr)(Args...) = +f;
     
     vm::builtin wrapper = [](const vm::value* first, const vm::value* last) -> vm::value {
@@ -255,8 +258,13 @@ const auto jit_compiler = [](bool dump) {
     const sexpr e = expand_seq(env, s);
 
     const types::check_type checked = types::check(tc, e);
-    const vm::value v = jit->eval(checked.expr, dump);
 
+    if(dump) {
+      std::cout << "rewritten expr: " << checked.expr << std::endl;
+    }
+    
+    const vm::value v = jit->eval(checked.expr, dump);
+    
     std::cout << " : " << checked.type; 
     
     if(v.is<slip::unit>()) {

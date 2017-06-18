@@ -78,6 +78,13 @@ namespace slip {
     return foldl( f(init, self->head), self->tail, f);
   }
   
+
+  template<class Head>
+  static inline list<Head> concat(const list<Head>& lhs, const list<Head>& rhs) {
+    return foldr(rhs, lhs, [](const Head& head, const list<Head>& rest) {
+        return head >>= rest;
+      });
+  }
   
   
   

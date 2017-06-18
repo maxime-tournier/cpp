@@ -334,7 +334,7 @@ namespace slip {
       const sexpr::list& vars = terms->head.get<sexpr::list>();
       
       // build application type
-      const mono app_type = foldr(result_type, vars, [&ctx, &sub](const sexpr& lhs, const mono& rhs) {
+      mono app_type = foldr(result_type, vars, [&ctx, &sub](const sexpr& lhs, const mono& rhs) {
           
           // create variable types and fill sub-context while we're at it
           ref<variable> var_type = variable::fresh(ctx->depth);
@@ -343,6 +343,9 @@ namespace slip {
           return var_type >>= rhs;
         });
 
+
+      // remember true argcount
+      app_type.get<application>().info = size(vars);
       
       // infer body type in sub-context
       const sexpr& body = terms->tail->head;
@@ -414,6 +417,12 @@ namespace slip {
       return result_type;
     }
 
+
+    static symbol gensym() {
+      static std::size_t index = 0;
+
+      return std::string("__arg") + std::to_string(index++);
+    }
     
 
     static typed_sexpr check_app(const ref<context>& ctx, const sexpr::list& self) {
@@ -431,11 +440,53 @@ namespace slip {
       
       unify(func.type, app_type);
 
-      // TODO currying
-      return {result_type, func.expr >>= map(args, [](const typed_sexpr& e) {
-            return e.expr;
-          })};
+      const std::size_t argc = size(args);
+      const std::size_t info = func.type.get<application>().info;
+
+      // call expression
+      const sexpr::list call_expr = func.expr >>= map(args, [](const typed_sexpr& e) {
+          return e.expr;
+        });
+
+      if(info == argc) {
+        return {result_type, call_expr};
+      }
       
+      if(info > argc) {
+        // non-saturated call: wrap in a closure
+        
+        // generate additional vars
+        sexpr::list vars;
+        for(std::size_t i = 0; i < (info - argc); ++i) {
+          vars = gensym() >>= vars;
+        }
+
+        const sexpr closure_expr = kw::lambda >>= sexpr(vars)
+          >>= sexpr(concat(call_expr, vars)) >>= sexpr::list();
+
+        return {result_type, closure_expr};
+      }
+      
+      if( info < argc ) {
+        // over-saturated call: split call ((func args...) args...)
+        sexpr::list res;
+        sexpr::list* curr = &res;
+        
+        std::size_t i = 0;
+        for(const sexpr& e : call_expr) {
+          if(i++ != argc) {
+            *curr = e >>= sexpr::list();
+            curr = &(*curr)->tail;
+          } else {
+            res = res >>= e >>= sexpr::list();
+            curr = &res->tail;
+          }
+        }
+
+        return {result_type, res};
+      }
+
+      throw error("impossibru!");
     }
 
     
@@ -660,19 +711,18 @@ namespace slip {
       static std::size_t init = ctx->depth++; (void) init;
       
       // TODO FIXME global uf
-      const mono res = check_expr(ctx, e).type.map<mono>(nice(), uf);
-      
-      if(res.is<application>() && res.get<application>().ctor == io_ctor) {
+      const typed_sexpr res = check_expr(ctx, e);
 
+      if(res.type.is<application>() && res.type.get<application>().ctor == io_ctor) {
+        
         // toplevel io must happen in toplevel thread
         const mono fresh = variable::fresh(ctx->depth);
-        unify( io_ctor(fresh, thread), res);
-        
+        unify( io_ctor(fresh, thread), res.type);
       }
 
       
       
-      return {res.generalize(ctx->depth), e};
+      return {res.type.generalize(ctx->depth), res.expr};
     }
     
 

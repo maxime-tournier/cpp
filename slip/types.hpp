@@ -101,8 +101,8 @@ namespace slip {
       using args_type = std::vector<mono>;
       args_type args;
 
-      application(constructor ctor, const args_type& args)
-        : ctor(ctor), args(args) {
+      application(constructor ctor, const args_type& args, std::size_t info = 0)
+        : ctor(ctor), args(args), info(info) {
         if(args.size() != ctor->argc) {
           throw error("constructor argc error");
         }
@@ -116,6 +116,10 @@ namespace slip {
         return ctor < other.ctor || (ctor == other.ctor && args < other.args);
       }
 
+
+      // remember "real" arity for a function 
+      std::size_t info;
+      
     };
 
 
@@ -123,17 +127,18 @@ namespace slip {
     template<class F>
     static application map(const application& self, const F& f) {
       application::args_type args; args.reserve(self.args.size());
-
+      
       std::transform(self.args.begin(), self.args.end(), std::back_inserter(args), f);
 
-      return application(self.ctor, args);
+      return application(self.ctor, args, self.info);
     }
     
 
-   template<class ... Args>
-   application constructor::operator()(Args&& ... args) const {
-     return application(*this, { std::forward<Args>(args)... });
-   }
+
+    template<class ... Args>
+    application constructor::operator()(Args&& ... args) const {
+      return application(*this, { std::forward<Args>(args)... });
+    }
 
     
     struct scheme;
