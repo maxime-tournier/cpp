@@ -10,15 +10,7 @@ namespace lisp {
   }
 
   static value cons(const value* first, const value* last) {
-    argument_error::check(last - first, 2);
-    
-    const value& head = *first++;
-    try{
-      const value::list& tail = first->cast<value::list>();
-      return head >>= tail;
-    } catch( value::bad_cast& e ) {
-      throw type_error("list expected");
-    }
+    return first[0] >>= first[1].get<value::list>();
   }
 
   

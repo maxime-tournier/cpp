@@ -190,7 +190,6 @@ namespace lisp {
 
     scheme check(const ref<context>& ctx, const sexpr& e);
 
-    
     template<class T>
     static bool operator!=(const T& lhs, const T& rhs) {
       return !(lhs == rhs);
