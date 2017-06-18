@@ -397,11 +397,8 @@ namespace slip {
                 const value* first = stack.data() + first_index;
                 const value* last = first + n;
 
-                reinterpret_cast<slip::value&>(stack[start]) = 
-                  (func.get<builtin>()
-                   ( reinterpret_cast<const slip::value*>(first),
-                     reinterpret_cast<const slip::value*>(last)));
-            
+                stack[start] = func.get<builtin>()(first, last);
+                
                 // pop args + push result
                 stack.resize( first_index, unit() ); // warning: func is invalidated
               }

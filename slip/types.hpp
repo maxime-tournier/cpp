@@ -14,7 +14,7 @@
 namespace slip {
 
   namespace types {
-  
+    
     // monotypes
     struct mono;
 
@@ -29,6 +29,11 @@ namespace slip {
 
     extern const constant unit_type, boolean_type, integer_type, real_type, string_type;
 
+    template<class T>
+    struct traits {
+      static constant type();
+    };
+    
     
     struct variable {
       const std::size_t depth;

@@ -15,8 +15,8 @@ namespace slip {
     jit();
     ~jit();
 
-    // not sure though
-    void import(const ref<slip::environment>& ctx);
+    // push named values on the stack
+    jit& def(symbol name, const vm::value& value);
     
     vm::value eval(const slip::sexpr& expr, bool dump = false);
 

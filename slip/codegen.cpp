@@ -100,6 +100,7 @@ namespace slip {
       res.label(end);
     }
 
+
     template<class T>
     static void literal(bytecode& res, const T& value) {
       res.push_back( opcode::PUSH );
@@ -321,7 +322,7 @@ namespace slip {
       }
 
 
-      void operator()(const builtin& self, ref<variables>& ctx, bytecode& res) const {
+      void operator()(const vm::builtin& self, ref<variables>& ctx, bytecode& res) const {
         literal(res, self);
       }
     

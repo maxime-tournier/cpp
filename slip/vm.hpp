@@ -53,7 +53,8 @@ namespace slip {
     using slip::real;
     using slip::list;
 
-    using slip::builtin;
+    using builtin = value (*)(const value* first, const value* last);
+    
     using slip::string;
 
     struct label : symbol {

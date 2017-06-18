@@ -97,22 +97,76 @@ static const auto interpreter = [] {
 
 
 
+namespace slip {
+struct helper {
+  ref<jit> jit;
+  ref<types::context> tc;
+
+
+  template<class T>
+  helper& operator()(symbol name, types::mono type, const T& value) {
+    tc->def(name, type);
+    jit->def(name, value);
+    return *this;   
+  }
+
+  
+  template<class F, class Ret, class ... Args, std::size_t ... I>
+  helper& operator()(symbol name, F f, Ret (*)(Args...args), indices<I...> ) {
+
+    const types::mono args[] = { types::traits<Args>::type()... };
+    const list<types::mono> arg_types = make_list<types::mono>(args, args + sizeof...(Args) );
+    
+    const types::mono result_type = types::traits<Ret>::type();
+    
+    const types::mono app = foldr(result_type, arg_types, [](types::mono lhs, types::mono rhs) -> types::mono {
+        return lhs >>= rhs;
+      });
+
+    static Ret (*ptr)(Args...) = +f;
+    
+    vm::builtin wrapper = [](const vm::value* first, const vm::value* last) -> vm::value {
+      return ptr(first[I].get<Args>()...);
+    };
+
+
+    return (*this)(name, app, wrapper);
+  }
+  
+
+  template<class Ret, class ... Args>
+  static range_indices<sizeof...(Args)> args_indices(Ret (*ptr)(Args...) ) {
+    return {};
+  }
+
+  
+  
+  template<class F>
+  helper& operator()(symbol name, F f) {
+    return (*this)(name, f, +f, args_indices(+f));
+  }
+  
+};
+}
+
 const auto jit_compiler = [](bool dump) {
 
+  static const ref<slip::environment> env = make_ref<slip::environment>();
   static const ref<slip::jit> jit = make_ref<slip::jit>();
-  static const ref<slip::environment> env = slip::std_env();
-
   static const ref<slip::types::context> tc = make_ref<slip::types::context>();
 
+  slip::helper ctx{jit, tc};
+  
   {
     using namespace slip;
     using namespace slip::types;
-    tc->def("+", integer_type >>= integer_type >>= integer_type);
-    tc->def("-", integer_type >>= integer_type >>= integer_type);
-    tc->def("/", integer_type >>= integer_type >>= integer_type);
-    tc->def("*", integer_type >>= integer_type >>= integer_type);
-    tc->def("%", integer_type >>= integer_type >>= integer_type);
-    tc->def("=", integer_type >>= integer_type >>= boolean_type);
+
+    ctx("+", [](integer lhs, integer rhs) -> integer { return lhs + rhs; });
+    ctx("-", [](integer lhs, integer rhs) -> integer { return lhs - rhs; });
+    ctx("/", [](integer lhs, integer rhs) -> integer { return lhs / rhs; });
+    ctx("*", [](integer lhs, integer rhs) -> integer { return lhs * rhs; });
+    ctx("%", [](integer lhs, integer rhs) -> integer { return lhs % rhs; });
+    ctx("=", [](integer lhs, integer rhs) -> boolean { return lhs == rhs; });
 
     {
       ref<variable> a = tc->fresh();
@@ -140,7 +194,7 @@ const auto jit_compiler = [](bool dump) {
     
     {
       ref<variable> a = tc->fresh();
-      tc->def("nil", list_ctor(a));
+      ctx("nil", list_ctor(a), vm::value::list());
     }
 
     {
@@ -161,41 +215,39 @@ const auto jit_compiler = [](bool dump) {
     
   }
 
-  (*env)("nil", slip::value::list());
   
-  (*env)("iter", +[](const slip::value* first, const slip::value* last) -> slip::value {
-      using namespace slip::vm;
+  // (*env)("iter", +[](const slip::value* first, const slip::value* last) -> slip::value {
+  //     using namespace slip::vm;
 
-      const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
+  //     const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
       
-      const value::list& x = args[0].get<value::list>();
-      const value& func = args[1];
+  //     const value::list& x = args[0].get<value::list>();
+  //     const value& func = args[1];
       
-      for(const value& xi : x) {
-        jit->call(func, &xi, &xi + 1);
-      }
+  //     for(const value& xi : x) {
+  //       jit->call(func, &xi, &xi + 1);
+  //     }
       
-      return unit();
-    });
+  //     return unit();
+  //   });
   
 
-  (*env)("map", +[](const slip::value* first, const slip::value* last) -> slip::value {
-      using namespace slip::vm;
+  // (*env)("map", +[](const slip::value* first, const slip::value* last) -> slip::value {
+  //     using namespace slip::vm;
 
-      const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
+  //     const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
 
-      const value::list& x = args[0].get<value::list>();
-      const value& func = args[1];
+  //     const value::list& x = args[0].get<value::list>();
+  //     const value& func = args[1];
 
       
-      value::list result = map(x, [&](const value& xi) {
-          return jit->call(func, &xi, &xi + 1);
-        });
+  //     value::list result = map(x, [&](const value& xi) {
+  //         return jit->call(func, &xi, &xi + 1);
+  //       });
 
-      return reinterpret_cast<slip::value::list&>(result);
-    });
+  //     return reinterpret_cast<slip::value::list&>(result);
+  //   });
 
-  jit->import( env );
 
   using namespace slip;  
   return [dump](sexpr&& s) {

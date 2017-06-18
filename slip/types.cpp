@@ -29,43 +29,19 @@ namespace slip {
     const constructor func_ctor("->", 2);
     const constructor list_ctor("list", 1);            
 
-    const constructor io_ctor("io", 2);
-    const constructor ref_ctor("ref", 2);
+    const constructor io_ctor("io", 2, 1);
+    const constructor ref_ctor("ref", 2, 1);
 
     
     
-    template<>
-    struct traits< slip::unit > {
-      static constant type() { return unit_type; }
-    };
-
+    template<> constant traits< slip::unit >::type() { return unit_type; }
+    template<> constant traits< slip::boolean >::type() { return boolean_type; }      
+    template<> constant traits< slip::integer >::type() { return integer_type; }
+    template<> constant traits< slip::real >::type() { return real_type; }
+    template<> constant traits< ref<slip::string> >::type() { return string_type; }
+    template<> constant traits< slip::symbol >::type() { return symbol_type; }
     
-    template<>
-    struct traits< slip::boolean > {
-      static constant type() { return boolean_type; }      
-    };
-
-
-    template<>
-    struct traits< slip::integer > {
-      static constant type() { return integer_type; }            
-    };
-
-    template<>
-    struct traits< slip::real > {
-      static constant type() { return real_type; }
-    };
-
-
-    template<>
-    struct traits< ref<slip::string> > {
-      static constant type() { return string_type; }                  
-    };
-
-    template<>
-    struct traits< slip::symbol > {
-      static constant type() { return symbol_type; }                        
-    };
+    
     
 
     struct var_repr {
@@ -99,12 +75,13 @@ namespace slip {
           
         } else {
           out << self.ctor->name;
-          
-          if(self.args.empty()) return;
 
-          for(const mono& t : self.args) {
+          // TODO should we print phantom types?
+          const std::size_t stop = self.ctor->argc - self.ctor->phantom;
+          
+          for(std::size_t i = 0; i < stop; ++i) {
             out << ' ';
-            t.apply(ostream_visitor(), out, osm);
+            self.args[i].apply(ostream_visitor(), out, osm);
           }
         }
         
@@ -346,28 +323,19 @@ namespace slip {
       // sub-context
       ref<context> sub = make_ref<context>(ctx);
 
-      ref<variable> result_type = variable::fresh(ctx->depth);
-
-      struct none {};
-      using maybe = variant<none, application>;
-      maybe init = none();
+      const mono result_type = variable::fresh(ctx->depth);
 
       const sexpr::list& vars = terms->head.get<sexpr::list>();
-
+      
       // build application type
-      const application app_type =
-        foldr(init, vars, [&ctx, &sub, &result_type](const sexpr& lhs, const maybe& rhs) {
+      const mono app_type = foldr(result_type, vars, [&ctx, &sub](const sexpr& lhs, const mono& rhs) {
           
-            // create variable types and fill sub-context
-            ref<variable> var_type = variable::fresh(ctx->depth);
-            sub->def(lhs.get<symbol>(), var_type);
+          // create variable types and fill sub-context while we're at it
+          ref<variable> var_type = variable::fresh(ctx->depth);
+          sub->def(lhs.get<symbol>(), var_type);
           
-            if(rhs.is<none>()) {
-              return var_type >>= result_type;
-            } 
-          
-            return var_type >>= rhs.get<application>();
-          }).get<application>();
+          return var_type >>= rhs;
+        });
 
       
       // infer body type in sub-context
@@ -446,25 +414,13 @@ namespace slip {
       assert(self);
 
       const mono func_type = check_expr(ctx, self->head);
+      
+      const mono result_type = variable::fresh(ctx->depth);
 
-      const list<mono> args_type = map(self->tail, [&ctx](const sexpr& e) -> mono{
-          return check_expr(ctx, e);
+      const mono app_type = foldr(result_type, self->tail, [&ctx](const sexpr& e, mono rhs) {
+          return check_expr(ctx, e) >>= rhs;
         });
-
-      const ref<variable> result_type = variable::fresh(ctx->depth);
       
-      struct none{};
-      using maybe = variant<none, application>;
-      maybe init = none();
-      
-      const mono app_type = foldr(init, args_type, [&result_type](const mono& lhs, const maybe& rhs) {
-          if(rhs.is<none>()) {
-            return lhs >>= result_type;
-          } 
-
-          return lhs >>= rhs.get<application>();
-        }).get<application>();
-
       unify(func_type, app_type);
       
       return result_type;

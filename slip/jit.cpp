@@ -18,41 +18,13 @@ namespace slip {
   jit::~jit() { }
 
 
-  struct import_visitor {
-
-    vm::value operator()(const sexpr& self) const {
-      return self;
-    }
-
-    vm::value operator()(const builtin& self) const {
-      return self;
-    }
-
-
-    vm::value operator()(const slip::value::list& self) const {
-      return reinterpret_cast<const vm::value::list&>(self);
-    }
-    
-
-    template<class T>
-    vm::value operator()(const T& self) const {
-      throw error("cannot import values of this type");
-    }
-    
-  };
-
-
-  
-  
-  void jit::import(const ref<slip::environment>& env) {
-
-    for(const auto& it : env->locals) {
-      ctx->add_local(it.first);
-      machine.stack.emplace_back( it.second.map<vm::value>(import_visitor()) );
-    }
-    
+  jit& jit::def(symbol name, const vm::value& value) {
+    ctx->add_local(name);
+    machine.stack.emplace_back( value );
+    return *this;
   }
-
+  
+  
   
   vm::value jit::eval(const slip::sexpr& expr, bool dump) {
     const std::size_t start = code.size();
@@ -128,12 +100,7 @@ namespace slip {
       return result;
     }
     case vm::value::type_index< vm::builtin >(): {
-
-      const vm::builtin& ptr = func.get< vm::builtin >();
-      slip::value result = ptr( reinterpret_cast<const slip::value*>(first),
-                                reinterpret_cast<const slip::value*>(last) );
-      
-      return reinterpret_cast<vm::value&>(result);
+      return func.get<vm::builtin>()( first, last );
     }
 
     default:
