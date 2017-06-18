@@ -1,19 +1,11 @@
 
-
-;; (run
-;;  (var x (ref 0))
-;;  (get x))
-
-(def z (run
-        (var y (ref nil))
-        (pure y)))
-z
-
-     
+(run
+ (var x (ref nil))
+ (get x))
 
 
-;; (do
-;;  (var x (ref 0))
-;;  (pure (run
-;;         (get x))))
+;; (run (ref nil))
+
+;; (var x (ref nil))
+;; (run (get x))
 

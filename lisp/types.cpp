@@ -662,15 +662,22 @@ namespace lisp {
 
       unify( io_ctor(value_type, thread), check_seq(sub, items));
 
-      // try to generalize thread
-      const scheme gen = uf.find(thread).generalize(ctx->depth);
+      const scheme gen_thread = thread.generalize(ctx->depth);
+      const scheme gen_value_type = value_type.generalize(ctx->depth);            
 
-      if(gen.vars.empty()) {
-        // thread variable is bound: computation can access outer state and
-        // maybe unpure
-        throw type_error("thread escape");
+      const vars_type vars = gen_value_type.body.vars();
+      
+      if( vars.find(gen_thread.body.cast<ref<variable>>() ) != vars.end()) {
+        // thread appears in result type: this is impossible with rank-2 types
+        throw type_error("computation thread escape");
       }
       
+      if(gen_thread.vars.empty()) {
+        // thread variable is bound: computation can access outer state and
+        // maybe unpure
+        throw type_error("computation references outer thread");
+      }
+
       return value_type;
     }
 

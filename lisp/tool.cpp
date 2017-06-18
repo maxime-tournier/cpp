@@ -9,7 +9,7 @@ namespace lisp {
     return make_list<value>(first, last);
   }
 
-  static value append(const value* first, const value* last) {
+  static value cons(const value* first, const value* last) {
     argument_error::check(last - first, 2);
     
     const value& head = *first++;
@@ -99,7 +99,7 @@ namespace lisp {
       ("%", wrap([](integer x, integer y) -> integer { return x % y; }))        
       
       ("list", list_ctor)
-      ("append", append)      
+      ("cons", cons)      
 
       ("repr", ostream<repr_visitor>)
       ("print", ostream<print_visitor>)

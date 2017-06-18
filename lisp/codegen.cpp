@@ -167,10 +167,13 @@ namespace lisp {
 
         res.push_back(opcode::PUSH );
         res.push_back( unit() );        
-        
-      }
+
+        return;
+      } 
+
       // this should not happen with typechecking
       throw unbound_variable(name);
+
     }
 
     
