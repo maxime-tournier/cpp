@@ -13,6 +13,12 @@ namespace slip {
 
   namespace types {
 
+    struct typed_sexpr {
+      mono type;
+      sexpr expr;
+
+    };
+    
     template<class T>
     struct traits;
 
@@ -219,7 +225,7 @@ namespace slip {
     
 
     
-    static mono check_expr(const ref<context>& ctx, const sexpr& e);
+    static typed_sexpr check_expr(const ref<context>& ctx, const sexpr& e);
     static void unify(const mono& lhs, const mono& rhs);
 
     
@@ -342,7 +348,7 @@ namespace slip {
       const sexpr& body = terms->tail->head;
 
       // unify with result type
-      uf.link(result_type, check_expr(sub, body));
+      uf.link(result_type, check_expr(sub, body).type);
       
       return app_type;
     }
@@ -401,8 +407,8 @@ namespace slip {
         const sexpr& test = pair->head;
         const sexpr& value = pair->tail->head;
 
-        unify(boolean_type, check_expr(ctx, test));
-        unify(result_type, check_expr(ctx, value));        
+        unify(boolean_type, check_expr(ctx, test).type);
+        unify(result_type, check_expr(ctx, value).type);        
       }
       
       return result_type;
@@ -413,12 +419,12 @@ namespace slip {
     static mono check_app(const ref<context>& ctx, const sexpr::list& self) {
       assert(self);
 
-      const mono func_type = check_expr(ctx, self->head);
+      const mono func_type = check_expr(ctx, self->head).type;
       
       const mono result_type = variable::fresh(ctx->depth);
 
       const mono app_type = foldr(result_type, self->tail, [&ctx](const sexpr& e, mono rhs) {
-          return check_expr(ctx, e) >>= rhs;
+          return check_expr(ctx, e).type >>= rhs;
         });
       
       unify(func_type, app_type);
@@ -474,15 +480,16 @@ namespace slip {
       
       // literals
       template<class T>
-      mono operator()(const T& self, const ref<context>& ctx) const {
-        return traits<T>::type();
+      typed_sexpr operator()(const T& self, const ref<context>& ctx) const {
+        return {traits<T>::type(), self};
       }
 
       // variables
-      mono operator()(const symbol& self, const ref<context>& ctx) const {
+      typed_sexpr operator()(const symbol& self, const ref<context>& ctx) const {
+        
         // TODO at which depth should we instantiate?
         if(scheme* p = ctx->find(self)) {
-          return p->instantiate(ctx->depth);
+          return {p->instantiate(ctx->depth), self};
         } else {
           throw unbound_variable(self);
         }
@@ -490,27 +497,27 @@ namespace slip {
 
       
 
-      mono operator()(const sexpr::list& self, const ref<context>& ctx) const {
+      typed_sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
         if(self && self->head.is<symbol>()) {
           const symbol s = self->head.get<symbol>();
 
           const auto it = special.find(s);
           if( it != special.end() ) {
-            return it->second(ctx, self->tail);
+            return {it->second(ctx, self->tail), self};
           }
 
         }
 
-        return check_app(ctx, self);
+        return {check_app(ctx, self), self};
       }
       
     };
 
 
-    static mono check_expr(const ref<context>& ctx, const sexpr& e) {
+    static typed_sexpr check_expr(const ref<context>& ctx, const sexpr& e) {
+
       try {
-        
-        return e.map<mono>(expr_visitor(), ctx);
+        return e.map<typed_sexpr>(expr_visitor(), ctx);
         
       } catch( unification_error& e) {
         std::stringstream ss;
@@ -554,7 +561,7 @@ namespace slip {
       sub->def(name, value_type);
       assert(sub->find(name)->vars.empty());
 
-      unify(value_type, check_expr(sub, value));
+      unify(value_type, check_expr(sub, value).type);
 
       // generalize in current context
       ctx->def(name, value_type);
@@ -573,7 +580,7 @@ namespace slip {
       const mono value_type = variable::fresh(ctx->depth);
       const mono thread = variable::fresh(ctx->depth);
       
-      unify(io_ctor(value_type, thread), check_expr(ctx, value));
+      unify(io_ctor(value_type, thread), check_expr(ctx, value).type);
 
       // value_type should remain monomorphic
       ++ctx->depth;
@@ -602,7 +609,7 @@ namespace slip {
       
       for(const sexpr& e : items) {
         res = io_ctor( variable::fresh(ctx->depth), thread );
-        unify(res, check_expr(ctx, e));
+        unify(res, check_expr(ctx, e).type);
       }
       
       return res;
@@ -642,12 +649,12 @@ namespace slip {
     
 
     // toplevel check
-    scheme check(const ref<context>& ctx, const sexpr& e) {
+    check_type check(const ref<context>& ctx, const sexpr& e) {
       static const mono thread = variable::fresh(ctx->depth);
       static std::size_t init = ctx->depth++; (void) init;
       
       // TODO FIXME global uf
-      const mono res = check_expr(ctx, e).map<mono>(nice(), uf);
+      const mono res = check_expr(ctx, e).type.map<mono>(nice(), uf);
       
       if(res.is<application>() && res.get<application>().ctor == io_ctor) {
 
@@ -656,8 +663,10 @@ namespace slip {
         unify( io_ctor(fresh, thread), res);
         
       }
+
       
-      return res.generalize(ctx->depth);
+      
+      return {res.generalize(ctx->depth), e};
     }
     
 

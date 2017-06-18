@@ -254,10 +254,10 @@ const auto jit_compiler = [](bool dump) {
     
     const sexpr e = expand_seq(env, s);
 
-    const types::scheme t = types::check(tc, e);
-    const vm::value v = jit->eval(e, dump);
+    const types::check_type checked = types::check(tc, e);
+    const vm::value v = jit->eval(checked.expr, dump);
 
-    std::cout << " : " << t; 
+    std::cout << " : " << checked.type; 
     
     if(v.is<slip::unit>()) {
       std::cout << std::endl;

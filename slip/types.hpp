@@ -153,9 +153,6 @@ namespace slip {
     application operator>>=(const mono& lhs, const mono& rhs);
 
     
-
-    // std::ostream& operator<<(std::ostream& out, const mono& self);
-
     
     struct scheme {
       vars_type vars;
@@ -193,8 +190,14 @@ namespace slip {
     };
 
 
-    scheme check(const ref<context>& ctx, const sexpr& e);
-
+    // typecheck and rewrite expression
+    struct check_type {
+      scheme type;
+      sexpr expr;
+    };
+    
+    check_type check(const ref<context>& ctx, const sexpr& e);
+    
     template<class T>
     static bool operator!=(const T& lhs, const T& rhs) {
       return !(lhs == rhs);
