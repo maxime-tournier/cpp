@@ -423,7 +423,7 @@ namespace slip {
 
       return std::string("__arg") + std::to_string(index++);
     }
-    
+
 
     static typed_sexpr check_app(const ref<context>& ctx, const sexpr::list& self) {
       const typed_sexpr func = check_expr(ctx, self->head);
@@ -449,6 +449,7 @@ namespace slip {
         });
 
       if(info == argc) {
+        // regular call        
         return {result_type, call_expr};
       }
       
@@ -464,25 +465,30 @@ namespace slip {
         const sexpr closure_expr = kw::lambda >>= sexpr(vars)
           >>= sexpr(concat(call_expr, vars)) >>= sexpr::list();
 
+        // TODO FIXME
+        const_cast<mono&>(uf.find(result_type)).get<application>().info = info - argc;
+        
         return {result_type, closure_expr};
       }
       
       if( info < argc ) {
-        // over-saturated call: split call ((func args...) args...)
-        sexpr::list res;
-        sexpr::list* curr = &res;
-        
-        std::size_t i = 0;
-        for(const sexpr& e : call_expr) {
-          if(i++ != argc) {
-            *curr = e >>= sexpr::list();
-            curr = &(*curr)->tail;
-          } else {
-            res = res >>= e >>= sexpr::list();
-            curr = &res->tail;
-          }
-        }
 
+        std::size_t i = 0;
+        const std::size_t extra = argc - info;
+        
+        const sexpr::list res = foldr( sexpr::list(), call_expr, [&i, extra](const sexpr& e, const sexpr::list& x) {
+            const std::size_t j = i++;
+            
+            if(j < extra) {
+              return e >>= x;
+            } else if (j == extra) {
+              return (e >>= sexpr::list()) >>= x;
+            } else {
+              return (e >>= x->head.get<sexpr::list>() ) >>= x->tail;
+            }
+          });
+        
+        // over-saturated call: split call ((func args...) args...)
         return {result_type, res};
       }
 

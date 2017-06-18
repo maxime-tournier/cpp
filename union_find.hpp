@@ -10,7 +10,6 @@ class union_find {
 public:
 
   const T& find(const T& value) const {
-
     auto it = parent.find(value);
     if(it == parent.end() ) {
       return value;
@@ -22,10 +21,11 @@ public:
     if(res != it->second) {
       parent.emplace( std::make_pair(value, res) );
     }
-    
     return res;
   }
 
+  
+  
   void link(const T& from, const T& to) {
     if(from != to) parent.emplace( std::make_pair(from, to) );
   }
