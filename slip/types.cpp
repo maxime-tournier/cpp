@@ -404,7 +404,7 @@ namespace slip {
       
       const ref<variable> result_type = variable::fresh(ctx->depth);
 
-      const sexpr result_expr = map(items, [&ctx, &result_type](const sexpr& it) -> sexpr {
+      const sexpr::list result_list = map(items, [&ctx, &result_type](const sexpr& it) -> sexpr {
       
           const sexpr::list& pair = it.get<sexpr::list>();
           
@@ -417,7 +417,7 @@ namespace slip {
           return test.expr >>= value.expr >>= sexpr::list();
         });
       
-      return {result_type, kw::cond >>= result_expr >>= sexpr::list() };
+      return {result_type, kw::cond >>= result_list };
     }
     
 
@@ -444,7 +444,7 @@ namespace slip {
       unify(func.type, app_type);
 
       const std::size_t argc = size(args);
-      const std::size_t info = func.type.get<application>().info;
+      const std::size_t info = uf.find(func.type).get<application>().info;
 
       // call expression
       const sexpr::list call_expr = func.expr >>= map(args, [](const typed_sexpr& e) {

@@ -374,12 +374,8 @@ namespace slip {
               // push return address
               const integer return_addr = ip + 1;
               stack.emplace_back( return_addr ); // warning: func is invalidated here
-              
-              // TODO typecheck instead
-              if( f.argc != std::size_t(n) ) {
-                fp.pop_back();
-                throw argument_error(n, f.argc);
-              }
+
+              assert(f.argc == std::size_t(n));
               
               // jump to function address
               ip = f.addr;
@@ -405,7 +401,7 @@ namespace slip {
             
               break;
             default:
-              assert(false);
+
               throw type_error("function expected");
             };
           
