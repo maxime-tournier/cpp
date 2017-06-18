@@ -1,13 +1,14 @@
-`slip` is a small ML-like language with a lispy syntax, written in c++11.
+`slip` is a small ML-like language with a lispy syntax, written in c++11. It is
+meant as a basis for experimentation with type systems. It has the following
+features:
 
-It is meant as a basis for experimentation with type systems. It has the
-following features:
-
-- a repl: `$ ./slip`
-- a small bytecode compiler + vm. you can see the resulting bytecode using: 
+- a **repl**: 
+  `$ ./slip`
+  
+- a small **bytecode compiler + vm**. you can see the resulting bytecode using: 
   `$ ./slip --dump`
 
-- a few primitive types: `unit, boolean, integer, real, string, symbol`
+- a few **primitive types**: `unit, boolean, integer, real, string, symbol`
 - a few non-primitive types:
   - function types `'a -> 'b`
   - lists `list 'a`
@@ -35,12 +36,13 @@ following features:
     - all sequence computation have type `io 'a 'b`, where `'a` is the value
       type and `'b'` is a phantom type binding to the computation thread
       
-    - the `io` monad is escapable provided computations don't reference outer
-      threads and that the inner thread does not leak outside (similar to
-      `runST` in haskell): `(run (var x (pure 0) ) (pure x))` has type `integer`
+    - the `io` monad is escapable using `run` provided computations don't
+      reference outer threads and that the inner thread does not leak outside
+      (similar to `runST` in haskell): `(run (var x (pure 0) ) (pure x))` has
+      type `integer`
       
-    - the language is strict, so the monad is only for type-checking purposes
-
+    - the language is strict: the monad is only for type-checking purpose
+    
 - **mutable references**
   - `ref : 'a -> io ref 'a 'b` where `'a` is the value type and `'b` is a
     phantom thread type
