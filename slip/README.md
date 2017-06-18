@@ -47,8 +47,8 @@ features:
   - `ref : 'a -> io ref 'a 'b` where `'a` is the value type and `'b` is a
     phantom thread type
 
-  - `get: ref 'a 'b -> io 'a 'b` dereferences a cell
-  - `set: ref 'a 'b -> 'a -> io unit 'b` mutates value
+  - `get : ref 'a 'b -> io 'a 'b` dereferences a cell
+  - `set : ref 'a 'b -> 'a -> io unit 'b` mutates value
 
   it is expected that threading sequencing and mutation in such a monadic way
   will remove the need for ML's value restriction. since the monad is safely
