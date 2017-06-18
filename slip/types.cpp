@@ -202,24 +202,24 @@ namespace slip {
 
     static typed_sexpr check_app(const ref<context>& ctx, const sexpr::list& self);
     
-    using special_type = mono (*)(const ref<context>& ctx, const sexpr::list& terms);
+    using special_type = typed_sexpr (*)(const ref<context>& ctx, const sexpr::list& terms);
 
-    static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms);
-    static mono check_cond(const ref<context>& ctx, const sexpr::list& terms);
-    static mono check_def(const ref<context>& ctx, const sexpr::list& terms);
+    static typed_sexpr check_lambda(const ref<context>& ctx, const sexpr::list& terms);
+    static typed_sexpr check_cond(const ref<context>& ctx, const sexpr::list& terms);
+    static typed_sexpr check_def(const ref<context>& ctx, const sexpr::list& terms);
     
-    static mono check_seq(const ref<context>& ctx, const sexpr::list& terms);    
-    static mono check_var(const ref<context>& ctx, const sexpr::list& terms);
-    static mono check_run(const ref<context>& ctx, const sexpr::list& terms);    
+    static typed_sexpr check_seq(const ref<context>& ctx, const sexpr::list& terms);    
+    static typed_sexpr check_var(const ref<context>& ctx, const sexpr::list& terms);
+    static typed_sexpr check_run(const ref<context>& ctx, const sexpr::list& terms);    
 
     
     static std::map<symbol, special_type> special = {
       {kw::lambda, check_lambda},
       {kw::cond, check_cond},
       {kw::def, check_def},
-
-      {kw::seq, check_seq},
       {kw::var, check_var},
+      
+      {kw::seq, check_seq},
       {kw::run, check_run},
     };
     
@@ -324,7 +324,7 @@ namespace slip {
     };
 
 
-    static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms) {
+    static typed_sexpr check_lambda(const ref<context>& ctx, const sexpr::list& terms) {
 
       // sub-context
       const ref<context> sub = make_ref<context>(ctx);
@@ -348,12 +348,12 @@ namespace slip {
       app_type.get<application>().info = size(vars);
       
       // infer body type in sub-context
-      const sexpr& body = terms->tail->head;
-
-      // unify with result type
-      uf.link(result_type, check_expr(sub, body).type);
+      const typed_sexpr body = check_expr(sub, terms->tail->head);
       
-      return app_type;
+      // unify body type with result type
+      uf.link(result_type, body.type);
+      
+      return {app_type, kw::lambda >>= vars >>= body.expr >>= sexpr::list() };
     }
     
 
@@ -400,23 +400,26 @@ namespace slip {
 
 
 
-    static mono check_cond(const ref<context>& ctx, const sexpr::list& items) {
-
+    static typed_sexpr check_cond(const ref<context>& ctx, const sexpr::list& items) {
+      
       const ref<variable> result_type = variable::fresh(ctx->depth);
-      
-      for(const sexpr& i : items ) {
-        const sexpr::list& pair = i.get<sexpr::list>();
 
-        const sexpr& test = pair->head;
-        const sexpr& value = pair->tail->head;
-
-        unify(boolean_type, check_expr(ctx, test).type);
-        unify(result_type, check_expr(ctx, value).type);        
-      }
+      const sexpr result_expr = map(items, [&ctx, &result_type](const sexpr& it) -> sexpr {
       
-      return result_type;
+          const sexpr::list& pair = it.get<sexpr::list>();
+          
+          const typed_sexpr test = check_expr(ctx, pair->head);
+          const typed_sexpr value = check_expr(ctx, pair->tail->head);          
+          
+          unify(boolean_type, test.type);
+          unify(result_type, value.type);
+
+          return test.expr >>= value.expr >>= sexpr::list();
+        });
+      
+      return {result_type, kw::cond >>= result_expr >>= sexpr::list() };
     }
-
+    
 
     static symbol gensym() {
       static std::size_t index = 0;
@@ -473,8 +476,8 @@ namespace slip {
       
       if( info < argc ) {
 
-        std::size_t i = 0;
         const std::size_t extra = argc - info;
+        std::size_t i = 0;
         
         const sexpr::list res = foldr( sexpr::list(), call_expr, [&i, extra](const sexpr& e, const sexpr::list& x) {
             const std::size_t j = i++;
@@ -566,7 +569,7 @@ namespace slip {
 
           const auto it = special.find(s);
           if( it != special.end() ) {
-            return {it->second(ctx, self->tail), self};
+            return it->second(ctx, self->tail);
           }
 
         }
@@ -611,9 +614,9 @@ namespace slip {
 
 
     
-    static mono check_def(const ref<context>& ctx, const sexpr::list& terms) {
-      const symbol& name = terms->head.get<symbol>();
-      const sexpr& value = terms->tail->head;
+    static typed_sexpr check_def(const ref<context>& ctx, const sexpr::list& terms) {
+      
+      const symbol name = terms->head.get<symbol>();
       
       const mono value_type = variable::fresh(ctx->depth);
       const mono thread = variable::fresh(ctx->depth);
@@ -624,70 +627,77 @@ namespace slip {
       sub->def(name, value_type);
       assert(sub->find(name)->vars.empty());
 
-      unify(value_type, check_expr(sub, value).type);
-
+      const typed_sexpr value = check_expr(sub, get(terms, 1));
+      unify(value_type, value.type);
+      
       // generalize in current context
       ctx->def(name, value_type);
 
-      return io_ctor(unit_type, thread);
+
+      
+      return {io_ctor(unit_type, thread), kw::def >>= name >>= value.expr >>= sexpr::list()};
     }
 
 
     
     // monadic binding
-    static mono check_bind(const ref<context>& ctx, const sexpr::list& terms) {
+    static typed_sexpr check_var(const ref<context>& ctx, const sexpr::list& terms) {
       const symbol& name = terms->head.get<symbol>();
-      const sexpr& value = terms->tail->head;
 
-      // bind values in the io monad
-      const mono value_type = variable::fresh(ctx->depth);
-      const mono thread = variable::fresh(ctx->depth);
-      
-      unify(io_ctor(value_type, thread), check_expr(ctx, value).type);
-
-      // value_type should remain monomorphic
-      ++ctx->depth;
-      ctx->def(name, value_type);
-      assert(ctx->find(name)->vars.empty());
-
-      // if no further computation happens, this is unit
-      return io_ctor(unit_type, thread);
-    }
-
-
-    static mono check_var(const ref<context>& ctx, const sexpr::list& terms) {
-      const symbol& name = terms->head.get<symbol>();
       if(ctx->find_local(name)) {
         throw type_error("variable redefinition: " + name.name());
       }
 
-      return check_bind(ctx, terms);
+
+      // bind values in the io monad
+      const mono value_type = variable::fresh(ctx->depth);
+      const mono thread = variable::fresh(ctx->depth);
+
+
+      const typed_sexpr value = check_expr(ctx, get(terms, 1) );
+      unify(io_ctor(value_type, thread), value.type);
+      
+      // value_type should remain monomorphic
+      ++ctx->depth;
+      ctx->def(name, value_type);
+      
+      assert(ctx->find(name)->vars.empty());
+
+      // if no further computation happens, this is unit
+      return {io_ctor(unit_type, thread), kw::def >>= name >>= value.expr >>= sexpr::list()};
     }
+    
 
     // monadic sequencing
-    static mono check_seq(const ref<context>& ctx, const sexpr::list& items) {
+    static typed_sexpr check_seq(const ref<context>& ctx, const sexpr::list& items) {
 
       const mono thread = variable::fresh(ctx->depth);
-      mono res = io_ctor( unit_type, thread );
+      mono result_type = io_ctor( unit_type, thread );
+
+      const sexpr::list& result_expr = map(items, [&ctx, &result_type, &thread](const sexpr& e) {
+          result_type = io_ctor( variable::fresh(ctx->depth), thread );
+
+          const typed_sexpr item = check_expr(ctx, e);
+          unify(result_type, item.type);
+          return item.expr;
+        });
       
-      for(const sexpr& e : items) {
-        res = io_ctor( variable::fresh(ctx->depth), thread );
-        unify(res, check_expr(ctx, e).type);
-      }
-      
-      return res;
+      return {result_type, kw::seq >>= result_expr};
     }
     
 
     // runST-like monad escape
-    static mono check_run(const ref<context>& ctx, const sexpr::list& items) {
+    static typed_sexpr check_run(const ref<context>& ctx, const sexpr::list& items) {
+
       const mono thread = variable::fresh(ctx->depth);
       const mono value_type = variable::fresh(ctx->depth);      
 
       const ref<context> sub = make_ref<context>(ctx);
 
-      unify( io_ctor(value_type, thread), check_seq(sub, items));
-
+      const typed_sexpr result = check_seq(sub, items);
+      
+      unify( io_ctor(value_type, thread), result.type);
+      
       const scheme gen_thread = thread.generalize(ctx->depth);
       const scheme gen_value_type = value_type.generalize(ctx->depth);            
 
@@ -704,7 +714,7 @@ namespace slip {
         throw type_error("computation references outer thread");
       }
 
-      return value_type;
+      return {value_type, result.expr};
     }
 
 
@@ -735,7 +745,10 @@ namespace slip {
     
     
     application operator>>=(const mono& lhs, const mono& rhs) {
-      return application(func_ctor, {lhs, rhs});
+      const std::size_t info = rhs.is<application>() ?
+        1 + rhs.get<application>().info : 1;
+      
+      return application(func_ctor, {lhs, rhs}, info);
     }
     
   }

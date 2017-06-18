@@ -61,7 +61,8 @@ namespace slip {
   template<class Head, class F>
   static inline list< typename std::result_of< F(Head) >::type > map(const list<Head>& self, const F& f) {
     if(!self) return {};
-    return f(self->head) >>= map(self->tail, f);
+    const auto head = f(self->head);
+    return head >>= map(self->tail, f);
   }
 
 
@@ -85,7 +86,12 @@ namespace slip {
         return head >>= rest;
       });
   }
-  
+
+  template<class Head>
+  const Head& get( const list<Head>& self, std::size_t i ) {
+    if(i == 0) return self->head;
+    return get(self->tail, i - 1);
+  }
   
   
   template<class H, class Iterator>

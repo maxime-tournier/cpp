@@ -249,8 +249,7 @@ namespace slip {
     };
 
 
-
-
+    
     static void app(bytecode& res, ref<variables>& ctx, const sexpr& func, const sexpr::list& args) {
       
       // compile function
@@ -278,12 +277,9 @@ namespace slip {
       { kw::seq, seq},
 
       { kw::set, set},      
-      { kw::var, def},
-      
-      { kw::pure, pure},
-      { kw::run, seq},
       
       // these are only aliases
+      { kw::pure, pure},
       { kw::ref, pure},
       { kw::get, pure},
       
