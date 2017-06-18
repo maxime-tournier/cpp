@@ -248,11 +248,11 @@ namespace slip {
       
     };
 
-  
-  
+
+
 
     static void app(bytecode& res, ref<variables>& ctx, const sexpr& func, const sexpr::list& args) {
-
+      
       // compile function
       compile(res, ctx, func);
     

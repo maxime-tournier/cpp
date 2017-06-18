@@ -225,7 +225,7 @@ namespace slip {
     
     struct unification_error {
       unification_error(mono lhs, mono rhs) : lhs(lhs), rhs(rhs) { }
-      mono lhs, rhs;
+      const mono lhs, rhs;
     };
     
 
@@ -321,7 +321,7 @@ namespace slip {
     static mono check_lambda(const ref<context>& ctx, const sexpr::list& terms) {
 
       // sub-context
-      ref<context> sub = make_ref<context>(ctx);
+      const ref<context> sub = make_ref<context>(ctx);
 
       const mono result_type = variable::fresh(ctx->depth);
 
@@ -393,7 +393,7 @@ namespace slip {
 
     static mono check_cond(const ref<context>& ctx, const sexpr::list& items) {
 
-      ref<variable> result_type = variable::fresh(ctx->depth);
+      const ref<variable> result_type = variable::fresh(ctx->depth);
       
       for(const sexpr& i : items ) {
         const sexpr::list& pair = i.get<sexpr::list>();
@@ -545,10 +545,10 @@ namespace slip {
       const symbol& name = terms->head.get<symbol>();
       const sexpr& value = terms->tail->head;
       
-      mono value_type = variable::fresh(ctx->depth);
-      mono thread = variable::fresh(ctx->depth);
+      const mono value_type = variable::fresh(ctx->depth);
+      const mono thread = variable::fresh(ctx->depth);
       
-      ref<context> sub = make_ref<context>(ctx);
+      const ref<context> sub = make_ref<context>(ctx);
 
       // note: value_type is bound in sub-context (i.e. monomorphic)
       sub->def(name, value_type);
@@ -597,8 +597,8 @@ namespace slip {
     // monadic sequencing
     static mono check_seq(const ref<context>& ctx, const sexpr::list& items) {
 
-      mono thread = variable::fresh(ctx->depth);
-      mono res = io_ctor( unit_type, thread ); // TODO const impossible here ?
+      const mono thread = variable::fresh(ctx->depth);
+      mono res = io_ctor( unit_type, thread );
       
       for(const sexpr& e : items) {
         res = io_ctor( variable::fresh(ctx->depth), thread );
@@ -614,7 +614,7 @@ namespace slip {
       const mono thread = variable::fresh(ctx->depth);
       const mono value_type = variable::fresh(ctx->depth);      
 
-      ref<context> sub = make_ref<context>(ctx);
+      const ref<context> sub = make_ref<context>(ctx);
 
       unify( io_ctor(value_type, thread), check_seq(sub, items));
 
@@ -643,7 +643,7 @@ namespace slip {
 
     // toplevel check
     scheme check(const ref<context>& ctx, const sexpr& e) {
-      static mono thread = variable::fresh(ctx->depth);
+      static const mono thread = variable::fresh(ctx->depth);
       static std::size_t init = ctx->depth++; (void) init;
       
       // TODO FIXME global uf
