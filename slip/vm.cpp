@@ -262,9 +262,7 @@ namespace slip {
             // pop value
             const value& top = stack.back();
 
-            if(!top.is<boolean>()) {
-              throw type_error("boolean expected");
-            }
+            assert(top.is<boolean>() && "boolean expected for jnz");
             
             // jnz
             if( top.get<boolean>() ) {
@@ -401,8 +399,8 @@ namespace slip {
             
               break;
             default:
-
-              throw type_error("function expected");
+              // TODO optimize default jump test
+              throw type_error("callable expected");
             };
           
             break;
