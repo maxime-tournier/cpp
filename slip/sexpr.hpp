@@ -8,7 +8,7 @@
 
 #include <set>
 
-namespace lisp {
+namespace slip {
 
 
   struct sexpr;
@@ -31,7 +31,7 @@ namespace lisp {
                           ref<string>,
                           list<sexpr> > {
 
-    using list = lisp::list<sexpr>;
+    using list = slip::list<sexpr>;
     
     using sexpr::variant::variant;
     

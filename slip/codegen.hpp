@@ -6,7 +6,7 @@
 #include "eval.hpp"
 #include "context.hpp"
 
-namespace lisp {
+namespace slip {
 
   namespace vm {
     class bytecode;
@@ -15,7 +15,7 @@ namespace lisp {
   namespace codegen {
 
     
-    struct variables : lisp::context<variables, std::size_t> {
+    struct variables : slip::context<variables, std::size_t> {
 
       using context::context;
       
@@ -25,12 +25,12 @@ namespace lisp {
 
       integer add_local(symbol s) {
         auto res = locals.insert( std::make_pair(s, locals.size()));
-        if(!res.second) throw lisp::error("duplicate local");
+        if(!res.second) throw slip::error("duplicate local");
         return res.first->second;
       }
 
       integer capture(symbol s) {
-        if(!parent) throw lisp::unbound_variable(s);
+        if(!parent) throw slip::unbound_variable(s);
       
         auto res = captured.insert( std::make_pair(s, captured.size()));
         return res.first->second;
@@ -40,7 +40,7 @@ namespace lisp {
 
   }
   
-  void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const lisp::sexpr& e);
+  void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const slip::sexpr& e);
   
 
 }

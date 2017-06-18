@@ -7,7 +7,7 @@
 
 // #include <iostream>
 
-namespace lisp {
+namespace slip {
 
   class jit;
   
@@ -16,7 +16,7 @@ namespace lisp {
     struct value;
     struct closure;
   
-    enum class opcode : lisp::integer {
+    enum class opcode : slip::integer {
       NOOP,
         STOP, 
 
@@ -46,15 +46,15 @@ namespace lisp {
     
 
     
-    using lisp::unit;
-    using lisp::boolean;    
-    using lisp::integer;
-    using lisp::symbol;
-    using lisp::real;
-    using lisp::list;
+    using slip::unit;
+    using slip::boolean;    
+    using slip::integer;
+    using slip::symbol;
+    using slip::real;
+    using slip::list;
 
-    using lisp::builtin;
-    using lisp::string;
+    using slip::builtin;
+    using slip::string;
 
     struct label : symbol {
 
@@ -70,7 +70,7 @@ namespace lisp {
                             ref<closure>,
                             opcode,
                             label> {
-      using list = lisp::list<value>;
+      using list = slip::list<value>;
       
       using value::variant::variant;
 
@@ -128,7 +128,7 @@ namespace lisp {
     }
   
   
-    static_assert(sizeof(value) == sizeof(lisp::value),
+    static_assert(sizeof(value) == sizeof(slip::value),
                   "value size mismatch");
 
   

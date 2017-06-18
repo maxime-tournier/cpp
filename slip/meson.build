@@ -1,5 +1,5 @@
 
-project('lisp', 'cpp', default_options : ['cpp_std=c++11'])
+project('slip', 'cpp', default_options : ['cpp_std=c++11'])
 
 sources = ['main.cpp',
            'symbol.cpp',
@@ -23,7 +23,7 @@ if get_option('buildtype') == 'release' or get_option('buildtype') == 'debugopti
 endif
 
 
-executable('lisp', sources, 
+executable('slip', sources, 
 		   dependencies : [readline, boost],
 		   install: true,
 		   install_dir: meson.source_root() )

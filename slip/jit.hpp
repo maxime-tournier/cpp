@@ -4,7 +4,7 @@
 #include "vm.hpp"
 #include "codegen.hpp"
 
-namespace lisp {
+namespace slip {
 
   class jit {
     vm::machine machine;
@@ -16,9 +16,9 @@ namespace lisp {
     ~jit();
 
     // not sure though
-    void import(const ref<lisp::environment>& ctx);
+    void import(const ref<slip::environment>& ctx);
     
-    vm::value eval(const lisp::sexpr& expr, bool dump = false);
+    vm::value eval(const slip::sexpr& expr, bool dump = false);
 
     // note: arguments will be moved
     vm::value call(const vm::value& func,

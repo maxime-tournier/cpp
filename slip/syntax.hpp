@@ -4,7 +4,7 @@
 // TODO this is weird
 #include "eval.hpp"
 
-namespace lisp {
+namespace slip {
   
   struct syntax_error : error {
     using error::error;

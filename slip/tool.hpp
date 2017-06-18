@@ -6,7 +6,7 @@
 #include "../indices.hpp"
 #include <iostream>
 
-namespace lisp {
+namespace slip {
   
   template<class F, class Ret, class ... Args, std::size_t ... I>
   static builtin wrap(const F& f, Ret (*)(Args... args), indices<I...> indices) {

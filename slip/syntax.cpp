@@ -6,7 +6,7 @@
 #include <iostream>
 #include <sstream>
 
-namespace lisp {
+namespace slip {
 
   namespace kw {
     const symbol def = "def",

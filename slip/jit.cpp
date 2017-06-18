@@ -6,7 +6,7 @@
 #include <iostream>
 
 
-namespace lisp {
+namespace slip {
 
   jit::jit()
     : ctx( make_ref<codegen::variables>()) {
@@ -29,7 +29,7 @@ namespace lisp {
     }
 
 
-    vm::value operator()(const lisp::value::list& self) const {
+    vm::value operator()(const slip::value::list& self) const {
       return reinterpret_cast<const vm::value::list&>(self);
     }
     
@@ -44,7 +44,7 @@ namespace lisp {
 
   
   
-  void jit::import(const ref<lisp::environment>& env) {
+  void jit::import(const ref<slip::environment>& env) {
 
     for(const auto& it : env->locals) {
       ctx->add_local(it.first);
@@ -54,7 +54,7 @@ namespace lisp {
   }
 
   
-  vm::value jit::eval(const lisp::sexpr& expr, bool dump) {
+  vm::value jit::eval(const slip::sexpr& expr, bool dump) {
     const std::size_t start = code.size();
 
     compile(code, ctx, expr);
@@ -80,7 +80,7 @@ namespace lisp {
 
     if( machine.stack.size() == stack_size ) {
       // code chunk was expression evaluation without binding: clear
-      code.resize(start, lisp::unit());
+      code.resize(start, slip::unit());
     }
     
     
@@ -130,8 +130,8 @@ namespace lisp {
     case vm::value::type_index< vm::builtin >(): {
 
       const vm::builtin& ptr = func.get< vm::builtin >();
-      lisp::value result = ptr( reinterpret_cast<const lisp::value*>(first),
-                                reinterpret_cast<const lisp::value*>(last) );
+      slip::value result = ptr( reinterpret_cast<const slip::value*>(first),
+                                reinterpret_cast<const slip::value*>(last) );
       
       return reinterpret_cast<vm::value&>(result);
     }

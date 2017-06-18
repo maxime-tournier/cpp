@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-namespace lisp {
+namespace slip {
 
 
   static value list_ctor(const value* first, const value* last) {

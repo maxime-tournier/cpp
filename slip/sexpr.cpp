@@ -2,7 +2,7 @@
 #include "sexpr.hpp"
 #include <iostream>
 
-namespace lisp {
+namespace slip {
 
 
 

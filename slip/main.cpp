@@ -53,25 +53,25 @@ static void read_loop(const F& f) {
 template<class Action>
 static int process(std::istream& in, Action action) {
   
-  const auto parse = parse::start( lisp::skipper() ) >>=
-    *( lisp::parser() >> action | parse::error<lisp::sexpr>() );
+  const auto parse = parse::start( slip::skipper() ) >>=
+    *( slip::parser() >> action | parse::error<slip::sexpr>() );
   
   try{
     parse(in);
     return 0;
   }
-  catch(parse::error<lisp::sexpr>& e) {
+  catch(parse::error<slip::sexpr>& e) {
     std::cerr << "parse error: " << e.what() << std::endl;
   }
-  catch( lisp::syntax_error& e ) {
+  catch( slip::syntax_error& e ) {
     std::cerr << "syntax error: " << e.what() << std::endl;
   }
 
-  catch( lisp::type_error& e ) {
+  catch( slip::type_error& e ) {
     std::cerr << "type error: " << e.what() << std::endl;
   }
   
-  catch( lisp::error& e ) {
+  catch( slip::error& e ) {
     std::cerr << "runtime error: " << e.what() << std::endl;
   }  
 
@@ -80,13 +80,13 @@ static int process(std::istream& in, Action action) {
 
 
 static const auto interpreter = [] {
-  const ref<lisp::environment> ctx = lisp::std_env();
+  const ref<slip::environment> ctx = slip::std_env();
   
-  return [ctx](lisp::sexpr&& e) {
-    const lisp::sexpr ex = expand_seq(ctx, e);
-    const lisp::value val = eval(ctx, ex);
+  return [ctx](slip::sexpr&& e) {
+    const slip::sexpr ex = expand_seq(ctx, e);
+    const slip::value val = eval(ctx, ex);
     
-    if(!val.is<lisp::unit>()) {
+    if(!val.is<slip::unit>()) {
       std::cout << val << std::endl;  
     }
     
@@ -99,14 +99,14 @@ static const auto interpreter = [] {
 
 const auto jit_compiler = [](bool dump) {
 
-  static const ref<lisp::jit> jit = make_ref<lisp::jit>();
-  static const ref<lisp::environment> env = lisp::std_env();
+  static const ref<slip::jit> jit = make_ref<slip::jit>();
+  static const ref<slip::environment> env = slip::std_env();
 
-  static const ref<lisp::types::context> tc = make_ref<lisp::types::context>();
+  static const ref<slip::types::context> tc = make_ref<slip::types::context>();
 
   {
-    using namespace lisp;
-    using namespace lisp::types;
+    using namespace slip;
+    using namespace slip::types;
     tc->def("+", integer_type >>= integer_type >>= integer_type);
     tc->def("-", integer_type >>= integer_type >>= integer_type);
     tc->def("/", integer_type >>= integer_type >>= integer_type);
@@ -161,12 +161,12 @@ const auto jit_compiler = [](bool dump) {
     
   }
 
-  (*env)("nil", lisp::value::list());
+  (*env)("nil", slip::value::list());
   
-  (*env)("iter", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
-      using namespace lisp::vm;
+  (*env)("iter", +[](const slip::value* first, const slip::value* last) -> slip::value {
+      using namespace slip::vm;
 
-      const auto args = lisp::unpack_args<2>( (value*)first, (value*)last);
+      const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
       
       const value::list& x = args[0].get<value::list>();
       const value& func = args[1];
@@ -179,10 +179,10 @@ const auto jit_compiler = [](bool dump) {
     });
   
 
-  (*env)("map", +[](const lisp::value* first, const lisp::value* last) -> lisp::value {
-      using namespace lisp::vm;
+  (*env)("map", +[](const slip::value* first, const slip::value* last) -> slip::value {
+      using namespace slip::vm;
 
-      const auto args = lisp::unpack_args<2>( (value*)first, (value*)last);
+      const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
 
       const value::list& x = args[0].get<value::list>();
       const value& func = args[1];
@@ -192,12 +192,12 @@ const auto jit_compiler = [](bool dump) {
           return jit->call(func, &xi, &xi + 1);
         });
 
-      return reinterpret_cast<lisp::value::list&>(result);
+      return reinterpret_cast<slip::value::list&>(result);
     });
 
   jit->import( env );
 
-  using namespace lisp;  
+  using namespace slip;  
   return [dump](sexpr&& s) {
     
     const sexpr e = expand_seq(env, s);
@@ -207,12 +207,12 @@ const auto jit_compiler = [](bool dump) {
 
     std::cout << " : " << t; 
     
-    if(v.is<lisp::unit>()) {
+    if(v.is<slip::unit>()) {
       std::cout << std::endl;
     } else {
       std::cout << " = ";
       
-      if(v.is<lisp::symbol>() || v.is<lisp::vm::value::list>()) {
+      if(v.is<slip::symbol>() || v.is<slip::vm::value::list>()) {
         std::cout << "'";
       }
       std::cout << v << std::endl;  
@@ -258,7 +258,7 @@ int main(int argc, char** argv) {
 
   const po::variables_map vm = parse_options(argc, argv);
 
-  using action_type = std::function< parse::any<lisp::sexpr> (lisp::sexpr&&) > ;
+  using action_type = std::function< parse::any<slip::sexpr> (slip::sexpr&&) > ;
   
   action_type action = nullptr;
 

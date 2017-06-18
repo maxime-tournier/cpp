@@ -7,7 +7,7 @@
 #include "../ref.hpp"
 
 
-namespace lisp {
+namespace slip {
 
   template<class Derived, class Value>
   class context {

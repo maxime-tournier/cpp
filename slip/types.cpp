@@ -9,7 +9,7 @@
 #include <iostream>
 #include <sstream>
 
-namespace lisp {
+namespace slip {
 
   namespace types {
 
@@ -35,35 +35,35 @@ namespace lisp {
     
     
     template<>
-    struct traits< lisp::unit > {
+    struct traits< slip::unit > {
       static constant type() { return unit_type; }
     };
 
     
     template<>
-    struct traits< lisp::boolean > {
+    struct traits< slip::boolean > {
       static constant type() { return boolean_type; }      
     };
 
 
     template<>
-    struct traits< lisp::integer > {
+    struct traits< slip::integer > {
       static constant type() { return integer_type; }            
     };
 
     template<>
-    struct traits< lisp::real > {
+    struct traits< slip::real > {
       static constant type() { return real_type; }
     };
 
 
     template<>
-    struct traits< ref<lisp::string> > {
+    struct traits< ref<slip::string> > {
       static constant type() { return string_type; }                  
     };
 
     template<>
-    struct traits< lisp::symbol > {
+    struct traits< slip::symbol > {
       static constant type() { return symbol_type; }                        
     };
     

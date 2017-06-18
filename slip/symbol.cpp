@@ -1,7 +1,7 @@
 #include "symbol.hpp"
 #include <ostream>
 
-namespace lisp {
+namespace slip {
 
   symbol::symbol(const std::string& value) 
     : iterator(table().insert(value).first) { }  

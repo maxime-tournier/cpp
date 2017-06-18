@@ -8,7 +8,7 @@
 #include "sexpr.hpp"
 #include "context.hpp"
 
-namespace lisp {
+namespace slip {
 
   struct unbound_variable : error {
     unbound_variable(const symbol& s);
@@ -28,7 +28,7 @@ namespace lisp {
   struct value : variant<unit, boolean, integer, real, symbol, ref<string>, list<value>,
                          builtin, ref<lambda> > {
     
-    using list = lisp::list<value>;
+    using list = slip::list<value>;
     
     using value::variant::variant;
 
@@ -59,7 +59,7 @@ namespace lisp {
 
   
   
-  struct environment : lisp::context<environment, value> {
+  struct environment : slip::context<environment, value> {
 
     using context::context;
     

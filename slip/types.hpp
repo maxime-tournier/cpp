@@ -11,7 +11,7 @@
 #include "../variant.hpp"
 #include "../ref.hpp"
 
-namespace lisp {
+namespace slip {
 
   namespace types {
   
@@ -165,7 +165,7 @@ namespace lisp {
     std::ostream& operator<<(std::ostream& out, const scheme& self);
 
     
-    struct context : lisp::context< context, scheme > {
+    struct context : slip::context< context, scheme > {
       std::size_t depth;
       
       context(const ref<context>& parent = {})

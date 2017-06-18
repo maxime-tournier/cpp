@@ -12,7 +12,7 @@
 #include "../indices.hpp"
 
 
-namespace lisp {
+namespace slip {
   namespace vm {
 
   
@@ -22,7 +22,7 @@ namespace lisp {
 
     void bytecode::label(vm::label s) {
       auto it = labels.insert( std::make_pair(s, size()) );
-      if( !it.second ) throw lisp::error("duplicate label: " + s.name());
+      if( !it.second ) throw slip::error("duplicate label: " + s.name());
     }
   
     void bytecode::link( std::size_t start )  {
@@ -36,7 +36,7 @@ namespace lisp {
         auto it = labels.find( sym );
       
         if(it == labels.end()) {
-          throw lisp::error("unknown label: " + sym.name());
+          throw slip::error("unknown label: " + sym.name());
         } else {
           // std::cout << "link: " << it->first.name() << " resolved to: " << it->second << std::endl;;
           *x = it->second;
@@ -397,10 +397,10 @@ namespace lisp {
                 const value* first = stack.data() + first_index;
                 const value* last = first + n;
 
-                reinterpret_cast<lisp::value&>(stack[start]) = 
+                reinterpret_cast<slip::value&>(stack[start]) = 
                   (func.get<builtin>()
-                   ( reinterpret_cast<const lisp::value*>(first),
-                     reinterpret_cast<const lisp::value*>(last)));
+                   ( reinterpret_cast<const slip::value*>(first),
+                     reinterpret_cast<const slip::value*>(last)));
             
                 // pop args + push result
                 stack.resize( first_index, unit() ); // warning: func is invalidated
@@ -442,7 +442,7 @@ namespace lisp {
         
           ++ip;
         };
-      } catch(lisp::error& e) {
+      } catch(slip::error& e) {
         fp.resize(init_fp_size); // should be 1 anyways?
         stack.resize(init_stack_size, unit());
         throw;

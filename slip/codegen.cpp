@@ -3,7 +3,7 @@
 
 #include "syntax.hpp"
 
-namespace lisp {
+namespace slip {
 
   // codegen
   namespace codegen {
@@ -294,7 +294,7 @@ namespace lisp {
 
       template<class T>
       void operator()(const T& self, ref<variables>& ctx, bytecode& res) const {
-        throw lisp::error("codegen: not implemented");
+        throw slip::error("codegen: not implemented");
       }
       
       // literals
@@ -369,7 +369,7 @@ namespace lisp {
     };
   }
   
-  void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const lisp::sexpr& e) {
+  void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const slip::sexpr& e) {
     e.apply(codegen::compile_visitor(), ctx, res);
   }
   

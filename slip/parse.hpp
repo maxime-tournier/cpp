@@ -4,7 +4,7 @@
 #include <iostream>
 #include "../parse.hpp"
 
-namespace lisp {
+namespace slip {
 
   struct sexpr;
 

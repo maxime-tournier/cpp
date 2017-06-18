@@ -7,7 +7,7 @@
 #include <ostream>
 
 
-namespace lisp {
+namespace slip {
 
   template<class Head> struct cell;
 

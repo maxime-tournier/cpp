@@ -3,7 +3,7 @@
 #include "syntax.hpp"
 #include <sstream>
 
-namespace lisp {
+namespace slip {
 
   unbound_variable::unbound_variable(const symbol& s) 
     : error("unbound variable: " + s.name()) { }
@@ -76,7 +76,7 @@ namespace lisp {
         vars.emplace_back( v.get<symbol>() );
       }
       
-      return make_ref<lisp::lambda>(ctx, std::move(vars), body);
+      return make_ref<slip::lambda>(ctx, std::move(vars), body);
     }
 
     

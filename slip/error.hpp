@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace lisp {
+namespace slip {
 
   struct error : std::runtime_error {
     using std::runtime_error::runtime_error;

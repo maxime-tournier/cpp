@@ -4,7 +4,7 @@
 #include <set>
 #include <string>
 
-namespace lisp {
+namespace slip {
 
   class symbol {
     using table_type = std::set<std::string>;
