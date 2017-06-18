@@ -1,13 +1,14 @@
 
 
-(run
- (var x (ref 0))
- (get x))
+;; (run
+;;  (var x (ref 0))
+;;  (get x))
 
+(def z (run
+        (var y (ref nil))
+        (pure y)))
+z
 
-(run
- (var y (ref 0))
- (pure y))
      
 
 

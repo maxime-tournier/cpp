@@ -21,6 +21,10 @@ namespace lisp {
       sexpr::list curr = args;
       const symbol name = curr->head.get<symbol>();
       ctx->add_local(name);
+
+      // save some space on the stack by pushing a dummy var
+      res.push_back( opcode::PUSH );
+      res.push_back( unit() );
       
       curr = curr->tail;
       const sexpr& expr = curr->head;
@@ -30,9 +34,8 @@ namespace lisp {
       compile(res, ctx, expr);
       ctx->defining = nullptr;
       
-      // def evals to nil
-      res.push_back( opcode::PUSH );
-      res.push_back( unit() );
+      // def evals to nil, so we just swap result and dummy var
+      res.push_back( opcode::SWAP );
     };
 
   
