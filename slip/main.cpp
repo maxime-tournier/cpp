@@ -98,58 +98,58 @@ static const auto interpreter = [] {
 
 
 namespace slip {
-struct helper {
-  ref<jit> jit;
-  ref<types::context> tc;
 
+  struct helper {
+    ref<slip::jit> jit;
+    ref<types::context> tc;
 
-  template<class T>
-  helper& operator()(symbol name, types::mono type, const T& value) {
-    tc->def(name, type);
-    jit->def(name, value);
-    return *this;   
-  }
+    template<class T>
+    helper& operator()(symbol name, types::mono type, const T& value) {
+      tc->def(name, type);
+      jit->def(name, value);
+      return *this;   
+    }
 
   
-  template<class F, class Ret, class ... Args, std::size_t ... I>
-  helper& operator()(symbol name, F f, Ret (*)(Args...args), indices<I...> ) {
+    template<class F, class Ret, class ... Args, std::size_t ... I>
+    helper& operator()(symbol name, F f, Ret (*)(Args...args), indices<I...> ) {
 
-    const types::mono args[] = { types::traits<Args>::type()... };
-    const list<types::mono> arg_types = make_list<types::mono>(args, args + sizeof...(Args) );
+      const types::mono args[] = { types::traits<Args>::type()... };
+      const list<types::mono> arg_types = make_list<types::mono>(args, args + sizeof...(Args) );
     
-    const types::mono result_type = types::traits<Ret>::type();
+      const types::mono result_type = types::traits<Ret>::type();
     
-    types::mono app = foldr(result_type, arg_types, [](types::mono lhs, types::mono rhs) -> types::mono {
-        return lhs >>= rhs;
-      });
+      types::mono app = foldr(result_type, arg_types, [](types::mono lhs, types::mono rhs) -> types::mono {
+          return lhs >>= rhs;
+        });
 
-    // remember true argc
-    app.get<types::application>().info = sizeof...(Args);
+      // remember true argc
+      app.get<types::application>().info = sizeof...(Args);
     
-    static Ret (*ptr)(Args...) = +f;
+      static Ret (*ptr)(Args...) = +f;
     
-    vm::builtin wrapper = [](const vm::value* first, const vm::value* last) -> vm::value {
-      return ptr(first[I].get<Args>()...);
-    };
+      vm::builtin wrapper = [](const vm::value* first, const vm::value* last) -> vm::value {
+        return ptr(first[I].get<Args>()...);
+      };
 
 
-    return (*this)(name, app, wrapper);
-  }
+      return (*this)(name, app, wrapper);
+    }
   
 
-  template<class Ret, class ... Args>
-  static range_indices<sizeof...(Args)> args_indices(Ret (*ptr)(Args...) ) {
-    return {};
-  }
+    template<class Ret, class ... Args>
+    static range_indices<sizeof...(Args)> args_indices(Ret (*ptr)(Args...) ) {
+      return {};
+    }
 
   
   
-  template<class F>
-  helper& operator()(symbol name, F f) {
-    return (*this)(name, f, +f, args_indices(+f));
-  }
+    template<class F>
+    helper& operator()(symbol name, F f) {
+      return (*this)(name, f, +f, args_indices(+f));
+    }
   
-};
+  };
 }
 
 const auto jit_compiler = [](bool dump) {
