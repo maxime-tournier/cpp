@@ -718,11 +718,45 @@ namespace slip {
     }
 
 
+    static typed_sexpr check_datatype(const ref<context>& ctx, const sexpr::list& terms) {
+      const symbol name = terms->head.get<sexpr::list>()->head.get<symbol>();
 
+      const auto& v = terms->head.get<sexpr::list>()->tail;
+
+      const list< ref<variable> > vars = map(v, [&ctx](const sexpr& e) {
+          return variable::fresh(ctx->depth);
+        });
+
+      std::vector<mono> args;
+      for(const auto& a : vars) {
+        args.emplace_back(a);
+      }
+      
+      constructor ctor(name, args.size());
+      const mono app = application(ctor, args);
+
+      const mono ctor_type =
+        foldr(app, vars, [](const ref<variable>& lhs, const mono& rhs) {
+            return lhs >>= rhs;
+          });
+
+      ctx->def(name, ctor_type);
+      
+      auto nil = sexpr::list();
+      
+      const sexpr expr = kw::def >>= name >>=
+        (kw::lambda >>= v >>= (symbol("array") >>= v) >>= nil)
+        >>= nil;
+
+      std::clog << expr << std::endl;
+      
+      // TODO define data constructors
+      return {app, expr};
+    }
     
 
     // toplevel check
-    check_type check(const ref<context>& ctx, const sexpr& e) {
+    static typed_sexpr check_toplevel_expr(const ref<context>& ctx, const sexpr& e) {
       static const mono thread = variable::fresh(ctx->depth);
       static std::size_t init = ctx->depth++; (void) init;
       
@@ -730,7 +764,6 @@ namespace slip {
       const typed_sexpr res = check_expr(ctx, e);
 
       if(res.type.is<application>() && res.type.get<application>().ctor == io_ctor) {
-        
         // toplevel io must happen in toplevel thread
         const mono fresh = variable::fresh(ctx->depth);
         unify( io_ctor(fresh, thread), res.type);
@@ -738,11 +771,32 @@ namespace slip {
 
       
       
-      return {res.type.generalize(ctx->depth), res.expr};
+      return res; 
+    }
+
+
+    // toplevel
+    static typed_sexpr check_toplevel(const ref<context>& ctx, const sexpr& e) {
+
+      if(auto lst = e.get_if<sexpr::list>()) {
+        if(*lst) {
+          if( auto s = (*lst)->head.get_if<symbol>() ) {
+            if(*s == kw::type) {
+              return check_datatype(ctx, (*lst)->tail);
+            }
+          }
+        }
+      }
+      
+      return check_toplevel_expr(ctx, e);
     }
     
 
-    
+    check_type check(const ref<context>& ctx, const sexpr& e) {
+      typed_sexpr res = check_toplevel(ctx, e);
+      return {res.type.generalize(ctx->depth), res.expr};
+    }
+
     
     application operator>>=(const mono& lhs, const mono& rhs) {
       const std::size_t info = rhs.is<application>() ?

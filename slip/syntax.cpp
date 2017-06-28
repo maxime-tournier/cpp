@@ -251,7 +251,7 @@ namespace slip {
     sexpr operator()(const symbol& self, const ref<environment>& ctx) const {
       if(special::reserved.find(self) != special::reserved.end()) {
         std::stringstream ss;
-        ss << '`' << self.name() << "` not allowed in this environment";
+        ss << '`' << self.name() << "` not allowed in this context";
         throw syntax_error(ss.str());
       }
 

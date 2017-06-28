@@ -171,14 +171,29 @@ public:
     return res;
   } 
 
+
   template<class U, index_type R = type_index<U>() >
   const U& get() const {
     const U& res = reinterpret_cast<const U&>(storage);
-
     assert(R == index);
     return res;
   }
   
+
+  template<class U, index_type R = type_index<U>()>
+  U* get_if() {
+    if(!is<U>()) return nullptr;
+    return &get<U>();
+  } 
+
+  template<class U, index_type R = type_index<U>()>
+  const U* get_if() const {
+    if(!is<U>()) return nullptr;
+    return &get<U>();
+  } 
+  
+  
+
   
   template<class U, index_type R = type_index<U>() >
   bool is() const noexcept {
@@ -292,8 +307,11 @@ public:
   }
 
 
-
 };
+
+
+
+
 
 
 
