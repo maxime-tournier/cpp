@@ -63,6 +63,8 @@ namespace slip {
         out << '(' << self << ')';
       }
 
+
+      
       void operator()(const symbol& self, std::ostream& out) const {
         out << self.name();
       }
@@ -90,6 +92,10 @@ namespace slip {
         out << "#<closure: @" << self->addr << ">";
       }
 
+      void operator()(const ref<array>& self, std::ostream& out) const {
+        out << "#(" << make_list<value>(self->begin(), self->end()) << ')';
+      }
+      
       void operator()(const opcode& self, std::ostream& out) const {
 
         switch(self) {
@@ -209,6 +215,26 @@ namespace slip {
       };
 
       return helper::make(argc, addr, first, last);
+    }
+
+
+    ref<array> make_array(const value* first, const value* last) {
+      
+      struct helper : ref<array> {
+        
+        using helper::ref::ref;
+        
+        static ref<array> make(const value* first, const value* last) {
+          const std::size_t size = last - first;
+          
+          // we need to instantiate control blocks ourselves
+          block_type* block = array::create< detail::control_block<array> >(size, first, last);
+          return helper(block);
+        }
+        
+      };
+
+      return helper::make(first, last);
     }
 
     

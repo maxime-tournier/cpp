@@ -1,11 +1,14 @@
 
+- datatypes + pattern matching
+- typeclasses
 
-- runST-like monad escape https://stackoverflow.com/questions/39725024/runst-with-hindley-milner-type-system
-- algebraic datatypes
-- row-polymorphism
+- records/row-polymorphism?
+- modules?
+- lifetime inference?
 
 - macros?
-- modules?
+
+
 
 
     

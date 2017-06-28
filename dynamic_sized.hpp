@@ -21,7 +21,6 @@ template<class T>
 class dynamic_sized {
   std::size_t count;
   T data[0];
-
 public:
 
   std::size_t size() const { return count; }
@@ -35,6 +34,13 @@ public:
     assert(i < count);
     return data[i];
   }
+
+  T* begin() { return data; }
+  T* end() { return data + size(); }  
+
+  const T* begin() const { return data; }
+  const T* end() const { return data + size(); }  
+  
 
   template<class Derived>
   struct tag {

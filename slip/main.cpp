@@ -218,6 +218,12 @@ const auto jit_compiler = [](bool dump) {
     
   }
 
+
+  // allow jit to create arrays
+  jit->def("array", +[](const slip::vm::value* first, const slip::vm::value* last) -> slip::vm::value {
+      return slip::vm::make_array(first, last);
+    });
+  
   
   // (*env)("iter", +[](const slip::value* first, const slip::value* last) -> slip::value {
   //     using namespace slip::vm;
@@ -255,7 +261,7 @@ const auto jit_compiler = [](bool dump) {
   using namespace slip;  
   return [dump](sexpr&& s) {
     
-    const sexpr e = expand_seq(env, s);
+    const sexpr e = expand_toplevel(env, s);
 
     const types::check_type checked = types::check(tc, e);
 

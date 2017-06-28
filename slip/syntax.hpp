@@ -13,6 +13,7 @@ namespace slip {
   // macro-expand + syntax check
   sexpr expand(const ref<environment>& ctx, const sexpr& expr);
   sexpr expand_seq(const ref<environment>& ctx, const sexpr& expr);
+  sexpr expand_toplevel(const ref<environment>& ctx, const sexpr& expr);  
   
   namespace kw {
     const extern symbol def, lambda, seq, cond, quote, unquote, quasiquote;

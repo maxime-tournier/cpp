@@ -17,8 +17,10 @@ namespace slip {
       quasiquote = "quasiquote",
       unquote = "unquote";
 
-    const symbol var = "var", pure = "pure", run = "run";
 
+    const symbol type = "type";
+    
+    const symbol var = "var", pure = "pure", run = "run";
     const symbol ref = "ref", get = "get", set = "set";
   }
 
@@ -139,6 +141,55 @@ namespace slip {
     }
 
 
+    struct type_visitor {
+      struct error { };
+
+      template<class T>
+      void operator()(const T& self) const {
+        throw error();
+      }
+
+      void operator()(const symbol& self) const { }
+
+      void operator()(const sexpr::list& self) const {
+        if(!self) throw error();
+        if(!self->head.is<symbol>()) throw error();
+
+        for(const sexpr& e : self->tail) {
+          e.apply( type_visitor() );
+        }
+      }
+      
+      
+      
+    };
+    
+
+    static sexpr datatype(const ref<environment>& ctx, const sexpr::list& args) {
+      // TODO macro-expand?
+      static const auto fail = [] {
+        throw syntax_error("(type (`symbol` `symbol`...) (`symbol` `type`...)...)");
+      };
+
+      if(!args || !args->head.is<sexpr::list>()) fail();
+
+      for(const sexpr& e : args->head.get<sexpr::list>() ) {
+        if(!e.is<symbol>()) fail();
+      }
+
+      try {
+        for(const sexpr& e : args->tail) {
+          e.apply(type_visitor());
+        }
+      } catch( type_visitor::error& e ) {
+        fail();
+      }
+
+      return kw::type >>= args;
+    }
+
+    
+
     static sexpr cond(const ref<environment>& ctx, const sexpr::list& args) {
       static const auto fail = [] {
         throw syntax_error("(cond (`expr` `expr`)...)");
@@ -184,6 +235,7 @@ namespace slip {
       kw::def,
       kw::quasiquote,
       kw::unquote,
+      kw::type,
     };
 
   }
@@ -249,9 +301,9 @@ namespace slip {
     using expand_visitor::operator();
     
     sexpr operator()(const sexpr::list& self, const ref<environment>& ctx) const {
-      if(self && head(self).is<symbol>() ) {
-        const symbol name = head(self).get<symbol>();
-
+      if(self && self->head.is<symbol>() ) {
+        const symbol& name = self->head.get<symbol>();
+        
         if(name == kw::def) {
           return special::def(ctx, tail(self));
         }
@@ -275,5 +327,27 @@ namespace slip {
     // std::clog << "expand: " << expr << " -> " << res << std::endl;
     return res;
   }
+
+
+
+  struct expand_toplevel_visitor : expand_seq_visitor {
+
+    using expand_seq_visitor::operator();
+
+    sexpr operator()(const sexpr::list& self, const ref<environment>& ctx) const {
+      if(self && self->head.is<symbol>() && self->head.get<symbol>() == kw::type) {
+        return special::datatype(ctx, self->tail);
+      }
+      
+      return expand_seq_visitor::operator()(self, ctx);
+    }
+  };
+  
+  
+  sexpr expand_toplevel(const ref<environment>& ctx, const sexpr& expr) {
+    const auto res = expr.map<sexpr>(expand_toplevel_visitor(), ctx);
+    return res;
+  }
+
   
 }
