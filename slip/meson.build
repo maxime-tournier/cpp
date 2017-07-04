@@ -12,7 +12,8 @@ sources = ['main.cpp',
            'tool.cpp',
            'codegen.cpp',
            'jit.cpp',
-           'types.cpp' ]
+           'types.cpp',
+           'kinds.cpp' ]
 
 compiler = meson.get_compiler('cpp')
 
