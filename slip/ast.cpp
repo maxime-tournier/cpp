@@ -29,6 +29,36 @@ namespace slip {
           >>= sexpr::list();
       }
 
+      sexpr operator()(const ref<definition>& self) const {
+        return kw::def
+          >>= self->name
+          >>= repr(self->value)
+          >>= sexpr::list();
+      }
+
+
+      sexpr operator()(const ref<binding>& self) const {
+        return kw::var
+          >>= self->name
+          >>= repr(self->value)
+          >>= sexpr::list();
+      }
+
+
+      sexpr operator()(const ref<sequence>& self) const {
+        return kw::seq
+          >>= map(self->items, [](const expr& e) {
+              return repr(e);
+            });
+      }
+
+      sexpr operator()(const ref<condition>& self) const {
+        return kw::cond
+          >>= map(self->branches, [](const condition::branch& b) -> sexpr {
+              return repr(b.test) >>= repr(b.value) >>= sexpr::list();
+            });
+      }
+
 
       sexpr operator()(const ref<application>& self) const {
         return repr(self->func) >>= map(self->args, [](const expr& e) {
