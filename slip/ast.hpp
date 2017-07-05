@@ -5,6 +5,9 @@
 #include "symbol.hpp"
 #include "sexpr.hpp"
 
+
+// TODO repr ?
+
 namespace slip {
 
   namespace ast {
@@ -18,7 +21,7 @@ namespace slip {
     struct definition;
     struct sequence;
     struct condition;
-
+    struct binding;
 
     template<class T>
     struct literal {
@@ -41,6 +44,7 @@ namespace slip {
                            ref<lambda>,
                            ref<application>,
                            ref<definition>,
+                           ref<binding>,                           
                            ref<sequence>,
                            ref<condition> > {
       using expr::variant::variant;
@@ -48,8 +52,10 @@ namespace slip {
       using list = slip::list<expr>;
 
     };
-                           
-                           
+
+    sexpr repr(const expr& self);
+    std::ostream& operator<<(std::ostream& out, const expr& self);
+    
     
     struct lambda {
       lambda(const list<symbol>& args, const expr& body)
@@ -69,6 +75,7 @@ namespace slip {
     };
 
 
+    // let bindings
     struct definition {
       definition(const symbol& name, const expr& value)
         : name(name),
@@ -79,26 +86,22 @@ namespace slip {
     };
 
     
-    struct sequence {
-
-      struct binding {
-        binding(const symbol& name, const expr& value)
-          : name(name),
-            value(value) { } 
-         
-        const symbol name;
-        const expr value;
-      };
-
-      struct item : variant< expr, binding > {
-        using item::variant::variant;
-      };
-
-      list<item> items;
+    // monadic binding in a sequence
+    struct binding {
+      binding(const symbol& name, const expr& value)
+        : name(name),
+          value(value) { } 
       
+      const symbol name;
+      const expr value;
     };
 
+    
+    struct sequence {
+      list<expr> items;
+    };
 
+    
     struct condition {
       
       struct branch {
@@ -116,13 +119,15 @@ namespace slip {
 
 
     // TODO type, etc
-    
-    struct toplevel : variant<sequence::item> {
+    struct toplevel : variant<expr> {
       using toplevel::variant::variant;
     };
     
+    std::ostream& operator<<(std::ostream& out, const toplevel& self);    
 
-    toplevel check(const sexpr& e);
+
+    sexpr repr(const toplevel& self);    
+    toplevel check_toplevel(const sexpr& e);
 
     
   }

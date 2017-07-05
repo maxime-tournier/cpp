@@ -26,6 +26,7 @@
 #include "jit.hpp"
 
 #include "types.hpp"
+#include "ast.hpp"
 
 
 #include <boost/program_options.hpp>
@@ -100,6 +101,7 @@ static const auto interpreter = [] {
 namespace slip {
 
   struct helper {
+    
     ref<slip::jit> jit;
     ref<types::context> tc;
 
@@ -258,8 +260,12 @@ const auto jit_compiler = [](bool dump) {
   //   });
 
 
-  using namespace slip;  
+  using namespace slip;
+  
   return [dump](sexpr&& s) {
+
+    const ast::toplevel node = ast::check_toplevel(s);
+    std::cout << "ast: " << node << std::endl;
     
     const sexpr e = expand_toplevel(env, s);
 

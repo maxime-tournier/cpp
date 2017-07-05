@@ -7,6 +7,54 @@ namespace slip {
   namespace ast {
 
 
+    struct repr_visitor {
+      
+      template<class T>
+      sexpr operator()(const literal<T>& self) const {
+        return self.value;
+      }
+
+      sexpr operator()(const literal<string>& self) const {
+        return make_ref<string>(self.value);
+      }
+
+      sexpr operator()(const variable& self) const {
+        return self.name;
+      }
+      
+      sexpr operator()(const ref<lambda>& self) const {
+        return kw::lambda
+          >>= map(self->args, [](symbol s) -> sexpr { return s; })
+          >>= repr(self->body)
+          >>= sexpr::list();
+      }
+
+
+      sexpr operator()(const ref<application>& self) const {
+        return repr(self->func) >>= map(self->args, [](const expr& e) {
+            return repr(e);
+          });
+      }
+
+      
+      template<class T>
+      sexpr operator()(const T& self) const {
+        throw error("unimplemented");
+      }
+      
+    };
+
+    
+    sexpr repr(const expr& self) {
+      return self.map<sexpr>( repr_visitor() );
+    }
+    
+    std::ostream& operator<<(std::ostream& out, const expr& self) {
+      return out << repr(self);
+    }
+    
+    
+
     static expr check_expr(const sexpr& e);
     
 
@@ -17,13 +65,13 @@ namespace slip {
       check_definition,
       check_condition;
     
-    static sequence::binding check_sequence_binding(const sexpr::list&);
-    
-    
+    static expr check_binding(const sexpr::list&);
+
     static const std::map< symbol, special_type* > special = {
       {kw::lambda, check_lambda},
       {kw::def, check_definition},
-      {kw::cond, check_condition},                  
+      {kw::cond, check_condition},
+      {kw::var, check_binding},                        
     };
     
 
@@ -135,26 +183,8 @@ namespace slip {
     }
     
 
-    struct sequence_item_visitor : expr_visitor {
 
-      template<class T>
-      sequence::item operator()(const T& self) const {
-        return expr_visitor::operator()(self);
-      }
-      
-      sequence::item operator()(const sexpr::list& self) const {
-        if(self && self->head.is<symbol>() && self->head.get<symbol>() == kw::var) {
-          return check_sequence_binding(self->tail);
-        }
-
-        return expr_visitor::operator()(self);
-      }
-      
-    };
-
-
-
-    static sequence::binding check_sequence_binding(const sexpr::list& items) {
+    static expr check_binding(const sexpr::list& items) {
       struct fail { };
       
       try {
@@ -162,30 +192,35 @@ namespace slip {
         if( size(items) != 2 ) throw fail();
         if( !items->head.is<symbol>() ) throw fail();
 
-        return sequence::binding(items->head.get<symbol>(), check_expr(items->tail->head));
+        return make_ref<binding>(items->head.get<symbol>(), check_expr(items->tail->head));
       } catch( fail& ) {
         throw syntax_error("(var `symbol` `expr`)");
       }
     }
     
-    sequence::item check_sequence_item(const sexpr& e) {
-      return e.map<sequence::item>(sequence_item_visitor());
-    }
 
-
-    struct toplevel_visitor : sequence_item_visitor {
+    struct toplevel_visitor : expr_visitor {
 
       template<class T>
       toplevel operator()(const T& self) const {
-        return sequence_item_visitor::operator()(self);
+        return expr_visitor::operator()(self);
       }
       
     };
 
-    toplevel check(const sexpr& e) {
+    
+    toplevel check_toplevel(const sexpr& e) {
       return e.map<toplevel>(toplevel_visitor());
     }
 
+    
+    std::ostream& operator<<(std::ostream& out, const toplevel& self) {
+      return out << self.get<expr>();
+    }
+
+    sexpr repr(const toplevel& self) {
+      return repr(self.get<expr>());
+    }
     
   }
   
