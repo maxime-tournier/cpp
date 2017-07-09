@@ -28,6 +28,7 @@
 #include "types.hpp"
 #include "ast.hpp"
 
+#include <numeric>
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -46,6 +47,178 @@ static void read_loop(const F& f) {
 };
 
 
+class prime_enumerator {
+  using value_type = std::size_t;
+  value_type current = 1;
+  std::vector<value_type> previous;
+public:
+  
+  value_type operator()() {
+    
+    while(true) {
+      ++current;
+      const value_type sqrt = std::sqrt(current);
+      
+      bool has_div = false;
+      for(value_type p : previous) {
+        if(current % p == 0) {
+          has_div = true;
+          break;
+        }
+        
+        if( p > sqrt ) break;
+      }
+      
+      if(!has_div) {
+        previous.push_back(current);
+        return current;
+      }
+    }
+  }
+};
+
+
+template<class U>
+static U gcd(U a, U b) {
+  U res;
+  
+  while(U r = a % b) {
+    a = b;
+    b = r;
+    res = r;
+  }
+
+  return res;
+}
+
+
+template<class U>
+static void bezout(U a, U b, int* s, int* t) {
+  
+  int s_prev = 1, t_prev = 0;
+  int s_curr = 0, t_curr = 1;
+  
+  while(U r = a % b) {
+    const U q = a / b;
+
+    const int s_next = s_prev - q * s_curr;
+    const int t_next = t_prev - q * t_curr;    
+
+    s_prev = s_curr;
+    s_curr = s_next;
+    
+    t_prev = t_curr;
+    t_curr = t_next;    
+    
+    a = b;
+    b = r;
+  }
+
+  *s = s_curr;
+  *t = t_curr;
+  
+}
+
+
+
+template<class U>
+static int chinese_euclid(U a, U b) {
+  int e_prev = 0, e = b;
+  
+  while(U r = a % b) {
+    const U q = a / b;
+    
+    const int e_next = e_prev - q * e;
+    
+    e_prev = e;
+    e = e_next;
+    
+    a = b;
+    b = r;
+  }
+
+  return e;
+}
+
+
+int mul_inv(int a, int b)
+{
+	int b0 = b, t, q;
+	int x0 = 0, x1 = 1;
+	if (b == 1) return 1;
+	while (a > 1) {
+		q = a / b;
+		t = b, b = a % b, a = t;
+		t = x0, x0 = x1 - q * x0, x1 = t;
+	}
+	if (x1 < 0) x1 += b0;
+	return x1;
+}
+
+template<class U>
+static int chinese_remainders(const U* a, const U* n, std::size_t size) {
+
+  U prod = 1;
+  for(std::size_t i = 0; i < size; ++i) {
+    prod *= n[i];
+  }
+  
+  int x = 0;
+
+  for(std::size_t i = 0; i < size; ++i) {
+    const U m = prod / n[i];
+
+    int u, v;
+    bezout(m, n[i], &u, &v);
+
+    // if( u < 0 ) u += m;
+    std::clog << "bezout: " << u << ", " << v << std::endl;
+    
+    const int e = m * u;
+    std::clog << "e: " << e << std::endl;
+    
+    x += a[i] * e;
+    // x += a[i] * mul_inv(m, n[i]) * m;    
+    std::clog << "chinese: " << x << std::endl;
+  }
+
+  return x;
+}
+
+
+
+struct test {
+  test() {
+
+    prime_enumerator f;
+
+    for(std::size_t i = 0, n = 20; i < n; ++i) {
+      std::clog << f() << std::endl;
+    }
+
+    const std::size_t ns[] = {f(), f(), f(), f()};
+    const std::size_t as[] = {0, 1, 2, 3};
+
+    const int x = chinese_remainders(as, ns, 4);
+    
+    for(std::size_t i = 0; i < 4; ++i) {
+      std::clog << x % (int)ns[i] << " vs. " << as[i] << std::endl;
+    }
+
+    std::clog << "gcd: " << gcd( ns[0], ns[1] ) << std::endl;
+    std::clog << "gcd: " << gcd( ns[1], ns[2] ) << std::endl;
+    std::clog << "gcd: " << gcd( ns[1], ns[3] ) << std::endl;
+
+    int s, t;
+
+    bezout(ns[0], ns[1], &s, &t);
+
+    std::clog << ns[0] * s + ns[1] * t << std::endl;
+
+    
+  }
+
+} instance;
 
 
 
