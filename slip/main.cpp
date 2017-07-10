@@ -29,7 +29,9 @@
 #include "ast.hpp"
 
 #include <numeric>
-#include "../prime.hpp"
+
+#include "kinds.hpp"
+
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -46,43 +48,6 @@ static void read_loop(const F& f) {
   }
   
 };
-
-
-
-
-struct test {
-  test() {
-
-    prime_enumerator<std::size_t> f;
-
-    for(std::size_t i = 0, n = 20; i < n; ++i) {
-      std::clog << f() << std::endl;
-    }
-
-    const std::size_t ns[] = {f(), f(), f(), f()};
-    const std::size_t as[] = {0, 1, 2, 3};
-
-    const int x = chinese_remainders(as, ns, 4);
-    
-    for(std::size_t i = 0; i < 4; ++i) {
-      std::clog << x % (int)ns[i] << " vs. " << as[i] << std::endl;
-    }
-
-    std::clog << "gcd: " << gcd( ns[0], ns[1] ) << std::endl;
-    std::clog << "gcd: " << gcd( ns[1], ns[2] ) << std::endl;
-    std::clog << "gcd: " << gcd( ns[1], ns[3] ) << std::endl;
-
-    int s, t;
-
-    bezout(ns[0], ns[1], &s, &t);
-
-    std::clog << ns[0] * s + ns[1] * t << std::endl;
-
-    
-  }
-
-} instance;
-
 
 
 
@@ -300,9 +265,6 @@ const auto jit_compiler = [](bool dump) {
   
   return [dump](sexpr&& s) {
 
-    const ast::toplevel node = ast::check_toplevel(s);
-    std::cout << "ast: " << node << std::endl;
-    
     const sexpr e = expand_toplevel(env, s);
 
     const types::check_type checked = types::check(tc, e);
@@ -331,6 +293,26 @@ const auto jit_compiler = [](bool dump) {
   
 
 };
+
+
+static const auto kind_test = [] {
+  using namespace slip;
+  
+  auto tc = kinds::typechecker();
+  
+  return [tc](sexpr&& s) mutable {
+    
+    const ast::toplevel node = ast::check_toplevel(s);
+    std::cout << "ast: " << node << std::endl;
+
+    const kinds::polytype p = infer(tc, node);
+    std::cout << p << std::endl;
+
+    return parse::pure(s);
+  };
+  
+};
+
 
 namespace po = boost::program_options;
 static po::variables_map parse_options(int argc, char** argv) {
@@ -376,6 +358,7 @@ int main(int argc, char** argv) {
   } else {
     const bool dump = vm.count("dump");    
     action = jit_compiler(dump);
+    action = kind_test();
   }
   
 
