@@ -17,23 +17,26 @@ namespace slip {
   // kinds
   struct kind;
 
+  // the monotypes kind
   struct types {
     bool operator==(const types& other) const {
       return true;
     }
   };
 
-  
+
   struct function;
     
   struct kind : variant<types, ref<function> > {
+    using kind::variant::variant;
     
     struct error : slip::error {
       using slip::error::error;
     };
     
   };
-  
+
+  // function kind
   struct function {
     kind from, to;
 
@@ -49,6 +52,12 @@ namespace slip {
   struct constant {
     symbol name;
     slip::kind kind;
+
+    constant(symbol name, slip::kind kind)
+      : name(name),
+        kind(kind) {
+
+    }
   };
   
   struct variable {
@@ -60,16 +69,16 @@ namespace slip {
   struct application;
 
   struct kind_visitor {
-
-    template<class T>
-    slip::kind operator()(const T& self) const { return self.kind; }
+    // TODO hide
+    slip::kind operator()(const constant& self) const { return self.kind; }
+    slip::kind operator()(const ref<variable>& self) const { return self->kind; }    
 
     slip::kind operator()(const ref<application>& self) const;
     
   };
   
 
-  struct constructor : variant< constant, variable, ref<application> > {
+  struct constructor : variant< constant, ref<variable>, ref<application> > {
 
     using constructor::variant::variant;
     
@@ -116,15 +125,32 @@ namespace slip {
   };
 
   struct polytype {
-    std::vector< variable > forall;
+    using forall_type = std::vector< ref<variable> >;
+    forall_type forall;
     monotype body;
+
+    polytype(const monotype& body) : body(body) { }
   };
 
   
-  struct environment : context< environment, polytype >  { };
+  struct environment : context< environment, polytype > {
+    std::size_t depth;
+
+    environment( const ref<environment>& parent = {} )
+      : environment::context(parent),
+      depth( parent ? 0 : parent->depth + 1 ) {
+
+    }
+
+  };
+
+
+  namespace ast {
+    struct toplevel;
+  }
+
   
-  
-  class state {
+  class typechecker {
     using env_type = environment;
     ref<env_type> env;
 
@@ -132,16 +158,18 @@ namespace slip {
     ref< uf_type > uf;
     
   public:
-    state();
+    typechecker();
     
-    polytype generalize(monotype t) const;
-    monotype instantiate(polytype p) const;
+    polytype generalize(const monotype& t) const;
+    monotype instantiate(const polytype& p) const;
 
-    void unify(monotype lhs, monotype rhs);    
+    void unify(const monotype& lhs, const monotype& rhs);    
     
-    state scope() const;
+    typechecker scope() const;
 
-    state& def(symbol id, polytype p);
+    typechecker& def(const symbol& id, const polytype& p);
+
+    polytype infer(const ast::toplevel& node);
     
   };
   

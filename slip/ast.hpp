@@ -124,11 +124,11 @@ namespace slip {
     };
     
     std::ostream& operator<<(std::ostream& out, const toplevel& self);    
+    
+    sexpr repr(const toplevel& self);
 
-
-    sexpr repr(const toplevel& self);    
+    
     toplevel check_toplevel(const sexpr& e);
-
     
   }
   
