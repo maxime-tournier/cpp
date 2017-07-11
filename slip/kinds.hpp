@@ -67,8 +67,14 @@ namespace slip {
     };
   
     struct variable {
-      std::size_t depth;
       struct kind kind;
+      std::size_t depth;
+
+      variable(struct kind kind, std::size_t depth)
+        : kind(kind), depth(depth) {
+
+      }
+      
     };
 
 
@@ -159,6 +165,9 @@ namespace slip {
 
       typechecker& def(const symbol& id, const polytype& p);
 
+      const polytype& find(const symbol& id) const;
+
+      ref<variable> fresh(kind k) const;
     };
 
 

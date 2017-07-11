@@ -67,11 +67,16 @@ namespace slip {
       }
 
 
+      monotype operator()(const ast::variable& self, typechecker& tc) const {
+        const polytype& p = tc.find(self.name);
+        return tc.instantiate(p);
+      }
+
       template<class T>
       monotype operator()(const T& self, typechecker& tc) const {
-        throw error("unimplemented");
+        throw error("infer unimplemented");
       }
-    
+      
     };
 
 
@@ -91,7 +96,7 @@ namespace slip {
 
       template<class T, class UF>
       monotype operator()(const T& self, UF& uf) const {
-        throw error("unimplemented");
+        throw error("nice unimplemented");
       }
     
       // mono operator()(const ref<variable>& self, uf_type& uf) const {
@@ -145,6 +150,57 @@ namespace slip {
     }
 
 
+    struct instantiate_visitor {
+      using map_type = std::map< ref<variable>, ref<variable> >;
+      
+      monotype operator()(const constant& self, const map_type& m) const {
+        return self;
+      }
+
+      monotype operator()(const ref<variable>& self, const map_type& m) const {
+        auto it = m.find(self);
+        if(it == m.end()) return self;
+        return it->second;
+      }
+
+      monotype operator()(const ref<application>& self, const map_type& m) const {
+        return make_ref<application>( self->func.map<monotype>(instantiate_visitor(), m),
+                                      self->func.map<monotype>(instantiate_visitor(), m) );
+      }
+      
+    };
+
+    struct unbound_variable : type_error {
+      unbound_variable(symbol id) : type_error("unbound variable " + id.name()) { }
+    };
+
+    
+    const polytype& typechecker::find(const symbol& id) const {
+
+      if(polytype* p = env->find(id)) {
+        return *p;
+      }
+
+      throw unbound_variable(id);
+    }
+    
+
+    ref<variable> typechecker::fresh(kind k) const {
+      return make_ref<variable>(k, env->depth);
+    }
+
+    monotype typechecker::instantiate(const polytype& poly) const {
+      instantiate_visitor::map_type map;
+
+      // associate each bound variable to a fresh one
+      auto out = std::inserter(map, map.begin());
+      std::transform(poly.forall.begin(), poly.forall.end(), out, [&](const ref<variable>& v) {
+          return std::make_pair(v, fresh(v->kind));
+        });
+      
+      return poly.body.map<monotype>(instantiate_visitor(), map);
+    }
+    
     polytype typechecker::generalize(const monotype& mono) const {
       polytype res(mono.map<monotype>(nice(), uf));
 
@@ -200,7 +256,7 @@ namespace slip {
 
       template<class T>
       void operator()(const T& self, std::ostream& out, ostream_map& osm) const {
-        throw error("unimplemented");
+        throw error("ostream unimplemented");
       }
     };
 
