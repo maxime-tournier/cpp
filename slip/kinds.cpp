@@ -10,8 +10,23 @@ namespace slip {
 
   namespace kinds {
 
+    ref<function> operator>>=(const kind& lhs, const kind& rhs) {
+      return make_ref<function>(lhs, rhs);
+    }
+
+    const constructor func_ctor = constant("->", types() >>= types() >>= types() );
 
 
+    constructor constructor::operator()(const constructor& arg) const {
+      return make_ref<application>(*this, arg);
+    }
+    
+    monotype operator>>=(const monotype& lhs, const monotype& rhs) {
+      return func_ctor(lhs)(rhs);
+
+    }
+    
+    
     struct kind_visitor {
       kind operator()(const constant& self) const { return self.kind; }
       kind operator()(const ref<variable>& self) const { return self->kind; }    
@@ -26,6 +41,29 @@ namespace slip {
     struct kind constructor::kind() const {
       return map<struct kind>(kind_visitor());
     }
+
+
+    struct kind_ostream {
+
+      void operator()(types, std::ostream& out) const {
+        out << '*';
+      }
+
+      void operator()(const ref<function>& self, std::ostream& out) const {
+        // TODO parentheses
+        out << self->from << " -> " << self->to << std::endl;
+      }
+      
+      
+    };
+    
+    std::ostream& operator<<(std::ostream& out, const kind& self) {
+      self.apply(kind_ostream(), out);
+      return out;      
+    }
+
+
+    
     
     template<class T>
     struct traits {
@@ -49,10 +87,10 @@ namespace slip {
     template<> constant traits< slip::symbol >::type() { return symbol_type; }
 
 
-    typechecker::typechecker()
-      : env( make_ref<environment>() ),
-        uf( make_ref<uf_type>() ) {
-
+    typechecker::typechecker(ref<env_type> env, ref<uf_type> uf) 
+      : env( env ),
+        uf( uf ) {
+      
     }
 
     
@@ -72,6 +110,29 @@ namespace slip {
         return tc.instantiate(p);
       }
 
+      monotype operator()(const ref<ast::lambda>& self, typechecker& tc) const {
+
+        typechecker sub = tc.scope();
+
+        // create/define arg types
+        const list< ref<variable> > args = map(self->args, [&](const symbol& s) {
+            const ref<variable> var = tc.fresh( types() );
+            // note: var stays monomorphic after generalization
+            sub.def(s, sub.generalize(var) );
+            return var;
+          });
+        
+        // infer body type in subcontext
+        const monotype body_type = infer(sub, self->body);
+
+        // return complete application type
+        return foldr(body_type, args, [](const ref<variable>& lhs, const monotype& rhs) -> monotype {
+            return lhs >>= rhs;
+          });
+        
+      }
+
+      
       template<class T>
       monotype operator()(const T& self, typechecker& tc) const {
         throw error("infer unimplemented");
@@ -89,38 +150,26 @@ namespace slip {
     struct nice {
 
       template<class UF>
-      monotype operator()(const constant& self, UF& uf) const {
+      constructor operator()(const constant& self, UF& uf) const {
         return self;
       }
 
 
-      template<class T, class UF>
-      monotype operator()(const T& self, UF& uf) const {
-        throw error("nice unimplemented");
+      template<class UF>
+      constructor operator()(const ref<variable>& self, UF& uf) const {
+        const constructor res = uf->find(self);
+        if(res == monotype(self)) {
+          return res;
+        }
+        
+        return res.map<constructor>(nice(), uf);
       }
-    
-      // mono operator()(const ref<variable>& self, uf_type& uf) const {
-      //   mono res = uf.find(self);
-      //   if(res != mono(self)) {
-      //     return res.map<mono>(nice(), uf);
-      //   }
-        
-      //   return res;
-      // }
 
 
-      // mono operator()(const application& self, uf_type& uf) const {
-      //   mono res = uf.find(self);
-
-      //   if(res != mono(self)) {
-      //     return res.map<mono>(nice(), uf);
-      //   }
-
-      //   return map(self, [&](const mono& t) {
-      //       return t.map<mono>(nice(), uf);
-      //     });
-        
-      // }
+      template<class UF>
+      constructor operator()(const ref<application>& self, UF& uf) const {
+        return self->func.map<constructor>(nice(), uf)( self->arg.map<constructor>(nice(), uf));
+      }
       
     };
 
@@ -183,11 +232,25 @@ namespace slip {
 
       throw unbound_variable(id);
     }
+
+
+    typechecker& typechecker::def(const symbol& id, const polytype& p) {
+      auto res = env->locals.emplace( std::make_pair(id, p) );
+      if(!res.second) throw error("redefinition of " + id.name());
+      return *this;
+    }
     
 
     ref<variable> typechecker::fresh(kind k) const {
       return make_ref<variable>(k, env->depth);
     }
+
+
+    typechecker typechecker::scope() const {
+      // TODO should we use nested union-find too?
+      return typechecker( make_ref<env_type>(env), uf);
+    }
+    
 
     monotype typechecker::instantiate(const polytype& poly) const {
       instantiate_visitor::map_type map;
@@ -200,6 +263,8 @@ namespace slip {
       
       return poly.body.map<monotype>(instantiate_visitor(), map);
     }
+
+
     
     polytype typechecker::generalize(const monotype& mono) const {
       polytype res(mono.map<monotype>(nice(), uf));
@@ -248,16 +313,28 @@ namespace slip {
         out << self.name;
       }
 
-
       void operator()(const ref<variable>& self, std::ostream& out, ostream_map& osm) const {
         auto err = osm.emplace( std::make_pair(self, var_repr{osm.size(), false} ));
         out << err.first->second;
       }
 
-      template<class T>
-      void operator()(const T& self, std::ostream& out, ostream_map& osm) const {
-        throw error("ostream unimplemented");
+      void operator()(const ref<application>& self, std::ostream& out, ostream_map& osm) const {
+        // TODO parentheses
+
+        if(self->func == func_ctor) {
+          // this must be why ocaml's types are written in reverse          
+          self->arg.apply(ostream_visitor(), out, osm);
+          out << ' ';
+          self->func.apply(ostream_visitor(), out, osm);
+        } else {
+          self->func.apply(ostream_visitor(), out, osm);
+          out << ' ';
+          self->arg.apply(ostream_visitor(), out, osm);
+        }
+         
       }
+
+      
     };
 
 
