@@ -306,7 +306,7 @@ static const auto kind_test = [] {
     std::cout << "ast: " << node << std::endl;
 
     const kinds::polytype p = infer(tc, node);
-    std::cout << p << std::endl;
+    std::cout << " : " << p << std::endl;
 
     return parse::pure(s);
   };

@@ -239,6 +239,7 @@ namespace slip {
       ref<variable> var;
       mono type;
     };
+
     
     struct occurs_check {
 

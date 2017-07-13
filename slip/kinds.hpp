@@ -202,13 +202,13 @@ namespace slip {
       polytype generalize(const monotype& t) const;
       monotype instantiate(const polytype& p) const;
 
-      void unify(const monotype& lhs, const monotype& rhs);    
+      void unify(const constructor& lhs, const constructor& rhs);    
     
       typechecker scope() const;
 
-      typechecker& def(const symbol& id, const polytype& p);
+      typechecker& def(symbol id, const polytype& p);
 
-      const polytype& find(const symbol& id) const;
+      const polytype& find(symbol id) const;
 
       ref<variable> fresh(kind k) const;
     };

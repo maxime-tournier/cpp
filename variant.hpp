@@ -295,6 +295,7 @@ public:
     impl::dispatch<variant, const variant, void (Visitor, Args...)>::table[index]
       (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
 
+    
   }
 
 

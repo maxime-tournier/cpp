@@ -10,6 +10,10 @@ namespace slip {
 
   namespace kinds {
 
+
+    template<class ... C>
+    static std::ostream& debug(std::ostream& out, C&& ... c);
+    
     ref<function> operator>>=(const kind& lhs, const kind& rhs) {
       return make_ref<function>(lhs, rhs);
     }
@@ -22,7 +26,7 @@ namespace slip {
     }
     
     monotype operator>>=(const monotype& lhs, const monotype& rhs) {
-      return func_ctor(lhs)(rhs);
+      return (func_ctor(lhs))(rhs);
 
     }
     
@@ -97,19 +101,139 @@ namespace slip {
     static monotype infer(typechecker& self, const ast::expr& node);
     
 
+
+    // unification
+    struct unification_error {
+      unification_error(constructor lhs, constructor rhs) : lhs(lhs), rhs(rhs) { }
+      const constructor lhs, rhs;
+    };
+
+    
+    struct occurs_error {
+      ref<variable> var;
+      constructor type;         // TODO do we want monotype here?
+    };
+
+
+
+    template<class UF>
+    struct occurs_check {
+
+      bool operator()(const constant& self, const ref<variable>& var, UF& uf) const {
+        return false;
+      }
+
+      bool operator()(const ref<variable>& self, const ref<variable>& var, UF& uf) const {
+
+        // TODO not sure if this should be done here
+        
+        if(self->depth > var->depth) {
+          // we are trying to unify var with app( ... self ... ) but var has
+          // lower depth: we need to "lower" self to var's depth so that self
+          // generalizes just like var
+          // ref<variable> lower = make_ref<variable>(var->kind, var->depth);
+
+          // assert(uf.find(self).kind() == lower->kind);
+          // debug( std::clog << "linking", constructor(self), constructor(lower) ) << std::endl;          
+          // uf.link(uf.find(self), lower);
+        }
+        
+        return self == var;
+      }
+
+
+      bool operator()(const ref<application>& self, const ref<variable>& var, UF& uf) const {
+
+        if( uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ) return true;        
+        if( uf.find(self->func).template map<bool>(occurs_check(), var, uf) ) return true;
+        
+        return false;
+      }
+      
+    };
+
+    
+
+    template<class UF>
+    struct unify_visitor {
+
+      const bool try_reverse;
+      
+      unify_visitor(bool try_reverse = true) 
+        : try_reverse(try_reverse) { }
+      
+      template<class T>
+      void operator()(const T& self, const constructor& rhs, UF& uf) const {
+        
+        // double dispatch
+        if( try_reverse ) {
+          return rhs.apply( unify_visitor(false), self, uf);
+        } else {
+          throw unification_error(self, rhs);
+        }
+      }
+
+
+      void operator()(const ref<variable>& self, const constructor& rhs, UF& uf) const {
+        assert( uf.find(self) == self );
+        assert( uf.find(rhs) == rhs );        
+        
+        if( constructor(self) != rhs && rhs.map<bool>(occurs_check<UF>(), self, uf)) {
+          throw occurs_error{self, rhs.get< ref<application> >()};
+        }
+
+        assert(self->kind == rhs.kind());
+        
+        // debug( std::clog << "linking", constructor(self), rhs ) << std::endl;
+        uf.link(self, rhs);
+
+        
+      }
+
+
+      void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
+        if( !(lhs == rhs) ) {
+          throw unification_error(lhs, rhs);
+        }
+      }
+      
+
+      void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
+        // if( !(lhs->func == rhs->func) ) {
+        //   debug( std::clog << "func mismatch: ", lhs->func, rhs->func) << std::endl;
+        //   throw unification_error(lhs, rhs);
+        // }
+
+        uf.find(lhs->arg).apply( unify_visitor(), uf.find(rhs->arg), uf);        
+        uf.find(lhs->func).apply( unify_visitor(), uf.find(rhs->func), uf);
+
+        
+      }
+
+      
+    };
+
+    
+
+
+    
+    // expression inference
     struct expr_visitor {
 
+      
       template<class T>
       monotype operator()(const ast::literal<T>& self, typechecker& tc) const {
         return traits<T>::type();
       }
 
 
+      
       monotype operator()(const ast::variable& self, typechecker& tc) const {
         const polytype& p = tc.find(self.name);
         return tc.instantiate(p);
       }
 
+      
       monotype operator()(const ref<ast::lambda>& self, typechecker& tc) const {
 
         typechecker sub = tc.scope();
@@ -132,6 +256,33 @@ namespace slip {
         
       }
 
+
+
+      monotype operator()(const ref<ast::application>& self, typechecker& tc) const {
+
+        const monotype func = infer(tc, self->func);
+
+        // infer arg types
+        const list<monotype> args = map(self->args, [&](const ast::expr& e) {
+            return infer(tc, e);
+          });
+
+        // construct function type
+        const monotype result = tc.fresh( types() );
+        
+        const monotype sig = foldr(result, args, [&](const monotype& lhs, const monotype& rhs) {
+            return lhs >>= rhs;
+          });
+
+        try{
+          tc.unify(func, sig);
+        } catch( occurs_error ) {
+          throw type_error("occurs check");
+        }
+
+        return result;
+      }
+      
       
       template<class T>
       monotype operator()(const T& self, typechecker& tc) const {
@@ -147,6 +298,8 @@ namespace slip {
 
 
 
+    
+    // finding nice representants
     struct nice {
 
       template<class UF>
@@ -157,8 +310,11 @@ namespace slip {
 
       template<class UF>
       constructor operator()(const ref<variable>& self, UF& uf) const {
+
         const constructor res = uf->find(self);
+        
         if(res == monotype(self)) {
+          // debug(std::clog << "nice: ", constructor(self), res) << std::endl;          
           return res;
         }
         
@@ -168,37 +324,19 @@ namespace slip {
 
       template<class UF>
       constructor operator()(const ref<application>& self, UF& uf) const {
-        return self->func.map<constructor>(nice(), uf)( self->arg.map<constructor>(nice(), uf));
+        const auto func = self->func.map<constructor>(nice(), uf);
+        const auto arg = self->arg.map<constructor>(nice(), uf);
+        // debug(std::clog << "nice: ", func, arg, func(arg)) << std::endl;
+        
+        return func(arg);
       }
       
     };
 
 
 
-    struct vars_visitor {
 
-      using result_type = std::set< ref<variable> >;
-    
-      void operator()(const constant&, result_type& res) const { }
-      
-      void operator()(const ref<variable>& self, result_type& res) const {
-        res.insert(self);
-      }
-
-      void operator()(const ref<application>& self, result_type& res) const {
-        self->func.apply( vars_visitor(), res );
-        self->arg.apply( vars_visitor(), res );      
-      }
-    
-    };
-
-    static vars_visitor::result_type vars(const constructor& self) {
-      vars_visitor::result_type res;
-      self.apply(vars_visitor(), res);
-      return res;
-    }
-
-
+    // instantiation
     struct instantiate_visitor {
       using map_type = std::map< ref<variable>, ref<variable> >;
       
@@ -218,13 +356,31 @@ namespace slip {
       }
       
     };
+    
 
+
+    monotype typechecker::instantiate(const polytype& poly) const {
+      instantiate_visitor::map_type map;
+
+      // associate each bound variable to a fresh one
+      auto out = std::inserter(map, map.begin());
+      std::transform(poly.forall.begin(), poly.forall.end(), out, [&](const ref<variable>& v) {
+          return std::make_pair(v, fresh(v->kind));
+        });
+      
+      return poly.body.map<monotype>(instantiate_visitor(), map);
+    }
+
+
+
+
+    // env lookup/def
     struct unbound_variable : type_error {
       unbound_variable(symbol id) : type_error("unbound variable " + id.name()) { }
     };
 
     
-    const polytype& typechecker::find(const symbol& id) const {
+    const polytype& typechecker::find(symbol id) const {
 
       if(polytype* p = env->find(id)) {
         return *p;
@@ -234,7 +390,7 @@ namespace slip {
     }
 
 
-    typechecker& typechecker::def(const symbol& id, const polytype& p) {
+    typechecker& typechecker::def(symbol id, const polytype& p) {
       auto res = env->locals.emplace( std::make_pair(id, p) );
       if(!res.second) throw error("redefinition of " + id.name());
       return *this;
@@ -252,21 +408,37 @@ namespace slip {
     }
     
 
-    monotype typechecker::instantiate(const polytype& poly) const {
-      instantiate_visitor::map_type map;
 
-      // associate each bound variable to a fresh one
-      auto out = std::inserter(map, map.begin());
-      std::transform(poly.forall.begin(), poly.forall.end(), out, [&](const ref<variable>& v) {
-          return std::make_pair(v, fresh(v->kind));
-        });
-      
-      return poly.body.map<monotype>(instantiate_visitor(), map);
-    }
+    // variables
+    struct vars_visitor {
 
-
+      using result_type = std::set< ref<variable> >;
     
+      void operator()(const constant&, result_type& res) const { }
+      
+      void operator()(const ref<variable>& self, result_type& res) const {
+        res.insert(self);
+      }
+
+      void operator()(const ref<application>& self, result_type& res) const {
+        self->func.apply( vars_visitor(), res );
+        self->arg.apply( vars_visitor(), res );      
+      }
+    
+    };
+
+
+    static vars_visitor::result_type vars(const constructor& self) {
+      vars_visitor::result_type res;
+      self.apply(vars_visitor(), res);
+      return res;
+    }
+    
+    
+
+    // generalization
     polytype typechecker::generalize(const monotype& mono) const {
+      // debug(std::clog << "gen: ", mono) << std::endl;
       polytype res(mono.map<monotype>(nice(), uf));
 
       const auto all = vars(res.body);
@@ -354,7 +526,26 @@ namespace slip {
       ostream_map osm;
       return ostream(out, self, osm);
     }
-    
+
+
+
+
+
+    void typechecker::unify(const constructor& lhs, const constructor& rhs) {
+      // debug( std::clog << "unifying: ", lhs, rhs) << std::endl;
+      uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
+    }
+
+
+    template<class ... C>
+    static std::ostream& debug(std::ostream& out, C&& ... c) {
+      ostream_map osm;
+      const int expand[] = {
+        (c.apply( ostream_visitor(), std::clog << "   " , osm ) , 0)...
+      }; (void) expand;
+      
+      return out;
+    }
   }
   
 }
