@@ -185,6 +185,15 @@ namespace slip {
       }
       
       expr operator()(const symbol& self) const {
+        if(self == "true") {
+          return literal<boolean>{true};
+        }
+
+        if(self == "false") {
+          return literal<boolean>{false};
+        }
+
+        
         return variable{self};
       }
 
