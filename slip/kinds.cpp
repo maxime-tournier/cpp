@@ -3,8 +3,8 @@
 #include "sexpr.hpp"
 #include "ast.hpp"
 
-
 #include <algorithm>
+#include <sstream>
 
 namespace slip {
 
@@ -30,6 +30,8 @@ namespace slip {
 
     }
     
+
+
     
     struct kind_visitor {
       kind operator()(const constant& self) const { return self.kind; }
@@ -223,7 +225,6 @@ namespace slip {
         return traits<T>::type();
       }
 
-
       
       monotype operator()(const ast::variable& self, typechecker& tc) const {
         const polytype& p = tc.find(self.name);
@@ -247,7 +248,8 @@ namespace slip {
         const monotype body_type = infer(sub, self->body);
 
         // return complete application type
-        return foldr(body_type, args, [](const ref<variable>& lhs, const monotype& rhs) -> monotype {
+        return foldr(body_type, args, [](const ref<variable>& lhs,
+                                         const monotype& rhs) -> monotype {
             return lhs >>= rhs;
           });
         
@@ -267,9 +269,10 @@ namespace slip {
         // construct function type
         const monotype result = tc.fresh( types() );
         
-        const monotype sig = foldr(result, args, [&](const monotype& lhs, const monotype& rhs) {
-            return lhs >>= rhs;
-          });
+        const monotype sig = foldr(result, args, [&](const monotype& lhs,
+                                                     const monotype& rhs) {
+                                     return lhs >>= rhs;
+                                   });
 
         try{
           tc.unify(func, sig);
@@ -315,6 +318,20 @@ namespace slip {
         
       }
 
+
+      monotype operator()(const ref<ast::sequence>& self, typechecker& tc) const {
+        monotype res = io_ctor( unit_type );
+
+        for(const ast::expr& e : self->items) {
+
+          res = io_ctor( tc.fresh(types()) );
+          tc.unify( res, infer(tc, e));          
+        }
+          
+        return res;
+      }
+
+      
       
       
       template<class T>
@@ -326,7 +343,15 @@ namespace slip {
 
 
     static monotype infer(typechecker& self, const ast::expr& node) {
-      return node.map<monotype>(expr_visitor(), self);
+      try{
+        return node.map<monotype>(expr_visitor(), self);
+      } catch( unification_error& e )  {
+        std::stringstream ss;
+
+        debug(ss, "cannot unify: ", e.lhs, " with: ", e.rhs);
+        
+        throw type_error(ss.str());
+      }
     }
 
 
@@ -526,7 +551,6 @@ namespace slip {
         // TODO parentheses
 
         if(self->func == func_ctor) {
-          // this must be why ocaml's types are written in reverse          
           self->arg.apply(ostream_visitor(), out, osm);
           out << ' ';
           self->func.apply(ostream_visitor(), out, osm);
@@ -561,19 +585,33 @@ namespace slip {
 
 
 
-
-
     void typechecker::unify(const constructor& lhs, const constructor& rhs) {
       // debug( std::clog << "unifying: ", lhs, rhs) << std::endl;
       uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
     }
 
 
+    static std::ostream& debug_aux(std::ostream& out,
+                                   const constructor& self,
+                                   ostream_map& osm) {
+      self.apply(ostream_visitor(), out, osm);
+      return out;
+    }
+
+
+    static std::ostream& debug_aux(std::ostream& out,
+                                   const std::string& self,
+                                   ostream_map& osm) {
+      return out << self;
+    }
+
+    
     template<class ... C>
     static std::ostream& debug(std::ostream& out, C&& ... c) {
       ostream_map osm;
       const int expand[] = {
-        (c.apply( ostream_visitor(), std::clog << "   " , osm ) , 0)...
+        
+        ( debug_aux(out, c, osm), 0)...
       }; (void) expand;
       
       return out;

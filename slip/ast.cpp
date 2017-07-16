@@ -91,9 +91,10 @@ namespace slip {
     using special_type = expr (const sexpr::list& e);
 
     static special_type check_lambda,
-      check_application,
-      check_definition,
-      check_condition;
+                    check_application,
+                    check_definition,
+                    check_condition,
+                    check_sequence;
     
     static expr check_binding(const sexpr::list&);
 
@@ -101,7 +102,8 @@ namespace slip {
       {kw::lambda, check_lambda},
       {kw::def, check_definition},
       {kw::cond, check_condition},
-      {kw::var, check_binding},                        
+      {kw::var, check_binding},
+      {kw::seq, check_sequence}
     };
     
 
@@ -112,10 +114,12 @@ namespace slip {
       try {
         if(size(args) != 2 || !args->head.is<sexpr::list>() ) throw fail();
         
-        const list<symbol> vars = map(args->head.get<sexpr::list>(), [&](const sexpr& e) {
-            if(!e.is<symbol>()) throw fail();
-            return e.get<symbol>();
-          });
+        const list<symbol> vars =
+          map(args->head.get<sexpr::list>(), [&](const sexpr& e) {
+              if(!e.is<symbol>()) throw fail();
+              return e.get<symbol>();
+            });
+        
         return make_ref<lambda>(vars, check_expr(args->tail->head));
         
       } catch( fail& ) {
@@ -130,9 +134,10 @@ namespace slip {
         throw syntax_error("empty list in application");
       }
 
-      return make_ref<application>( check_expr(self->head), map(self->tail, [](const sexpr& e) {
-            return check_expr(e);
-          }));
+      return make_ref<application>( check_expr(self->head),
+                                    map(self->tail, [](const sexpr& e) {
+                                        return check_expr(e);
+                                      }));
     }
 
     
@@ -144,13 +149,19 @@ namespace slip {
         if( size(items) != 2 ) throw fail();
         if( !items->head.is<symbol>() ) throw fail();
 
-        return make_ref<definition>(items->head.get<symbol>(), check_expr(items->tail->head));
+        return make_ref<definition>(items->head.get<symbol>(),
+                                    check_expr(items->tail->head));
+        
       } catch( fail& ) {
         throw syntax_error("(def `symbol` `expr`)");
       }
     }
 
-
+    static expr check_sequence(const sexpr::list& items) {
+      return make_ref<ast::sequence>(map(items, [](const sexpr& e) {
+            return check_expr(e);
+          }));
+    }
 
     static expr check_condition(const sexpr::list& items) {
       struct fail {};

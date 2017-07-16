@@ -98,6 +98,7 @@ namespace slip {
 
     
     struct sequence {
+      sequence(const list<expr>& items) : items(items) { }
       list<expr> items;
     };
 
