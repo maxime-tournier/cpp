@@ -186,7 +186,6 @@ namespace slip {
         
         // debug( std::clog << "linking", constructor(self), rhs ) << std::endl;
         uf.link(self, rhs);
-
         
       }
 
@@ -199,15 +198,8 @@ namespace slip {
       
 
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
-        // if( !(lhs->func == rhs->func) ) {
-        //   debug( std::clog << "func mismatch: ", lhs->func, rhs->func) << std::endl;
-        //   throw unification_error(lhs, rhs);
-        // }
-
         uf.find(lhs->arg).apply( unify_visitor(), uf.find(rhs->arg), uf);        
         uf.find(lhs->func).apply( unify_visitor(), uf.find(rhs->func), uf);
-
-        
       }
 
       
@@ -279,6 +271,22 @@ namespace slip {
         } catch( occurs_error ) {
           throw type_error("occurs check");
         }
+
+        return result;
+      }
+
+
+      monotype operator()(const ref<ast::condition>& self, typechecker& tc) const {
+        const monotype result = tc.fresh( types() );
+
+        for(const ast::condition::branch& b : self->branches) {
+
+          const monotype test = infer(tc, b.test);
+          tc.unify(boolean_type, test);
+          
+          const monotype value = infer(tc, b.value);
+          tc.unify(value, result);
+        };
 
         return result;
       }
