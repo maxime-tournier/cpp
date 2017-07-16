@@ -77,11 +77,11 @@ namespace slip {
 
     // let bindings
     struct definition {
-      definition(const symbol& name, const expr& value)
-        : name(name),
+      definition(const symbol& id, const expr& value)
+        : id(id),
           value(value) { }
         
-      const symbol name;
+      const symbol id;
       const expr value;
     };
 

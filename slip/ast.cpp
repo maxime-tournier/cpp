@@ -31,7 +31,7 @@ namespace slip {
 
       sexpr operator()(const ref<definition>& self) const {
         return kw::def
-          >>= self->name
+          >>= self->id
           >>= repr(self->value)
           >>= sexpr::list();
       }

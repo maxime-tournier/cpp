@@ -19,7 +19,7 @@ namespace slip {
     }
 
     const constructor func_ctor = constant("->", types() >>= types() >>= types() );
-
+    const constructor io_ctor = constant("io", types() >>= types() );    
 
     constructor constructor::operator()(const constructor& arg) const {
       return make_ref<application>(*this, arg);
@@ -290,6 +290,20 @@ namespace slip {
 
         return result;
       }
+
+
+
+      monotype operator()(const ref<ast::definition>& self, typechecker& tc) const {
+
+        // TODO recursive definitions
+        const monotype value = infer(tc, self->value);
+        
+        tc.def(self->id, tc.generalize(value));
+
+        return io_ctor( unit_type );
+        
+      }
+
       
       
       template<class T>
