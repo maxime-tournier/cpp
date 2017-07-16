@@ -144,8 +144,13 @@ namespace slip {
 
       bool operator()(const ref<application>& self, const ref<variable>& var, UF& uf) const {
 
-        if( uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ) return true;        
-        if( uf.find(self->func).template map<bool>(occurs_check(), var, uf) ) return true;
+        if( uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ) {
+          return true;
+        }
+        
+        if( uf.find(self->func).template map<bool>(occurs_check(), var, uf) ) {
+          return true;
+        }
         
         return false;
       }
@@ -295,11 +300,17 @@ namespace slip {
 
       monotype operator()(const ref<ast::definition>& self, typechecker& tc) const {
 
-        // TODO recursive definitions
-        const monotype value = infer(tc, self->value);
+        const monotype value = tc.fresh( types() );
         
-        tc.def(self->id, tc.generalize(value));
+        typechecker sub = tc.scope();
 
+        // note: value is bound in sub-context (monomorphic)
+        sub.def(self->id, sub.generalize(value));
+
+        tc.unify(value, infer(sub, self->value));
+
+        tc.def(self->id, tc.generalize(value));
+        
         return io_ctor( unit_type );
         
       }
@@ -346,11 +357,9 @@ namespace slip {
 
       template<class UF>
       constructor operator()(const ref<application>& self, UF& uf) const {
-        const auto func = self->func.map<constructor>(nice(), uf);
-        const auto arg = self->arg.map<constructor>(nice(), uf);
-        // debug(std::clog << "nice: ", func, arg, func(arg)) << std::endl;
-        
-        return func(arg);
+        return map(self, [&](const constructor& c) {
+            return c.map<constructor>(nice(), uf);
+          });
       }
       
     };
@@ -362,19 +371,20 @@ namespace slip {
     struct instantiate_visitor {
       using map_type = std::map< ref<variable>, ref<variable> >;
       
-      monotype operator()(const constant& self, const map_type& m) const {
+      constructor operator()(const constant& self, const map_type& m) const {
         return self;
       }
 
-      monotype operator()(const ref<variable>& self, const map_type& m) const {
+      constructor operator()(const ref<variable>& self, const map_type& m) const {
         auto it = m.find(self);
         if(it == m.end()) return self;
         return it->second;
       }
 
-      monotype operator()(const ref<application>& self, const map_type& m) const {
-        return make_ref<application>( self->func.map<monotype>(instantiate_visitor(), m),
-                                      self->func.map<monotype>(instantiate_visitor(), m) );
+      constructor operator()(const ref<application>& self, const map_type& m) const {
+        return map(self, [&](const constructor& c) {
+            return c.map<constructor>(instantiate_visitor(), m);
+          });
       }
       
     };

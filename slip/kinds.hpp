@@ -140,6 +140,11 @@ namespace slip {
       }
     };
 
+    template<class F>
+    static ref<application> map(const ref<application>& self, const F& f) {
+      return make_ref<application>(f(self->func), f(self->arg));
+    }
+    
     
     struct monotype : constructor {
 
