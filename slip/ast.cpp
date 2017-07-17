@@ -39,7 +39,7 @@ namespace slip {
 
       sexpr operator()(const ref<binding>& self) const {
         return kw::var
-          >>= self->name
+          >>= self->id
           >>= repr(self->value)
           >>= sexpr::list();
       }
@@ -94,7 +94,8 @@ namespace slip {
                     check_application,
                     check_definition,
                     check_condition,
-                    check_sequence;
+                    check_sequence,
+                    check_binding;
     
     static expr check_binding(const sexpr::list&);
 
@@ -103,7 +104,7 @@ namespace slip {
       {kw::def, check_definition},
       {kw::cond, check_condition},
       {kw::var, check_binding},
-      {kw::seq, check_sequence}
+      {kw::seq, check_sequence},
     };
     
 
@@ -157,6 +158,8 @@ namespace slip {
       }
     }
 
+
+    
     static expr check_sequence(const sexpr::list& items) {
       return make_ref<ast::sequence>(map(items, [](const sexpr& e) {
             return check_expr(e);

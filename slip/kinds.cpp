@@ -300,7 +300,7 @@ namespace slip {
       }
 
 
-
+      // let-binding
       monotype operator()(const ref<ast::definition>& self, typechecker& tc) const {
 
         const monotype value = tc.fresh( types() );
@@ -318,6 +318,23 @@ namespace slip {
         
       }
 
+
+      // monadic binding
+      monotype operator()(const ref<ast::binding>& self, typechecker& tc) const {
+
+        const monotype value = tc.fresh( types() );
+
+        // note: value is bound in sub-context (monomorphic)
+        tc = tc.scope();
+        
+        tc.def(self->id, tc.generalize(value));
+
+        tc.unify(io_ctor(value), infer(tc, self->value));
+        
+        return io_ctor( unit_type );
+        
+      }
+      
 
       monotype operator()(const ref<ast::sequence>& self, typechecker& tc) const {
         monotype res = io_ctor( unit_type );
@@ -538,16 +555,19 @@ namespace slip {
     
     struct ostream_visitor {
 
-      void operator()(const constant& self, std::ostream& out, ostream_map& osm) const {
+      void operator()(const constant& self, std::ostream& out, 
+                      ostream_map& osm) const {
         out << self.name;
       }
 
-      void operator()(const ref<variable>& self, std::ostream& out, ostream_map& osm) const {
+      void operator()(const ref<variable>& self, std::ostream& out, 
+                      ostream_map& osm) const {
         auto err = osm.emplace( std::make_pair(self, var_repr{osm.size(), false} ));
         out << err.first->second;
       }
 
-      void operator()(const ref<application>& self, std::ostream& out, ostream_map& osm) const {
+      void operator()(const ref<application>& self, std::ostream& out,
+                      ostream_map& osm) const {
         // TODO parentheses
 
         if(self->func == func_ctor) {
@@ -566,7 +586,8 @@ namespace slip {
     };
 
 
-    static std::ostream& ostream(std::ostream& out, const polytype& self, ostream_map& osm) {
+    static std::ostream& ostream(std::ostream& out, const polytype& self, 
+                                 ostream_map& osm) {
       for(const ref<variable>& var : self.forall) {
         osm.emplace( std::make_pair(var, var_repr{osm.size(), true} ) );
       }

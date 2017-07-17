@@ -88,11 +88,11 @@ namespace slip {
     
     // monadic binding in a sequence
     struct binding {
-      binding(const symbol& name, const expr& value)
-        : name(name),
+      binding(const symbol& id, const expr& value)
+        : id(id),
           value(value) { } 
       
-      const symbol name;
+      const symbol id;
       const expr value;
     };
 
