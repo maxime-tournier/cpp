@@ -174,6 +174,26 @@ const auto jit_compiler = [](bool dump) {
     ctx("%", [](integer lhs, integer rhs) -> integer { return lhs % rhs; });
     ctx("=", [](integer lhs, integer rhs) -> boolean { return lhs == rhs; });
 
+    // monads
+    {
+      ref<variable> a = tc->fresh();
+      ref<variable> thread = tc->fresh();      
+      tc->def(kw::pure, a >>= io_ctor(a, thread));
+    }
+
+    // lists
+    {
+      ref<variable> a = tc->fresh();
+      ctx("nil", list_ctor(a), vm::value::list());
+    }
+
+    {
+      ref<variable> a = tc->fresh();
+      tc->def("cons", a >>= list_ctor(a) >>= list_ctor(a) );
+    }
+
+    
+    
     {
       ref<variable> a = tc->fresh();
       ref<variable> thread = tc->fresh();      
@@ -190,22 +210,6 @@ const auto jit_compiler = [](bool dump) {
       ref<variable> a = tc->fresh();
       ref<variable> thread = tc->fresh();
       tc->def(kw::get, ref_ctor(a, thread) >>= io_ctor(a, thread));
-    }
-
-    {
-      ref<variable> a = tc->fresh();
-      ref<variable> thread = tc->fresh();      
-      tc->def(kw::pure, a >>= io_ctor(a, thread));
-    }
-    
-    {
-      ref<variable> a = tc->fresh();
-      ctx("nil", list_ctor(a), vm::value::list());
-    }
-
-    {
-      ref<variable> a = tc->fresh();
-      tc->def("cons", a >>= list_ctor(a) >>= list_ctor(a) );
     }
 
 
@@ -298,14 +302,19 @@ const auto jit_compiler = [](bool dump) {
 static const auto kind_test = [] {
   using namespace slip;
   
-  auto tc = kinds::typechecker();
+  // kinds::typechecker tc = kinds::typechecker();
+  auto tc = make_ref<kinds::typechecker>();
+  
+  {
+    kinds::monotype a = tc->fresh();
+    tc->def("pure", tc->generalize( a >>= kinds::io_ctor(a) ));
+  }
   
   return [tc](sexpr&& s) mutable {
-    
-    const ast::toplevel node = ast::check_toplevel(s);
-    std::cout << "ast: " << node << std::endl;
 
-    const kinds::polytype p = infer(tc, node);
+    const ast::toplevel node = ast::check_toplevel(s);
+
+    const kinds::polytype p = infer(*tc, node);
     std::cout << " : " << p << std::endl;
 
     return parse::pure(s);

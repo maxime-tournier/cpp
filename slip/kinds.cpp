@@ -322,7 +322,7 @@ namespace slip {
       // monadic binding
       monotype operator()(const ref<ast::binding>& self, typechecker& tc) const {
 
-        const monotype value = tc.fresh( types() );
+        const monotype value = tc.fresh();
 
         // note: value is bound in sub-context (monomorphic)
         tc = tc.scope();
@@ -330,6 +330,8 @@ namespace slip {
         tc.def(self->id, tc.generalize(value));
 
         tc.unify(io_ctor(value), infer(tc, self->value));
+
+        tc.find(self->id);
         
         return io_ctor( unit_type );
         
@@ -478,7 +480,9 @@ namespace slip {
 
     typechecker typechecker::scope() const {
       // TODO should we use nested union-find too?
-      return typechecker( make_ref<env_type>(env), uf);
+      ref<env_type> sub = make_ref<env_type>(env);
+
+      return typechecker( sub, uf);
     }
     
 
@@ -530,7 +534,6 @@ namespace slip {
   
   
     polytype infer(typechecker& self, const ast::toplevel& node) {
-
       const monotype res = infer(self, node.get<ast::expr>());
       return self.generalize(res);
     }

@@ -90,7 +90,7 @@ namespace slip {
     };
 
 
-    extern const constructor func_ctor;
+    extern const constructor func_ctor, io_ctor, list_ctor, ref_ctor;
     
     
     struct variable {
@@ -215,7 +215,7 @@ namespace slip {
 
       const polytype& find(symbol id) const;
 
-      ref<variable> fresh(kind k) const;
+      ref<variable> fresh(kind k = types()) const;
     };
 
 
