@@ -19,8 +19,9 @@ namespace slip {
     }
 
     const constructor func_ctor = constant("->", types() >>= types() >>= types() );
-    const constructor io_ctor = constant("io", types() >>= types() );    
-
+    const constructor io_ctor = constant("io", types() >>= types() );
+    const constructor list_ctor = constant("list", types() >>= types() );        
+    
     constructor constructor::operator()(const constructor& arg) const {
       return make_ref<application>(*this, arg);
     }

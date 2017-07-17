@@ -309,6 +309,12 @@ static const auto kind_test = [] {
     kinds::monotype a = tc->fresh();
     tc->def("pure", tc->generalize( a >>= kinds::io_ctor(a) ));
   }
+
+  {
+    kinds::monotype a = tc->fresh();
+    tc->def("nil", tc->generalize(kinds::list_ctor(a)));
+  }
+  
   
   return [tc](sexpr&& s) mutable {
 
