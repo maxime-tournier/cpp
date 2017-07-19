@@ -102,13 +102,13 @@ static const auto interpreter = [] {
 static const auto compiler = [](bool dump_bytecode) {
   using namespace slip;
   
-  auto tc = make_ref<types::typechecker>();
+  auto tc = make_ref<types::state>();
   
   {
     types::constructor a = tc->fresh();
     tc->def("pure", tc->generalize( a >>= types::io_ctor(a) ));
   }
-
+  
   {
     types::constructor a = tc->fresh();
     tc->def("nil", tc->generalize(types::list_ctor(a)));

@@ -94,14 +94,14 @@ namespace slip {
     template<> constant traits< slip::symbol >::type() { return symbol_type; }
 
 
-    typechecker::typechecker(ref<env_type> env, ref<uf_type> uf) 
+    state::state(ref<env_type> env, ref<uf_type> uf) 
       : env( env ),
         uf( uf ) {
       
     }
 
     
-    static constructor infer(typechecker& self, const ast::expr& node);
+    static constructor infer(state& self, const ast::expr& node);
     
 
 
@@ -220,20 +220,20 @@ namespace slip {
 
       
       template<class T>
-      constructor operator()(const ast::literal<T>& self, typechecker& tc) const {
+      constructor operator()(const ast::literal<T>& self, state& tc) const {
         return traits<T>::type();
       }
 
       
-      constructor operator()(const ast::variable& self, typechecker& tc) const {
+      constructor operator()(const ast::variable& self, state& tc) const {
         const scheme& p = tc.find(self.name);
         return tc.instantiate(p);
       }
 
       
-      constructor operator()(const ref<ast::lambda>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::lambda>& self, state& tc) const {
 
-        typechecker sub = tc.scope();
+        state sub = tc.scope();
 
         // create/define arg types
         const list< ref<variable> > args = map(self->args, [&](const symbol& s) {
@@ -256,7 +256,7 @@ namespace slip {
 
 
 
-      constructor operator()(const ref<ast::application>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::application>& self, state& tc) const {
 
         const constructor func = infer(tc, self->func);
 
@@ -283,7 +283,7 @@ namespace slip {
       }
 
 
-      constructor operator()(const ref<ast::condition>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::condition>& self, state& tc) const {
         const constructor result = tc.fresh();
 
         for(const ast::condition::branch& b : self->branches) {
@@ -300,11 +300,11 @@ namespace slip {
 
 
       // let-binding
-      constructor operator()(const ref<ast::definition>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::definition>& self, state& tc) const {
 
         const constructor value = tc.fresh();
         
-        typechecker sub = tc.scope();
+        state sub = tc.scope();
 
         // note: value is bound in sub-context (monomorphic)
         sub.def(self->id, sub.generalize(value));
@@ -319,7 +319,7 @@ namespace slip {
 
 
       // monadic binding
-      constructor operator()(const ref<ast::binding>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::binding>& self, state& tc) const {
 
         const constructor value = tc.fresh();
 
@@ -337,7 +337,7 @@ namespace slip {
       }
       
 
-      constructor operator()(const ref<ast::sequence>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::sequence>& self, state& tc) const {
         constructor res = io_ctor( unit_type );
 
         for(const ast::expr& e : self->items) {
@@ -353,14 +353,14 @@ namespace slip {
       
       
       template<class T>
-      constructor operator()(const T& self, typechecker& tc) const {
+      constructor operator()(const T& self, state& tc) const {
         throw error("infer unimplemented");
       }
       
     };
 
 
-    static constructor infer(typechecker& self, const ast::expr& node) {
+    static constructor infer(state& self, const ast::expr& node) {
       try{
         return node.map<constructor>(expr_visitor(), self);
       } catch( unification_error& e )  {
@@ -434,7 +434,7 @@ namespace slip {
     
 
 
-    constructor typechecker::instantiate(const scheme& poly) const {
+    constructor state::instantiate(const scheme& poly) const {
       instantiate_visitor::map_type map;
 
       // associate each bound variable to a fresh one
@@ -455,7 +455,7 @@ namespace slip {
     };
 
     
-    const scheme& typechecker::find(symbol id) const {
+    const scheme& state::find(symbol id) const {
 
       if(scheme* p = env->find(id)) {
         return *p;
@@ -465,23 +465,23 @@ namespace slip {
     }
 
 
-    typechecker& typechecker::def(symbol id, const scheme& p) {
+    state& state::def(symbol id, const scheme& p) {
       auto res = env->locals.emplace( std::make_pair(id, p) );
       if(!res.second) throw error("redefinition of " + id.name());
       return *this;
     }
     
 
-    ref<variable> typechecker::fresh(kind k) const {
+    ref<variable> state::fresh(kind k) const {
       return make_ref<variable>(k, env->depth);
     }
 
 
-    typechecker typechecker::scope() const {
+    state state::scope() const {
       // TODO should we use nested union-find too?
       ref<env_type> sub = make_ref<env_type>(env);
 
-      return typechecker( sub, uf);
+      return state( sub, uf);
     }
     
 
@@ -514,7 +514,7 @@ namespace slip {
     
 
     // generalization
-    scheme typechecker::generalize(const constructor& mono) const {
+    scheme state::generalize(const constructor& mono) const {
       // debug(std::clog << "gen: ", mono) << std::endl;
       scheme res(mono.map<constructor>(nice(), uf));
 
@@ -532,7 +532,7 @@ namespace slip {
     }
   
   
-    scheme infer(typechecker& self, const ast::toplevel& node) {
+    scheme infer(state& self, const ast::toplevel& node) {
       const constructor res = infer(self, node.get<ast::expr>());
       return self.generalize(res);
     }
@@ -608,7 +608,7 @@ namespace slip {
 
 
 
-    void typechecker::unify(const constructor& lhs, const constructor& rhs) {
+    void state::unify(const constructor& lhs, const constructor& rhs) {
       // debug( std::clog << "unifying: ", lhs, rhs) << std::endl;
       uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
     }

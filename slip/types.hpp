@@ -178,7 +178,7 @@ namespace slip {
 
 
   
-    class typechecker {
+    class state {
       using env_type = environment;
       ref<env_type> env;
 
@@ -186,17 +186,17 @@ namespace slip {
       ref< uf_type > uf;
     
     public:
-      typechecker(ref<env_type> env = make_ref<env_type>(),
-                  ref<uf_type> uf = make_ref<uf_type>());
+      state(ref<env_type> env = make_ref<env_type>(),
+            ref<uf_type> uf = make_ref<uf_type>());
     
       scheme generalize(const constructor& t) const;
       constructor instantiate(const scheme& p) const;
 
       void unify(const constructor& lhs, const constructor& rhs);    
     
-      typechecker scope() const;
+      state scope() const;
 
-      typechecker& def(symbol id, const scheme& p);
+      state& def(symbol id, const scheme& p);
 
       const scheme& find(symbol id) const;
 
@@ -204,8 +204,8 @@ namespace slip {
     };
 
 
-    scheme infer(typechecker& self, const ast::toplevel& node);    
-
+    scheme infer(state& self, const ast::toplevel& node);    
+    
   }
   
 }
