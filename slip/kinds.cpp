@@ -239,7 +239,7 @@ namespace slip {
 
         // create/define arg types
         const list< ref<variable> > args = map(self->args, [&](const symbol& s) {
-            const ref<variable> var = tc.fresh( types() );
+            const ref<variable> var = tc.fresh();
             // note: var stays monomorphic after generalization
             sub.def(s, sub.generalize(var) );
             return var;
@@ -268,7 +268,7 @@ namespace slip {
           });
 
         // construct function type
-        const monotype result = tc.fresh( types() );
+        const monotype result = tc.fresh();
         
         const monotype sig = foldr(result, args, [&](const monotype& lhs,
                                                      const monotype& rhs) {
@@ -286,7 +286,7 @@ namespace slip {
 
 
       monotype operator()(const ref<ast::condition>& self, typechecker& tc) const {
-        const monotype result = tc.fresh( types() );
+        const monotype result = tc.fresh();
 
         for(const ast::condition::branch& b : self->branches) {
 
@@ -304,7 +304,7 @@ namespace slip {
       // let-binding
       monotype operator()(const ref<ast::definition>& self, typechecker& tc) const {
 
-        const monotype value = tc.fresh( types() );
+        const monotype value = tc.fresh();
         
         typechecker sub = tc.scope();
 
@@ -344,7 +344,7 @@ namespace slip {
 
         for(const ast::expr& e : self->items) {
 
-          res = io_ctor( tc.fresh(types()) );
+          res = io_ctor( tc.fresh() );
           tc.unify( res, infer(tc, e));          
         }
           
