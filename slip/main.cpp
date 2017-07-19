@@ -302,7 +302,6 @@ const auto jit_compiler = [](bool dump) {
 static const auto kind_test = [] {
   using namespace slip;
   
-  // kinds::typechecker tc = kinds::typechecker();
   auto tc = make_ref<kinds::typechecker>();
   
   {

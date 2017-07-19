@@ -2,6 +2,7 @@
 #include "vm.hpp"
 
 #include "syntax.hpp"
+#include "ast.hpp"
 
 namespace slip {
 
@@ -371,5 +372,29 @@ namespace slip {
   }
   
 
+
+  // new-style
+
+  namespace codegen {
+
+    struct compile_expr {
+      template<class T>
+      void operator()(const T& self, vm::bytecode& res, ref<variables>& ctx) const {
+        throw error("compile: unimplemented");
+      }
+    };
+    
+    
+    
+    
+    void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const ast::toplevel& e) {
+      e.get<ast::expr>().apply(compile_expr(), res, ctx);
+    }
+
+    
+  }
+
+
+  
   
 }
