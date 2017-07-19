@@ -1,54 +1,545 @@
-#include "types.hpp"
+#include "kinds.hpp"
+
+#include "sexpr.hpp"
+#include "ast.hpp"
 
 #include <algorithm>
-
-#include "syntax.hpp"
-#include "../union_find.hpp"
-
-
-#include <iostream>
 #include <sstream>
 
 namespace slip {
 
-  namespace types {
+  namespace kinds {
 
-    struct typed_sexpr {
-      mono type;
-      sexpr expr;
 
+    template<class ... C>
+    static std::ostream& debug(std::ostream& out, C&& ... c);
+    
+    ref<function> operator>>=(const kind& lhs, const kind& rhs) {
+      return make_ref<function>(lhs, rhs);
+    }
+
+    const constructor func_ctor = constant("->", types() >>= types() >>= types() );
+    const constructor io_ctor = constant("io", types() >>= types() );
+    const constructor list_ctor = constant("list", types() >>= types() );        
+    
+    constructor constructor::operator()(const constructor& arg) const {
+      return make_ref<application>(*this, arg);
+    }
+    
+    monotype operator>>=(const monotype& lhs, const monotype& rhs) {
+      return (func_ctor(lhs))(rhs);
+
+    }
+    
+
+
+    
+    struct kind_visitor {
+      kind operator()(const constant& self) const { return self.kind; }
+      kind operator()(const ref<variable>& self) const { return self->kind; }    
+
+      kind operator()(const ref<application>& self) const  {
+        return self->func.kind().get< ref<function> >()->to;
+      }  
+    
+    };
+  
+
+    struct kind constructor::kind() const {
+      return map<struct kind>(kind_visitor());
+    }
+
+
+    struct kind_ostream {
+
+      void operator()(types, std::ostream& out) const {
+        out << '*';
+      }
+
+      void operator()(const ref<function>& self, std::ostream& out) const {
+        // TODO parentheses
+        out << self->from << " -> " << self->to << std::endl;
+      }
+      
+      
     };
     
+    std::ostream& operator<<(std::ostream& out, const kind& self) {
+      self.apply(kind_ostream(), out);
+      return out;      
+    }
+
+
+    
+    
     template<class T>
-    struct traits;
-
-    const constant unit_type("unit"),
-      boolean_type("boolean"),
-      integer_type("integer"),
-      real_type("real"),
-      string_type("string"),
-      symbol_type("symbol");
+    struct traits {
+      static constant type();
+    };
 
 
-    constructor::table_type constructor::table;
-    
-    const constructor func_ctor("->", 2);
-    const constructor list_ctor("list", 1);            
-
-    const constructor io_ctor("io", 2, 1);
-    const constructor ref_ctor("ref", 2, 1);
-
-    
-    
+    const constant unit_type("unit", types()),
+      boolean_type("boolean", types()),
+      integer_type("integer", types()),
+      real_type("real", types()),
+      string_type("string", types()),
+      symbol_type("symbol", types());
+  
+  
     template<> constant traits< slip::unit >::type() { return unit_type; }
     template<> constant traits< slip::boolean >::type() { return boolean_type; }      
     template<> constant traits< slip::integer >::type() { return integer_type; }
     template<> constant traits< slip::real >::type() { return real_type; }
-    template<> constant traits< ref<slip::string> >::type() { return string_type; }
+    template<> constant traits< slip::string >::type() { return string_type; }
     template<> constant traits< slip::symbol >::type() { return symbol_type; }
+
+
+    typechecker::typechecker(ref<env_type> env, ref<uf_type> uf) 
+      : env( env ),
+        uf( uf ) {
+      
+    }
+
+    
+    static monotype infer(typechecker& self, const ast::expr& node);
+    
+
+
+    // unification
+    struct unification_error {
+      unification_error(constructor lhs, constructor rhs) : lhs(lhs), rhs(rhs) { }
+      const constructor lhs, rhs;
+    };
+
+    
+    struct occurs_error {
+      ref<variable> var;
+      constructor type;         // TODO do we want monotype here?
+    };
+
+
+
+    template<class UF>
+    struct occurs_check {
+
+      bool operator()(const constant& self, const ref<variable>& var, UF& uf) const {
+        return false;
+      }
+
+      bool operator()(const ref<variable>& self, const ref<variable>& var, UF& uf) const {
+        // TODO not sure if this should be done here
+        
+        if(self->depth > var->depth) {
+          // we are trying to unify var with a type constructor containing self,
+          // but var has smaller depth: we need to "raise" self to var's depth
+          // so that self generalizes just like var
+          const constructor raised = make_ref<variable>(var->kind, var->depth);
+
+          assert(uf.find(self).kind() == raised.kind());
+          uf.link(uf.find(self), raised);
+        }
+        
+        return self == var;
+      }
+
+
+      bool operator()(const ref<application>& self, const ref<variable>& var, UF& uf) const {
+
+        if( uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ) {
+          return true;
+        }
+        
+        if( uf.find(self->func).template map<bool>(occurs_check(), var, uf) ) {
+          return true;
+        }
+        
+        return false;
+      }
+      
+    };
+
+    
+
+    template<class UF>
+    struct unify_visitor {
+
+      const bool try_reverse;
+      
+      unify_visitor(bool try_reverse = true) 
+        : try_reverse(try_reverse) { }
+      
+      template<class T>
+      void operator()(const T& self, const constructor& rhs, UF& uf) const {
+        
+        // double dispatch
+        if( try_reverse ) {
+          return rhs.apply( unify_visitor(false), self, uf);
+        } else {
+          throw unification_error(self, rhs);
+        }
+      }
+
+
+      void operator()(const ref<variable>& self, const constructor& rhs, UF& uf) const {
+        assert( uf.find(self) == self );
+        assert( uf.find(rhs) == rhs );        
+        
+        if( constructor(self) != rhs && rhs.map<bool>(occurs_check<UF>(), self, uf)) {
+          throw occurs_error{self, rhs.get< ref<application> >()};
+        }
+
+        assert(self->kind == rhs.kind());
+        
+        // debug( std::clog << "linking", constructor(self), rhs ) << std::endl;
+        uf.link(self, rhs);
+        
+      }
+
+
+      void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
+        if( !(lhs == rhs) ) {
+          throw unification_error(lhs, rhs);
+        }
+      }
+      
+
+      void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
+        uf.find(lhs->arg).apply( unify_visitor(), uf.find(rhs->arg), uf);        
+        uf.find(lhs->func).apply( unify_visitor(), uf.find(rhs->func), uf);
+      }
+
+      
+    };
+
+    
+
+
+    
+    // expression inference
+    struct expr_visitor {
+
+      
+      template<class T>
+      monotype operator()(const ast::literal<T>& self, typechecker& tc) const {
+        return traits<T>::type();
+      }
+
+      
+      monotype operator()(const ast::variable& self, typechecker& tc) const {
+        const polytype& p = tc.find(self.name);
+        return tc.instantiate(p);
+      }
+
+      
+      monotype operator()(const ref<ast::lambda>& self, typechecker& tc) const {
+
+        typechecker sub = tc.scope();
+
+        // create/define arg types
+        const list< ref<variable> > args = map(self->args, [&](const symbol& s) {
+            const ref<variable> var = tc.fresh();
+            // note: var stays monomorphic after generalization
+            sub.def(s, sub.generalize(var) );
+            return var;
+          });
+        
+        // infer body type in subcontext
+        const monotype body_type = infer(sub, self->body);
+
+        // return complete application type
+        return foldr(body_type, args, [](const ref<variable>& lhs,
+                                         const monotype& rhs) -> monotype {
+            return lhs >>= rhs;
+          });
+        
+      }
+
+
+
+      monotype operator()(const ref<ast::application>& self, typechecker& tc) const {
+
+        const monotype func = infer(tc, self->func);
+
+        // infer arg types
+        const list<monotype> args = map(self->args, [&](const ast::expr& e) {
+            return infer(tc, e);
+          });
+
+        // construct function type
+        const monotype result = tc.fresh();
+        
+        const monotype sig = foldr(result, args, [&](const monotype& lhs,
+                                                     const monotype& rhs) {
+                                     return lhs >>= rhs;
+                                   });
+
+        try{
+          tc.unify(func, sig);
+        } catch( occurs_error ) {
+          throw type_error("occurs check");
+        }
+
+        return result;
+      }
+
+
+      monotype operator()(const ref<ast::condition>& self, typechecker& tc) const {
+        const monotype result = tc.fresh();
+
+        for(const ast::condition::branch& b : self->branches) {
+
+          const monotype test = infer(tc, b.test);
+          tc.unify(boolean_type, test);
+          
+          const monotype value = infer(tc, b.value);
+          tc.unify(value, result);
+        };
+
+        return result;
+      }
+
+
+      // let-binding
+      monotype operator()(const ref<ast::definition>& self, typechecker& tc) const {
+
+        const monotype value = tc.fresh();
+        
+        typechecker sub = tc.scope();
+
+        // note: value is bound in sub-context (monomorphic)
+        sub.def(self->id, sub.generalize(value));
+
+        tc.unify(value, infer(sub, self->value));
+
+        tc.def(self->id, tc.generalize(value));
+        
+        return io_ctor( unit_type );
+        
+      }
+
+
+      // monadic binding
+      monotype operator()(const ref<ast::binding>& self, typechecker& tc) const {
+
+        const monotype value = tc.fresh();
+
+        // note: value is bound in sub-context (monomorphic)
+        tc = tc.scope();
+        
+        tc.def(self->id, tc.generalize(value));
+
+        tc.unify(io_ctor(value), infer(tc, self->value));
+
+        tc.find(self->id);
+        
+        return io_ctor( unit_type );
+        
+      }
+      
+
+      monotype operator()(const ref<ast::sequence>& self, typechecker& tc) const {
+        monotype res = io_ctor( unit_type );
+
+        for(const ast::expr& e : self->items) {
+
+          res = io_ctor( tc.fresh() );
+          tc.unify( res, infer(tc, e));          
+        }
+          
+        return res;
+      }
+
+      
+      
+      
+      template<class T>
+      monotype operator()(const T& self, typechecker& tc) const {
+        throw error("infer unimplemented");
+      }
+      
+    };
+
+
+    static monotype infer(typechecker& self, const ast::expr& node) {
+      try{
+        return node.map<monotype>(expr_visitor(), self);
+      } catch( unification_error& e )  {
+        std::stringstream ss;
+
+        debug(ss, "cannot unify: ", e.lhs, " with: ", e.rhs);
+        
+        throw type_error(ss.str());
+      }
+    }
+
+
+
+    
+    // finding nice representants
+    struct nice {
+
+      template<class UF>
+      constructor operator()(const constant& self, UF& uf) const {
+        return self;
+      }
+
+
+      template<class UF>
+      constructor operator()(const ref<variable>& self, UF& uf) const {
+
+        const constructor res = uf->find(self);
+        
+        if(res == monotype(self)) {
+          // debug(std::clog << "nice: ", constructor(self), res) << std::endl;          
+          return res;
+        }
+        
+        return res.map<constructor>(nice(), uf);
+      }
+
+
+      template<class UF>
+      constructor operator()(const ref<application>& self, UF& uf) const {
+        return map(self, [&](const constructor& c) {
+            return c.map<constructor>(nice(), uf);
+          });
+      }
+      
+    };
+
+
+
+
+    // instantiation
+    struct instantiate_visitor {
+      using map_type = std::map< ref<variable>, ref<variable> >;
+      
+      constructor operator()(const constant& self, const map_type& m) const {
+        return self;
+      }
+
+      constructor operator()(const ref<variable>& self, const map_type& m) const {
+        auto it = m.find(self);
+        if(it == m.end()) return self;
+        return it->second;
+      }
+
+      constructor operator()(const ref<application>& self, const map_type& m) const {
+        return map(self, [&](const constructor& c) {
+            return c.map<constructor>(instantiate_visitor(), m);
+          });
+      }
+      
+    };
+    
+
+
+    monotype typechecker::instantiate(const polytype& poly) const {
+      instantiate_visitor::map_type map;
+
+      // associate each bound variable to a fresh one
+      auto out = std::inserter(map, map.begin());
+      std::transform(poly.forall.begin(), poly.forall.end(), out, [&](const ref<variable>& v) {
+          return std::make_pair(v, fresh(v->kind));
+        });
+      
+      return poly.body.map<monotype>(instantiate_visitor(), map);
+    }
+
+
+
+
+    // env lookup/def
+    struct unbound_variable : type_error {
+      unbound_variable(symbol id) : type_error("unbound variable " + id.name()) { }
+    };
+
+    
+    const polytype& typechecker::find(symbol id) const {
+
+      if(polytype* p = env->find(id)) {
+        return *p;
+      }
+
+      throw unbound_variable(id);
+    }
+
+
+    typechecker& typechecker::def(symbol id, const polytype& p) {
+      auto res = env->locals.emplace( std::make_pair(id, p) );
+      if(!res.second) throw error("redefinition of " + id.name());
+      return *this;
+    }
+    
+
+    ref<variable> typechecker::fresh(kind k) const {
+      return make_ref<variable>(k, env->depth);
+    }
+
+
+    typechecker typechecker::scope() const {
+      // TODO should we use nested union-find too?
+      ref<env_type> sub = make_ref<env_type>(env);
+
+      return typechecker( sub, uf);
+    }
+    
+
+
+    // variables
+    struct vars_visitor {
+
+      using result_type = std::set< ref<variable> >;
+    
+      void operator()(const constant&, result_type& res) const { }
+      
+      void operator()(const ref<variable>& self, result_type& res) const {
+        res.insert(self);
+      }
+
+      void operator()(const ref<application>& self, result_type& res) const {
+        self->func.apply( vars_visitor(), res );
+        self->arg.apply( vars_visitor(), res );      
+      }
+    
+    };
+
+
+    static vars_visitor::result_type vars(const constructor& self) {
+      vars_visitor::result_type res;
+      self.apply(vars_visitor(), res);
+      return res;
+    }
     
     
+
+    // generalization
+    polytype typechecker::generalize(const monotype& mono) const {
+      // debug(std::clog << "gen: ", mono) << std::endl;
+      polytype res(mono.map<monotype>(nice(), uf));
+
+      const auto all = vars(res.body);
     
+      // copy free variables (i.e. instantiated at a larger depth)
+      auto out = std::back_inserter(res.forall);
+
+      const std::size_t depth = this->env->depth;
+      std::copy_if(all.begin(), all.end(), out, [depth](const ref<variable>& v) {
+          return v->depth >= depth;
+        });
+
+      return res;
+    }
+  
+  
+    polytype infer(typechecker& self, const ast::toplevel& node) {
+      const monotype res = infer(self, node.get<ast::expr>());
+      return self.generalize(res);
+    }
+
+
+    // ostream
+
 
     struct var_repr {
       std::size_t index;
@@ -66,45 +557,40 @@ namespace slip {
     
     struct ostream_visitor {
 
-      void operator()(const constant& self, std::ostream& out, ostream_map& osm) const {
+      void operator()(const constant& self, std::ostream& out, 
+                      ostream_map& osm) const {
         out << self.name;
       }
 
-      void operator()(const application& self, std::ostream& out, ostream_map& osm) const {
-        if(self.ctor == func_ctor) {
-          bool first = true;
-          for(const mono& t : self.args) {
-            if(first) first = false;
-            else out << " -> ";
-            t.apply(ostream_visitor(), out, osm);
-          }
-          
-        } else {
-          out << self.ctor->name;
-
-          // TODO should we print phantom types?
-          const std::size_t stop = self.ctor->argc - self.ctor->phantom;
-          
-          for(std::size_t i = 0; i < stop; ++i) {
-            out << ' ';
-            self.args[i].apply(ostream_visitor(), out, osm);
-          }
-        }
-        
-      }
-
-
-      void operator()(const ref<variable>& self, std::ostream& out, ostream_map& osm) const {
+      void operator()(const ref<variable>& self, std::ostream& out, 
+                      ostream_map& osm) const {
         auto err = osm.emplace( std::make_pair(self, var_repr{osm.size(), false} ));
-        
         out << err.first->second;
       }
 
+      void operator()(const ref<application>& self, std::ostream& out,
+                      ostream_map& osm) const {
+        // TODO parentheses
+
+        if(self->func == func_ctor) {
+          self->arg.apply(ostream_visitor(), out, osm);
+          out << ' ';
+          self->func.apply(ostream_visitor(), out, osm);
+        } else {
+          self->func.apply(ostream_visitor(), out, osm);
+          out << ' ';
+          self->arg.apply(ostream_visitor(), out, osm);
+        }
+         
+      }
+
+      
     };
 
 
-    static std::ostream& ostream(std::ostream& out, const scheme& self, ostream_map& osm) {
-      for(const ref<variable>& var : self.vars) {
+    static std::ostream& ostream(std::ostream& out, const polytype& self, 
+                                 ostream_map& osm) {
+      for(const ref<variable>& var : self.forall) {
         osm.emplace( std::make_pair(var, var_repr{osm.size(), true} ) );
       }
       
@@ -112,700 +598,47 @@ namespace slip {
       return out;
     }
 
-    std::ostream& operator<<(std::ostream& out, const scheme& self) {
+
+
+
+    std::ostream& operator<<(std::ostream& out, const polytype& self) {
       ostream_map osm;
       return ostream(out, self, osm);
     }
 
 
 
-    // TODO fixme global uf
-    using uf_type = union_find<mono>;
-    static union_find<mono> uf;
-    
-    struct nice {
-      
-      mono operator()(const constant& self, uf_type& uf) const {
-        return self;
-      }
+    void typechecker::unify(const constructor& lhs, const constructor& rhs) {
+      // debug( std::clog << "unifying: ", lhs, rhs) << std::endl;
+      uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
+    }
 
-      mono operator()(const ref<variable>& self, uf_type& uf) const {
-        mono res = uf.find(self);
-        if(res != mono(self)) {
-          return res.map<mono>(nice(), uf);
-        }
+
+    static std::ostream& debug_aux(std::ostream& out,
+                                   const constructor& self,
+                                   ostream_map& osm) {
+      self.apply(ostream_visitor(), out, osm);
+      return out;
+    }
+
+
+    static std::ostream& debug_aux(std::ostream& out,
+                                   const std::string& self,
+                                   ostream_map& osm) {
+      return out << self;
+    }
+
+    
+    template<class ... C>
+    static std::ostream& debug(std::ostream& out, C&& ... c) {
+      ostream_map osm;
+      const int expand[] = {
         
-        return res;
-      }
-
-
-      mono operator()(const application& self, uf_type& uf) const {
-        mono res = uf.find(self);
-
-        if(res != mono(self)) {
-          return res.map<mono>(nice(), uf);
-        }
-
-        return map(self, [&](const mono& t) {
-            return t.map<mono>(nice(), uf);
-          });
-        
-      }
+        ( debug_aux(out, c, osm), 0)...
+      }; (void) expand;
       
-    };
-
-
-    
-
-    struct vars_visitor {
-
-      void operator()(const constant&, std::set< ref<variable> >& res) const {
-
-      }
-      
-      void operator()(const ref<variable>& self, std::set< ref<variable> >& res) const {
-        res.insert(self);
-      }
-
-
-      void operator()(const application& self, std::set< ref<variable> >& res) const {
-        for(const mono& t: self.args) {
-          t.apply(vars_visitor(), res);
-        }
-      }
-
-    };
-    
-
-    vars_type mono::vars() const {
-      vars_type res;
-      apply(vars_visitor(), res);
-      return res;
+      return out;
     }
-    
-    scheme mono::generalize(std::size_t depth) const {
-
-      scheme res(map<mono>(nice(), uf));
-      
-      const vars_type all = res.body.vars();
-
-      // copy free variables (i.e. instantiated at a larger depth)
-      auto out = std::inserter(res.vars, res.vars.begin());
-      std::copy_if(all.begin(), all.end(), out, [depth](const ref<variable>& v) {
-          return v->depth >= depth;
-        });
-
-
-      return res;
-    }
-
-
-    static typed_sexpr check_app(const ref<context>& ctx, const sexpr::list& self);
-    
-    using special_type = typed_sexpr (*)(const ref<context>& ctx, const sexpr::list& terms);
-
-    static typed_sexpr check_lambda(const ref<context>& ctx, const sexpr::list& terms);
-    static typed_sexpr check_cond(const ref<context>& ctx, const sexpr::list& terms);
-    static typed_sexpr check_def(const ref<context>& ctx, const sexpr::list& terms);
-    
-    static typed_sexpr check_seq(const ref<context>& ctx, const sexpr::list& terms);    
-    static typed_sexpr check_var(const ref<context>& ctx, const sexpr::list& terms);
-    static typed_sexpr check_run(const ref<context>& ctx, const sexpr::list& terms);    
-
-    
-    static std::map<symbol, special_type> special = {
-      {kw::lambda, check_lambda},
-      {kw::cond, check_cond},
-      {kw::def, check_def},
-      {kw::var, check_var},
-      
-      {kw::seq, check_seq},
-      {kw::run, check_run},
-    };
-    
-
-    
-    static typed_sexpr check_expr(const ref<context>& ctx, const sexpr& e);
-    static void unify(const mono& lhs, const mono& rhs);
-
-    
-    struct unification_error {
-      unification_error(mono lhs, mono rhs) : lhs(lhs), rhs(rhs) { }
-      const mono lhs, rhs;
-    };
-    
-
-    struct occurs_error {
-      ref<variable> var;
-      mono type;
-    };
-
-    
-    struct occurs_check {
-
-      bool operator()(const constant& self, const ref<variable>& var, uf_type& uf) const {
-        return false;
-      }
-
-      bool operator()(const ref<variable>& self, const ref<variable>& var, uf_type& uf) const {
-
-        if(self->depth > var->depth) {
-          // we are trying to unify var with app( ... self ... ) but var has
-          // lower depth: we need to "lower" self to var's depth so that self
-          // generalizes just like var
-          ref<variable> lower = variable::fresh(var->depth);
-          uf.link(uf.find(self), lower);
-        }
-        
-        return self == var;
-      }
-
-
-      bool operator()(const application& self, const ref<variable>& var, uf_type& uf) const {
-        for(const mono& t : self.args) {
-          if( uf.find(t).map<bool>(occurs_check(), var, uf) ) return true;
-        }
-        
-        return false;
-      }
-      
-    };
-    
-    
-    
-    struct unify_visitor {
-
-      bool call_reverse;
-      
-      unify_visitor(bool call_reverse = true) 
-        : call_reverse(call_reverse) { }
-      
-      template<class T>
-      void operator()(const T& self, const mono& rhs, uf_type& uf) const {
-        
-        // double dispatch
-        if( call_reverse ) {
-          return rhs.apply( unify_visitor(false), self, uf);
-        } else {
-          throw unification_error(self, rhs);
-        }
-      }
-      
-      void operator()(const ref<variable>& self, const mono& rhs, uf_type& uf) const {
-        assert( uf.find(self) == self );
-        assert( uf.find(rhs) == rhs );        
-        
-        if( mono(self) != rhs && rhs.map<bool>(occurs_check(), self, uf)) {
-          throw occurs_error{self, rhs.get<application>()};
-        }
-
-        uf.link(self, rhs);
-      }
-
-      
-      void operator()(const constant& lhs, const constant& rhs, uf_type& uf) const {
-        if( lhs != rhs ) {
-          throw unification_error(lhs, rhs);
-        }
-      }
-      
-
-      void operator()(const application& lhs, const application& rhs, uf_type& uf) const {
-        if( lhs.ctor != rhs.ctor ) {
-          throw unification_error(lhs, rhs);
-        }
-
-        for(std::size_t i = 0, n = lhs.ctor->argc; i < n; ++i) {
-          unify(lhs.args[i], rhs.args[i]);
-        }
-        
-      }
-
-      
-    };
-
-
-    static typed_sexpr check_lambda(const ref<context>& ctx, const sexpr::list& terms) {
-
-      // sub-context
-      const ref<context> sub = make_ref<context>(ctx);
-
-      const mono result_type = variable::fresh(ctx->depth);
-
-      const sexpr::list& vars = terms->head.get<sexpr::list>();
-      
-      // build application type
-      mono app_type = foldr(result_type, vars, [&ctx, &sub](const sexpr& lhs, const mono& rhs) {
-          
-          // create variable types and fill sub-context while we're at it
-          ref<variable> var_type = variable::fresh(ctx->depth);
-          sub->def(lhs.get<symbol>(), var_type);
-          
-          return var_type >>= rhs;
-        });
-
-
-      // remember true argcount
-      app_type.get<application>().info = size(vars);
-      
-      // infer body type in sub-context
-      const typed_sexpr body = check_expr(sub, terms->tail->head);
-      
-      // unify body type with result type
-      uf.link(result_type, body.type);
-      
-      return {app_type, kw::lambda >>= vars >>= body.expr >>= sexpr::list() };
-    }
-    
-
-
-    struct debug {
-      debug(const mono& type) : type(type) { }
-      const mono& type;
-
-      friend  std::ostream& operator<<(std::ostream& out, const debug& self) {
-        static ostream_map osm;
-        self.type.apply( ostream_visitor(), out, osm );
-        return out;
-      }
-      
-    };
-
-
-    struct indent {
-      indent(std::size_t level) : level(level) { }
-      const std::size_t level;
-
-      friend std::ostream& operator<<(std::ostream& out, const indent& self) {
-        for(std::size_t i = 0; i < self.level; ++i) out << "  ";
-        return out;
-      }
-      
-    };
-
-
-    
-    
-    static void unify(const mono& lhs, const mono& rhs) {
-
-      // static std::size_t level = 0;
-      // std::clog << indent(level++) << "unifying (" << debug(lhs) << ") with (" << debug(rhs) << ")" << std::endl;
-      
-      const mono l = uf.find(lhs);
-      const mono r = uf.find(rhs);
-
-      l.apply( unify_visitor(), r, uf );
-
-      // std::clog << indent(--level) << "result: " << debug( uf.find(l) ) << std::endl;
-    }
-
-
-
-    static typed_sexpr check_cond(const ref<context>& ctx, const sexpr::list& items) {
-      
-      const ref<variable> result_type = variable::fresh(ctx->depth);
-
-      const sexpr::list result_list = map(items, [&ctx, &result_type](const sexpr& it) -> sexpr {
-      
-          const sexpr::list& pair = it.get<sexpr::list>();
-          
-          const typed_sexpr test = check_expr(ctx, pair->head);
-          const typed_sexpr value = check_expr(ctx, pair->tail->head);          
-          
-          unify(boolean_type, test.type);
-          unify(result_type, value.type);
-
-          return test.expr >>= value.expr >>= sexpr::list();
-        });
-      
-      return {result_type, kw::cond >>= result_list };
-    }
-    
-
-    static symbol gensym() {
-      static std::size_t index = 0;
-
-      return std::string("__arg") + std::to_string(index++);
-    }
-
-
-    static typed_sexpr check_app(const ref<context>& ctx, const sexpr::list& self) {
-      const typed_sexpr func = check_expr(ctx, self->head);
-      
-      const mono result_type = variable::fresh(ctx->depth);
-
-      const list<typed_sexpr> args = map(self->tail, [&ctx](const sexpr& e) {
-          return check_expr(ctx, e);
-        });
-
-      const mono app_type = foldr(result_type, args, [&ctx](const typed_sexpr& e, mono rhs) {
-          return e.type >>= rhs;
-        });
-      
-      unify(func.type, app_type);
-
-      const std::size_t argc = size(args);
-      const std::size_t info = uf.find(func.type).get<application>().info;
-
-      // call expression
-      const sexpr::list call_expr = func.expr >>= map(args, [](const typed_sexpr& e) {
-          return e.expr;
-        });
-
-      if(info == argc) {
-        // regular call        
-        return {result_type, call_expr};
-      }
-      
-      if(info > argc) {
-        // non-saturated call: wrap in a closure
-        
-        // generate additional vars
-        sexpr::list vars;
-        for(std::size_t i = 0; i < (info - argc); ++i) {
-          vars = gensym() >>= vars;
-        }
-
-        const sexpr closure_expr = kw::lambda >>= sexpr(vars)
-          >>= sexpr(concat(call_expr, vars)) >>= sexpr::list();
-
-        // TODO FIXME
-        const_cast<mono&>(uf.find(result_type)).get<application>().info = info - argc;
-        
-        return {result_type, closure_expr};
-      }
-      
-      if( info < argc ) {
-
-        const std::size_t extra = argc - info;
-        std::size_t i = 0;
-        
-        const sexpr::list res = foldr( sexpr::list(), call_expr, [&i, extra](const sexpr& e, const sexpr::list& x) {
-            const std::size_t j = i++;
-            
-            if(j < extra) {
-              return e >>= x;
-            } else if (j == extra) {
-              return (e >>= sexpr::list()) >>= x;
-            } else {
-              return (e >>= x->head.get<sexpr::list>() ) >>= x->tail;
-            }
-          });
-        
-        // over-saturated call: split call ((func args...) args...)
-        return {result_type, res};
-      }
-
-      throw error("impossibru!");
-    }
-
-    
-
-    struct instantiate_visitor {
-      using map_type = std::map< ref<variable>, ref<variable> >;
-      
-      mono operator()(const constant& self, const map_type& m) const {
-        return self;
-      }
-
-      mono operator()(const ref<variable>& self, const map_type& m) const {
-        auto it = m.find(self);
-        if(it == m.end()) return self;
-        return it->second;
-      }
-
-      mono operator()(const application& self, const map_type& m) const {
-        return map(self, [&m](const mono& t) -> mono {
-            return t.map<mono>(instantiate_visitor(), m);
-          });
-      }
-      
-    };
-    
-
-    mono scheme::instantiate(std::size_t depth) const {
-      std::map< ref<variable>, ref<variable> > map;
-
-      // associate each bound variable to a fresh one
-      auto out = std::inserter(map, map.begin());
-      std::transform(vars.begin(), vars.end(), out, [&](const ref<variable>& v) {
-          return std::make_pair(v, variable::fresh(depth));
-        });
-
-      // replace each bound variable with its fresh one
-      return body.map<mono>( instantiate_visitor(), map ); 
-    }
-
-
-
-
-    struct unbound_variable : type_error {
-      unbound_variable(symbol id) : type_error("unbound variable " + id.name()) { }
-    };
-    
-    struct expr_visitor {
-      
-      // literals
-      template<class T>
-      typed_sexpr operator()(const T& self, const ref<context>& ctx) const {
-        return {traits<T>::type(), self};
-      }
-
-      // variables
-      typed_sexpr operator()(const symbol& self, const ref<context>& ctx) const {
-        
-        // TODO at which depth should we instantiate?
-        if(scheme* p = ctx->find(self)) {
-          return {p->instantiate(ctx->depth), self};
-        } else {
-          throw unbound_variable(self);
-        }
-      }
-
-      
-
-      typed_sexpr operator()(const sexpr::list& self, const ref<context>& ctx) const {
-        if(self && self->head.is<symbol>()) {
-          const symbol s = self->head.get<symbol>();
-
-          const auto it = special.find(s);
-          if( it != special.end() ) {
-            return it->second(ctx, self->tail);
-          }
-
-        }
-
-        return check_app(ctx, self);
-      }
-      
-    };
-
-
-    static typed_sexpr check_expr(const ref<context>& ctx, const sexpr& e) {
-
-      try {
-        return e.map<typed_sexpr>(expr_visitor(), ctx);
-        
-      } catch( unification_error& e) {
-        std::stringstream ss;
-        scheme lhs = e.lhs.generalize(), rhs = e.rhs.generalize();
-
-        ostream_map osm;
-
-        ss << "cannot unify ";
-        ostream(ss, lhs, osm) << " with ";
-        ostream(ss, rhs, osm);
-
-        throw type_error(ss.str());
-        
-      } catch( occurs_error& e ) {
-        std::stringstream ss;
-        scheme var = mono(e.var).generalize(), type = e.type.generalize();
-
-        ostream_map osm;
-        
-        ostream(ss, var, osm) << " occurs in ";
-        ostream(ss, type, osm);
-
-        throw type_error(ss.str());
-      }
-      
-    }
-
-
-
-    
-    static typed_sexpr check_def(const ref<context>& ctx, const sexpr::list& terms) {
-      
-      const symbol name = terms->head.get<symbol>();
-      
-      const mono value_type = variable::fresh(ctx->depth);
-      const mono thread = variable::fresh(ctx->depth);
-      
-      const ref<context> sub = make_ref<context>(ctx);
-
-      // note: value_type is bound in sub-context (i.e. monomorphic)
-      sub->def(name, value_type);
-      assert(sub->find(name)->vars.empty());
-
-      const typed_sexpr value = check_expr(sub, get(terms, 1));
-      unify(value_type, value.type);
-      
-      // generalize in current context
-      ctx->def(name, value_type);
-
-
-      
-      return {io_ctor(unit_type, thread), kw::def >>= name >>= value.expr >>= sexpr::list()};
-    }
-
-
-    
-    // monadic binding
-    static typed_sexpr check_var(const ref<context>& ctx, const sexpr::list& terms) {
-      const symbol& name = terms->head.get<symbol>();
-
-      if(ctx->find_local(name)) {
-        throw type_error("variable redefinition: " + name.name());
-      }
-
-
-      // bind values in the io monad
-      const mono value_type = variable::fresh(ctx->depth);
-      const mono thread = variable::fresh(ctx->depth);
-
-
-      const typed_sexpr value = check_expr(ctx, get(terms, 1) );
-      unify(io_ctor(value_type, thread), value.type);
-      
-      // value_type should remain monomorphic
-      ++ctx->depth;
-      ctx->def(name, value_type);
-      
-      assert(ctx->find(name)->vars.empty());
-
-      // if no further computation happens, this is unit
-      return {io_ctor(unit_type, thread), kw::def >>= name >>= value.expr >>= sexpr::list()};
-    }
-    
-
-    // monadic sequencing
-    static typed_sexpr check_seq(const ref<context>& ctx, const sexpr::list& items) {
-
-      const mono thread = variable::fresh(ctx->depth);
-      mono result_type = io_ctor( unit_type, thread );
-
-      const sexpr::list& result_expr = map(items, [&ctx, &result_type, &thread](const sexpr& e) {
-          result_type = io_ctor( variable::fresh(ctx->depth), thread );
-
-          const typed_sexpr item = check_expr(ctx, e);
-          unify(result_type, item.type);
-          return item.expr;
-        });
-      
-      return {result_type, kw::seq >>= result_expr};
-    }
-    
-
-    // runST-like monad escape
-    static typed_sexpr check_run(const ref<context>& ctx, const sexpr::list& items) {
-
-      const mono thread = variable::fresh(ctx->depth);
-      const mono value_type = variable::fresh(ctx->depth);      
-
-      const ref<context> sub = make_ref<context>(ctx);
-
-      const typed_sexpr result = check_seq(sub, items);
-      
-      unify( io_ctor(value_type, thread), result.type);
-      
-      const scheme gen_thread = thread.generalize(ctx->depth);
-      const scheme gen_value_type = value_type.generalize(ctx->depth);            
-
-      const vars_type vars = gen_value_type.body.vars();
-      
-      if( vars.find(gen_thread.body.cast<ref<variable>>() ) != vars.end()) {
-        // thread appears in result type: this is impossible with rank-2 types
-        throw type_error("computation thread escape");
-      }
-      
-      if(gen_thread.vars.empty()) {
-        // thread variable is bound: computation can access outer state and
-        // maybe unpure
-        throw type_error("computation references outer thread");
-      }
-
-      return {value_type, result.expr};
-    }
-
-
-    static typed_sexpr check_datatype(const ref<context>& ctx, const sexpr::list& terms) {
-      const symbol name = terms->head.get<sexpr::list>()->head.get<symbol>();
-
-      const auto& v = terms->head.get<sexpr::list>()->tail;
-
-      const list< ref<variable> > vars = map(v, [&ctx](const sexpr& e) {
-          return variable::fresh(ctx->depth);
-        });
-
-      std::vector<mono> args;
-      for(const auto& a : vars) {
-        args.emplace_back(a);
-      }
-      
-      constructor ctor(name, args.size());
-      const mono app = application(ctor, args);
-
-      const mono ctor_type =
-        foldr(app, vars, [](const ref<variable>& lhs, const mono& rhs) {
-            return lhs >>= rhs;
-          });
-
-      ctx->def(name, ctor_type);
-      
-      auto nil = sexpr::list();
-      
-      const sexpr expr = kw::def >>= name >>=
-        (kw::lambda >>= v >>= (symbol("array") >>= v) >>= nil)
-        >>= nil;
-
-      std::clog << expr << std::endl;
-      
-      // TODO define data constructors
-      return {app, expr};
-    }
-    
-
-    // toplevel check
-    static typed_sexpr check_toplevel_expr(const ref<context>& ctx, const sexpr& e) {
-      static const mono thread = variable::fresh(ctx->depth);
-      static std::size_t init = ctx->depth++; (void) init;
-      
-      // TODO FIXME global uf
-      const typed_sexpr res = check_expr(ctx, e);
-
-      if(res.type.is<application>() && res.type.get<application>().ctor == io_ctor) {
-        // toplevel io must happen in toplevel thread
-        const mono fresh = variable::fresh(ctx->depth);
-        unify( io_ctor(fresh, thread), res.type);
-      }
-
-      
-      
-      return res; 
-    }
-
-
-    // toplevel
-    static typed_sexpr check_toplevel(const ref<context>& ctx, const sexpr& e) {
-
-      if(auto lst = e.get_if<sexpr::list>()) {
-        if(*lst) {
-          if( auto s = (*lst)->head.get_if<symbol>() ) {
-            if(*s == kw::type) {
-              return check_datatype(ctx, (*lst)->tail);
-            }
-          }
-        }
-      }
-      
-      return check_toplevel_expr(ctx, e);
-    }
-    
-
-    check_type check(const ref<context>& ctx, const sexpr& e) {
-      typed_sexpr res = check_toplevel(ctx, e);
-      return {res.type.generalize(ctx->depth), res.expr};
-    }
-
-    
-    application operator>>=(const mono& lhs, const mono& rhs) {
-      const std::size_t info = rhs.is<application>() ?
-        1 + rhs.get<application>().info : 1;
-      
-      return application(func_ctor, {lhs, rhs}, info);
-    }
-    
   }
-
+  
 }

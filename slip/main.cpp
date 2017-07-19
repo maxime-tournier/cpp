@@ -155,151 +155,9 @@ namespace slip {
   };
 }
 
-const auto jit_compiler = [](bool dump) {
-
-  static const ref<slip::environment> env = make_ref<slip::environment>();
-  static const ref<slip::jit> jit = make_ref<slip::jit>();
-  static const ref<slip::types::context> tc = make_ref<slip::types::context>();
-
-  slip::helper ctx{jit, tc};
-  
-  {
-    using namespace slip;
-    using namespace slip::types;
-
-    ctx("+", [](integer lhs, integer rhs) -> integer { return lhs + rhs; });
-    ctx("-", [](integer lhs, integer rhs) -> integer { return lhs - rhs; });
-    ctx("/", [](integer lhs, integer rhs) -> integer { return lhs / rhs; });
-    ctx("*", [](integer lhs, integer rhs) -> integer { return lhs * rhs; });
-    ctx("%", [](integer lhs, integer rhs) -> integer { return lhs % rhs; });
-    ctx("=", [](integer lhs, integer rhs) -> boolean { return lhs == rhs; });
-
-    // monads
-    {
-      ref<variable> a = tc->fresh();
-      ref<variable> thread = tc->fresh();      
-      tc->def(kw::pure, a >>= io_ctor(a, thread));
-    }
-
-    // lists
-    {
-      ref<variable> a = tc->fresh();
-      ctx("nil", list_ctor(a), vm::value::list());
-    }
-
-    {
-      ref<variable> a = tc->fresh();
-      tc->def("cons", a >>= list_ctor(a) >>= list_ctor(a) );
-    }
-
-    
-    
-    {
-      ref<variable> a = tc->fresh();
-      ref<variable> thread = tc->fresh();      
-      tc->def(kw::ref, a >>= io_ctor(ref_ctor(a, thread), thread));
-    }
-
-    {
-      ref<variable> a = tc->fresh();
-      ref<variable> thread = tc->fresh();            
-      tc->def(kw::set, ref_ctor(a, thread) >>= a >>= io_ctor(unit_type, thread));
-    }
-
-    {
-      ref<variable> a = tc->fresh();
-      ref<variable> thread = tc->fresh();
-      tc->def(kw::get, ref_ctor(a, thread) >>= io_ctor(a, thread));
-    }
 
 
-    {
-      // TODO typeclasses
-      ref<variable> a = tc->fresh();
-      ref<variable> thread = tc->fresh();      
-
-      tc->def("print", a >>= io_ctor( unit_type, thread));
-    }
-    
-    
-    
-  }
-
-
-  // allow jit to create arrays
-  jit->def("array", +[](const slip::vm::value* first, const slip::vm::value* last) -> slip::vm::value {
-      return slip::vm::make_array(first, last);
-    });
-  
-  
-  // (*env)("iter", +[](const slip::value* first, const slip::value* last) -> slip::value {
-  //     using namespace slip::vm;
-
-  //     const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
-      
-  //     const value::list& x = args[0].get<value::list>();
-  //     const value& func = args[1];
-      
-  //     for(const value& xi : x) {
-  //       jit->call(func, &xi, &xi + 1);
-  //     }
-      
-  //     return unit();
-  //   });
-  
-
-  // (*env)("map", +[](const slip::value* first, const slip::value* last) -> slip::value {
-  //     using namespace slip::vm;
-
-  //     const auto args = slip::unpack_args<2>( (value*)first, (value*)last);
-
-  //     const value::list& x = args[0].get<value::list>();
-  //     const value& func = args[1];
-
-      
-  //     value::list result = map(x, [&](const value& xi) {
-  //         return jit->call(func, &xi, &xi + 1);
-  //       });
-
-  //     return reinterpret_cast<slip::value::list&>(result);
-  //   });
-
-
-  using namespace slip;
-  
-  return [dump](sexpr&& s) {
-
-    const sexpr e = expand_toplevel(env, s);
-
-    const types::check_type checked = types::check(tc, e);
-
-    if(dump) {
-      std::cout << "rewritten expr: " << checked.expr << std::endl;
-    }
-    
-    const vm::value v = jit->eval(checked.expr, dump);
-    
-    std::cout << " : " << checked.type; 
-    
-    if(v.is<slip::unit>()) {
-      std::cout << std::endl;
-    } else {
-      std::cout << " = ";
-      
-      if(v.is<slip::symbol>() || v.is<slip::vm::value::list>()) {
-        std::cout << "'";
-      }
-      std::cout << v << std::endl;  
-    }
-    return parse::pure(e);
-  };
-  
-  
-
-};
-
-
-static const auto kind_test = [] {
+static const auto jit_compiler = [](bool dump_bytecode) {
   using namespace slip;
   
   auto tc = make_ref<kinds::typechecker>();
@@ -372,7 +230,6 @@ int main(int argc, char** argv) {
   } else {
     const bool dump = vm.count("dump");    
     action = jit_compiler(dump);
-    action = kind_test();
   }
   
 
