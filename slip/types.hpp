@@ -20,18 +20,18 @@ namespace slip {
   }
 
   
-  namespace kinds {
+  namespace types {
     
     // kinds
     struct kind;
 
     // the monotypes kind
-    struct types {
-      bool operator==(const types& other) const {
+    struct monotypes {
+      bool operator==(const monotypes& other) const {
         return true;
       }
 
-      bool operator<(const types& other) const {
+      bool operator<(const monotypes& other) const {
         return false;
       }
       
@@ -40,7 +40,7 @@ namespace slip {
 
     struct function;
     
-    struct kind : variant<types, ref<function> > {
+    struct kind : variant<monotypes, ref<function> > {
       using kind::variant::variant;
     
       struct error : slip::error {
@@ -149,7 +149,7 @@ namespace slip {
     struct monotype : constructor {
 
       monotype(constructor self) : constructor(self) {
-        if(!kind().template is<types>()) {
+        if(!kind().template is<monotypes>()) {
           std::clog << kind() << std::endl;
           assert( false );
           throw kind::error("monotypes kind expected");
@@ -215,7 +215,7 @@ namespace slip {
 
       const polytype& find(symbol id) const;
 
-      ref<variable> fresh(kind k = types()) const;
+      ref<variable> fresh(kind k = monotypes()) const;
     };
 
 
