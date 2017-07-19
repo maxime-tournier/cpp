@@ -127,18 +127,16 @@ namespace slip {
       }
 
       bool operator()(const ref<variable>& self, const ref<variable>& var, UF& uf) const {
-
         // TODO not sure if this should be done here
         
         if(self->depth > var->depth) {
-          // we are trying to unify var with app( ... self ... ) but var has
-          // lower depth: we need to "lower" self to var's depth so that self
-          // generalizes just like var
-          // ref<variable> lower = make_ref<variable>(var->kind, var->depth);
+          // we are trying to unify var with a type constructor containing self,
+          // but var has smaller depth: we need to "raise" self to var's depth
+          // so that self generalizes just like var
+          const constructor raised = make_ref<variable>(var->kind, var->depth);
 
-          // assert(uf.find(self).kind() == lower->kind);
-          // debug( std::clog << "linking", constructor(self), constructor(lower) ) << std::endl;          
-          // uf.link(uf.find(self), lower);
+          assert(uf.find(self).kind() == raised.kind());
+          uf.link(uf.find(self), raised);
         }
         
         return self == var;
