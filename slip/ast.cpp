@@ -18,7 +18,7 @@ namespace slip {
         return make_ref<string>(self.value);
       }
 
-      sexpr operator()(const variable& self) const {
+      sexpr operator()(const symbol& self) const {
         return self;
       }
       
@@ -208,7 +208,7 @@ namespace slip {
         }
 
         
-        return variable(self.name());
+        return self;
       }
 
 

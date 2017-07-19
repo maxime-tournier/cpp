@@ -355,7 +355,7 @@ namespace slip {
 
             // argc
             const integer& n = code[++ip].get<integer>();
-            assert(n <= integer(stack.size()));
+            // assert(n <= integer(stack.size()));
         
             // fetch code address from bytecode start
             const integer& addr = code[++ip].get<integer>();

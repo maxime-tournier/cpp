@@ -389,7 +389,7 @@ namespace slip {
 
 
 
-      void operator()(const ast::variable& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const symbol& self, vm::bytecode& res, ref<variables>& ctx) const {
         // locals
         {
           auto it = ctx->locals.find(self);
@@ -427,6 +427,72 @@ namespace slip {
       }
 
       
+      void operator()(const ref<ast::lambda>& self, vm::bytecode& res, ref<variables>& ctx) const {
+        // sub variables
+        ref<variables> sub = make_ref<variables>(ctx);
+
+        // populate sub with locals for self
+        if(ctx->defining) {
+          sub->add_local(*ctx->defining);
+        } else {
+          sub->add_local("__self__");
+        }
+
+        // populate sub with args
+        for(const symbol& s : self->args) {
+          sub->add_local(s);
+        }
+
+        // reserve space for return address
+        sub->add_local("__return__");
+        
+        // label for function code
+        const integer id = unique();
+        
+        const label start = "lambda-" + std::to_string(id);
+        const label end = "after-" + start.name();
+
+        // skip function body
+        res.push_back( opcode::JMP ); 
+        res.push_back( end );      
+
+        // generate function body with sub variables      
+        res.label(start);
+        compile(res, sub, self->body);
+        res.push_back( opcode::RET );
+        
+        // push closure      
+        res.label(end);
+
+        // order sub captures and extend current ones
+        std::vector< symbol > ordered(sub->captured.size());
+      
+        for(const auto& it : sub->captured) {
+          const symbol& name = it.first;
+          ordered[it.second] = name;
+        
+          auto local = ctx->locals.find(name);
+          if(local == ctx->locals.end()) {
+            ctx->capture(name);
+          }
+        }
+
+        // load sub captures in order
+        for(const symbol& s : ordered) {
+          compile(res, ctx, s);
+        }
+
+        const integer m = ordered.size(), n = size(self->args);
+        
+        res.push_back( opcode::CLOS );
+        res.push_back( m ); 
+        res.push_back( n );    
+        res.push_back( start );      
+
+
+      }
+
+
       
       template<class T>
       void operator()(const T& self, vm::bytecode& res, ref<variables>& ctx) const {

@@ -29,19 +29,12 @@ namespace slip {
     };
 
 
-    // TODO 
-    struct variable : symbol {
-      using symbol::symbol;
-    };
-
-    
-
     struct expr : variant< literal<unit>,
                            literal<boolean>,
                            literal<integer>,
                            literal<real>,
                            literal< ref<string> >,
-                           variable,
+                           symbol,
                            ref<lambda>,
                            ref<application>,
                            ref<definition>,

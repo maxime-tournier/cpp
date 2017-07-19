@@ -227,7 +227,7 @@ namespace slip {
       }
 
       
-      constructor operator()(const ast::variable& self, state& tc) const {
+      constructor operator()(const symbol& self, state& tc) const {
         const scheme& p = tc.find(self);
         return tc.instantiate(p);
       }
