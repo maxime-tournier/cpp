@@ -26,7 +26,7 @@ namespace slip {
       return make_ref<application>(*this, arg);
     }
     
-    monotype operator>>=(const monotype& lhs, const monotype& rhs) {
+    constructor operator>>=(const constructor& lhs, const constructor& rhs) {
       return (func_ctor(lhs))(rhs);
 
     }
@@ -101,7 +101,7 @@ namespace slip {
     }
 
     
-    static monotype infer(typechecker& self, const ast::expr& node);
+    static constructor infer(typechecker& self, const ast::expr& node);
     
 
 
@@ -220,18 +220,18 @@ namespace slip {
 
       
       template<class T>
-      monotype operator()(const ast::literal<T>& self, typechecker& tc) const {
+      constructor operator()(const ast::literal<T>& self, typechecker& tc) const {
         return traits<T>::type();
       }
 
       
-      monotype operator()(const ast::variable& self, typechecker& tc) const {
-        const polytype& p = tc.find(self.name);
+      constructor operator()(const ast::variable& self, typechecker& tc) const {
+        const scheme& p = tc.find(self.name);
         return tc.instantiate(p);
       }
 
       
-      monotype operator()(const ref<ast::lambda>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::lambda>& self, typechecker& tc) const {
 
         typechecker sub = tc.scope();
 
@@ -244,11 +244,11 @@ namespace slip {
           });
         
         // infer body type in subcontext
-        const monotype body_type = infer(sub, self->body);
+        const constructor body_type = infer(sub, self->body);
 
         // return complete application type
         return foldr(body_type, args, [](const ref<variable>& lhs,
-                                         const monotype& rhs) -> monotype {
+                                         const constructor& rhs) -> constructor {
             return lhs >>= rhs;
           });
         
@@ -256,20 +256,20 @@ namespace slip {
 
 
 
-      monotype operator()(const ref<ast::application>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::application>& self, typechecker& tc) const {
 
-        const monotype func = infer(tc, self->func);
+        const constructor func = infer(tc, self->func);
 
         // infer arg types
-        const list<monotype> args = map(self->args, [&](const ast::expr& e) {
+        const list<constructor> args = map(self->args, [&](const ast::expr& e) {
             return infer(tc, e);
           });
 
         // construct function type
-        const monotype result = tc.fresh();
+        const constructor result = tc.fresh();
         
-        const monotype sig = foldr(result, args, [&](const monotype& lhs,
-                                                     const monotype& rhs) {
+        const constructor sig = foldr(result, args, [&](const constructor& lhs,
+                                                     const constructor& rhs) {
                                      return lhs >>= rhs;
                                    });
 
@@ -283,15 +283,15 @@ namespace slip {
       }
 
 
-      monotype operator()(const ref<ast::condition>& self, typechecker& tc) const {
-        const monotype result = tc.fresh();
+      constructor operator()(const ref<ast::condition>& self, typechecker& tc) const {
+        const constructor result = tc.fresh();
 
         for(const ast::condition::branch& b : self->branches) {
 
-          const monotype test = infer(tc, b.test);
+          const constructor test = infer(tc, b.test);
           tc.unify(boolean_type, test);
           
-          const monotype value = infer(tc, b.value);
+          const constructor value = infer(tc, b.value);
           tc.unify(value, result);
         };
 
@@ -300,9 +300,9 @@ namespace slip {
 
 
       // let-binding
-      monotype operator()(const ref<ast::definition>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::definition>& self, typechecker& tc) const {
 
-        const monotype value = tc.fresh();
+        const constructor value = tc.fresh();
         
         typechecker sub = tc.scope();
 
@@ -319,9 +319,9 @@ namespace slip {
 
 
       // monadic binding
-      monotype operator()(const ref<ast::binding>& self, typechecker& tc) const {
+      constructor operator()(const ref<ast::binding>& self, typechecker& tc) const {
 
-        const monotype value = tc.fresh();
+        const constructor value = tc.fresh();
 
         // note: value is bound in sub-context (monomorphic)
         tc = tc.scope();
@@ -337,8 +337,8 @@ namespace slip {
       }
       
 
-      monotype operator()(const ref<ast::sequence>& self, typechecker& tc) const {
-        monotype res = io_ctor( unit_type );
+      constructor operator()(const ref<ast::sequence>& self, typechecker& tc) const {
+        constructor res = io_ctor( unit_type );
 
         for(const ast::expr& e : self->items) {
 
@@ -353,16 +353,16 @@ namespace slip {
       
       
       template<class T>
-      monotype operator()(const T& self, typechecker& tc) const {
+      constructor operator()(const T& self, typechecker& tc) const {
         throw error("infer unimplemented");
       }
       
     };
 
 
-    static monotype infer(typechecker& self, const ast::expr& node) {
+    static constructor infer(typechecker& self, const ast::expr& node) {
       try{
-        return node.map<monotype>(expr_visitor(), self);
+        return node.map<constructor>(expr_visitor(), self);
       } catch( unification_error& e )  {
         std::stringstream ss;
 
@@ -389,7 +389,7 @@ namespace slip {
 
         const constructor res = uf->find(self);
         
-        if(res == monotype(self)) {
+        if(res == constructor(self)) {
           // debug(std::clog << "nice: ", constructor(self), res) << std::endl;          
           return res;
         }
@@ -434,7 +434,7 @@ namespace slip {
     
 
 
-    monotype typechecker::instantiate(const polytype& poly) const {
+    constructor typechecker::instantiate(const scheme& poly) const {
       instantiate_visitor::map_type map;
 
       // associate each bound variable to a fresh one
@@ -443,7 +443,7 @@ namespace slip {
           return std::make_pair(v, fresh(v->kind));
         });
       
-      return poly.body.map<monotype>(instantiate_visitor(), map);
+      return poly.body.map<constructor>(instantiate_visitor(), map);
     }
 
 
@@ -455,9 +455,9 @@ namespace slip {
     };
 
     
-    const polytype& typechecker::find(symbol id) const {
+    const scheme& typechecker::find(symbol id) const {
 
-      if(polytype* p = env->find(id)) {
+      if(scheme* p = env->find(id)) {
         return *p;
       }
 
@@ -465,7 +465,7 @@ namespace slip {
     }
 
 
-    typechecker& typechecker::def(symbol id, const polytype& p) {
+    typechecker& typechecker::def(symbol id, const scheme& p) {
       auto res = env->locals.emplace( std::make_pair(id, p) );
       if(!res.second) throw error("redefinition of " + id.name());
       return *this;
@@ -514,9 +514,9 @@ namespace slip {
     
 
     // generalization
-    polytype typechecker::generalize(const monotype& mono) const {
+    scheme typechecker::generalize(const constructor& mono) const {
       // debug(std::clog << "gen: ", mono) << std::endl;
-      polytype res(mono.map<monotype>(nice(), uf));
+      scheme res(mono.map<constructor>(nice(), uf));
 
       const auto all = vars(res.body);
     
@@ -532,8 +532,8 @@ namespace slip {
     }
   
   
-    polytype infer(typechecker& self, const ast::toplevel& node) {
-      const monotype res = infer(self, node.get<ast::expr>());
+    scheme infer(typechecker& self, const ast::toplevel& node) {
+      const constructor res = infer(self, node.get<ast::expr>());
       return self.generalize(res);
     }
 
@@ -588,7 +588,7 @@ namespace slip {
     };
 
 
-    static std::ostream& ostream(std::ostream& out, const polytype& self, 
+    static std::ostream& ostream(std::ostream& out, const scheme& self, 
                                  ostream_map& osm) {
       for(const ref<variable>& var : self.forall) {
         osm.emplace( std::make_pair(var, var_repr{osm.size(), true} ) );
@@ -601,7 +601,7 @@ namespace slip {
 
 
 
-    std::ostream& operator<<(std::ostream& out, const polytype& self) {
+    std::ostream& operator<<(std::ostream& out, const scheme& self) {
       ostream_map osm;
       return ostream(out, self, osm);
     }

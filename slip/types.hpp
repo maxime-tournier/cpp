@@ -21,7 +21,7 @@ namespace slip {
 
   
   namespace types {
-    
+
     // kinds
     struct kind;
 
@@ -146,40 +146,25 @@ namespace slip {
     }
     
     
-    struct monotype : constructor {
-
-      monotype(constructor self) : constructor(self) {
-        if(!kind().template is<monotypes>()) {
-          std::clog << kind() << std::endl;
-          assert( false );
-          throw kind::error("monotypes kind expected");
-        }
-      }
-
-      // not quite happy with these
-      monotype(constant self) : monotype( constructor(self) ) { }
-      monotype(ref<variable> self) : monotype( constructor(self) ) { }
-      monotype(ref<application> self) : monotype( constructor(self) ) { }            
-      
-    };
-
-    monotype operator>>=(const monotype& lhs, const monotype& rhs);
+    constructor operator>>=(const constructor& lhs, const constructor& rhs);
     
-    
-
-    struct polytype {
+    struct scheme {
       using forall_type = std::vector< ref<variable> >;
       forall_type forall;
-      monotype body;
+      const constructor body;
 
-      polytype(const monotype& body) : body(body) { }
+      scheme(const constructor& body) : body(body) {
+        if(body.kind() != monotypes()) {
+          throw kind_error("monotype expected");
+        }
+      }
     };
 
 
-    std::ostream& operator<<(std::ostream& out, const polytype& self);
+    std::ostream& operator<<(std::ostream& out, const scheme& self);
     
   
-    struct environment : context< environment, polytype > {
+    struct environment : context< environment, scheme > {
       std::size_t depth;
 
       environment( const ref<environment>& parent = {} )
@@ -204,22 +189,22 @@ namespace slip {
       typechecker(ref<env_type> env = make_ref<env_type>(),
                   ref<uf_type> uf = make_ref<uf_type>());
     
-      polytype generalize(const monotype& t) const;
-      monotype instantiate(const polytype& p) const;
+      scheme generalize(const constructor& t) const;
+      constructor instantiate(const scheme& p) const;
 
       void unify(const constructor& lhs, const constructor& rhs);    
     
       typechecker scope() const;
 
-      typechecker& def(symbol id, const polytype& p);
+      typechecker& def(symbol id, const scheme& p);
 
-      const polytype& find(symbol id) const;
+      const scheme& find(symbol id) const;
 
       ref<variable> fresh(kind k = monotypes()) const;
     };
 
 
-    polytype infer(typechecker& self, const ast::toplevel& node);    
+    scheme infer(typechecker& self, const ast::toplevel& node);    
 
   }
   

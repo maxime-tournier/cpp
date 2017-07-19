@@ -105,12 +105,12 @@ static const auto compiler = [](bool dump_bytecode) {
   auto tc = make_ref<types::typechecker>();
   
   {
-    types::monotype a = tc->fresh();
+    types::constructor a = tc->fresh();
     tc->def("pure", tc->generalize( a >>= types::io_ctor(a) ));
   }
 
   {
-    types::monotype a = tc->fresh();
+    types::constructor a = tc->fresh();
     tc->def("nil", tc->generalize(types::list_ctor(a)));
   } 
   
@@ -118,7 +118,7 @@ static const auto compiler = [](bool dump_bytecode) {
 
     const ast::toplevel node = ast::check_toplevel(s);
 
-    const types::polytype p = infer(*tc, node);
+    const types::scheme p = infer(*tc, node);
     std::cout << " : " << p << std::endl;
 
     return parse::pure(s);
