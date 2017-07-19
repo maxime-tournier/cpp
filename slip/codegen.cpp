@@ -4,6 +4,8 @@
 #include "syntax.hpp"
 #include "ast.hpp"
 
+#include <sstream>
+
 namespace slip {
 
   // codegen
@@ -378,20 +380,69 @@ namespace slip {
   namespace codegen {
 
     struct compile_expr {
+
+      template<class T>
+      void operator()(const ast::literal<T>& self, vm::bytecode& res, 
+                      ref<variables>& ctx) const {
+        literal(res, self.value);
+      }
+
+
+
+      void operator()(const ast::variable& self, vm::bytecode& res, ref<variables>& ctx) const {
+        // locals
+        {
+          auto it = ctx->locals.find(self);
+          if(it != ctx->locals.end()) {
+            res.push_back( opcode::LOAD );
+            res.push_back( integer(it->second) );
+            return;
+          }
+        }
+
+        // captures
+        {
+          res.push_back( opcode::LOADC );
+          res.push_back( ctx->capture(self) );
+          return;
+        }
+      }
+
+      
+      void operator()(const ref<ast::definition>& self, vm::bytecode& res, ref<variables>& ctx) const {
+        
+        ctx->add_local(self->id);
+      
+        // save some space on the stack by pushing a dummy var
+        res.push_back( opcode::PUSH );
+        res.push_back( unit() );
+      
+        // TODO better ?
+        ctx->defining = &self->id;
+        compile(res, ctx, self->value);
+        ctx->defining = nullptr;
+        
+        // def evals to nil, so we just swap result and dummy var
+        res.push_back( opcode::SWAP );
+      }
+
+      
+      
       template<class T>
       void operator()(const T& self, vm::bytecode& res, ref<variables>& ctx) const {
-        throw error("compile: unimplemented");
+        std::stringstream ss;
+        ss << self;
+        throw error("compile: unimplemented: " + ss.str());
       }
     };
     
     
     
     
-    void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const ast::toplevel& e) {
+    void compile(vm::bytecode& res, ref<variables>& ctx, const ast::toplevel& e) {
       e.get<ast::expr>().apply(compile_expr(), res, ctx);
     }
 
-    
   }
 
 

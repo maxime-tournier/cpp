@@ -3,6 +3,8 @@
 #include "eval.hpp"
 #include "codegen.hpp"
 
+#include "ast.hpp"
+
 #include <iostream>
 
 
@@ -26,12 +28,12 @@ namespace slip {
   
   
   
-  vm::value jit::eval(const slip::sexpr& expr, bool dump) {
+  vm::value jit::eval(const ast::toplevel& node, bool dump) {
     const std::size_t start = code.size();
-
-    compile(code, ctx, expr);
+    
+    codegen::compile(code, ctx, node);
     code.push_back( vm::opcode::STOP );
-
+    
     if( dump ) {
       std::cout << "bytecode:" << std::endl;
       code.dump(std::cout, start);

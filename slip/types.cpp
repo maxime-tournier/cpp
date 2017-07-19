@@ -90,9 +90,11 @@ namespace slip {
     template<> constant traits< slip::boolean >::type() { return boolean_type; }      
     template<> constant traits< slip::integer >::type() { return integer_type; }
     template<> constant traits< slip::real >::type() { return real_type; }
-    template<> constant traits< slip::string >::type() { return string_type; }
     template<> constant traits< slip::symbol >::type() { return symbol_type; }
 
+    // mew
+    template<> constant traits< ref<slip::string> >::type() { return string_type; }
+    
 
     state::state(ref<env_type> env, ref<uf_type> uf) 
       : env( env ),
@@ -226,7 +228,7 @@ namespace slip {
 
       
       constructor operator()(const ast::variable& self, state& tc) const {
-        const scheme& p = tc.find(self.name);
+        const scheme& p = tc.find(self);
         return tc.instantiate(p);
       }
 

@@ -29,8 +29,9 @@ namespace slip {
     };
 
 
-    struct variable {
-      const symbol name;
+    // TODO 
+    struct variable : symbol {
+      using symbol::symbol;
     };
 
     
@@ -39,7 +40,7 @@ namespace slip {
                            literal<boolean>,
                            literal<integer>,
                            literal<real>,
-                           literal<string>,
+                           literal< ref<string> >,
                            variable,
                            ref<lambda>,
                            ref<application>,

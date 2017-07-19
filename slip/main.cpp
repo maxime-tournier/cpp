@@ -101,7 +101,8 @@ static const auto interpreter = [] {
 
 static const auto compiler = [](bool dump_bytecode) {
   using namespace slip;
-  
+
+  auto jit = make_ref<slip::jit>();
   auto tc = make_ref<types::state>();
   
   {
@@ -114,12 +115,18 @@ static const auto compiler = [](bool dump_bytecode) {
     tc->def("nil", tc->generalize(types::list_ctor(a)));
   } 
   
-  return [tc](sexpr&& s) mutable {
+  return [tc, jit, dump_bytecode](sexpr&& s) mutable {
 
     const ast::toplevel node = ast::check_toplevel(s);
-
     const types::scheme p = infer(*tc, node);
-    std::cout << " : " << p << std::endl;
+
+    const vm::value v = jit->eval(node, dump_bytecode);
+    
+    std::cout << " : " << p;
+
+    std::cout << " = " << v;
+    
+    std::cout << std::endl;
 
     return parse::pure(s);
   };

@@ -19,7 +19,7 @@ namespace slip {
       }
 
       sexpr operator()(const variable& self) const {
-        return self.name;
+        return self;
       }
       
       sexpr operator()(const ref<lambda>& self) const {
@@ -208,14 +208,10 @@ namespace slip {
         }
 
         
-        return variable{self};
+        return variable(self.name());
       }
 
 
-      expr operator()(const ref<string>& self) const {
-        return literal<string>{*self};
-      }
-      
       
       expr operator()(const sexpr::list& self) const {
         if(self && self->head.is<symbol>() ) {
