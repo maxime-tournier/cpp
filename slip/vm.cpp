@@ -153,7 +153,11 @@ namespace slip {
         case opcode::STORE:
           out << "store";
           break;
-        
+
+        case opcode::PEEK:
+          out << "peek";
+          break;
+          
         default:
           out << "#<opcode>";
         };
@@ -432,6 +436,7 @@ namespace slip {
             break;
           }
 
+
           case opcode::RET: {
             // put result and pop
             const std::size_t start = fp.back();
@@ -452,7 +457,11 @@ namespace slip {
             continue;
             break;
           }
-        
+
+          case opcode::PEEK:
+            std::clog << *this << std::endl;
+            break;
+            
           default:
             assert(false && "unknown opcode");
           };

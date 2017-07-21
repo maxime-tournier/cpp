@@ -36,8 +36,10 @@ namespace slip {
         CLOS,
       
         JNZ,
-        JMP
+        JMP,
 
+        PEEK,
+        
         };
 
 

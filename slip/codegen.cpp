@@ -458,6 +458,7 @@ namespace slip {
 
         // generate function body with sub variables      
         res.label(start);
+
         compile(res, sub, self->body);
         res.push_back( opcode::RET );
         
@@ -509,6 +510,52 @@ namespace slip {
         res.push_back( n );
       }
 
+
+
+      void operator()(const ref<ast::condition>& self, vm::bytecode& res, ref<variables>& ctx) const {
+
+        const integer id = unique();
+
+        const label start = "cond-" + std::to_string(id) + "-start";
+      
+        res.label(start);
+        const label end = "cond-" + std::to_string(id) + "-end";
+      
+        std::map<label, ast::expr> branch;
+
+        // compile tests
+        integer i = 0;
+        for(const ast::condition::branch& b : self->branches) {
+          
+          const label then = "cond-" + std::to_string(id) +
+            "-then-" + std::to_string(i);
+          
+          branch.emplace( std::make_pair(then, b.value) );
+          
+          compile(res, ctx, b.test);
+          res.push_back( opcode::JNZ );
+          res.push_back( then );
+
+          ++i;
+        }
+
+        // don't forget to jump to end if nothing matched
+        res.push_back( opcode::JMP );
+        res.push_back( end );      
+
+        // compile branches
+        // TODO order branches ?
+        for(const auto it : branch) {
+          res.label(it.first);
+          compile(res, ctx, it.second);
+          res.push_back( opcode::JMP );
+          res.push_back( end );      
+        }
+
+        res.label(end);
+      }
+
+      
       
       template<class T>
       void operator()(const T& self, vm::bytecode& res, ref<variables>& ctx) const {
