@@ -42,15 +42,7 @@ namespace slip {
     
     };
 
-  }
 
-
-
-  
-  void compile(vm::bytecode& res, ref<codegen::variables>& ctx, const slip::sexpr& e);
-
-
-  namespace codegen {
     void compile(vm::bytecode& res, ref<variables>& ctx, const ast::toplevel& e);
   }
 }
