@@ -205,6 +205,11 @@ namespace slip {
 
 
     scheme infer(state& self, const ast::toplevel& node);    
+
+    template<class T>
+    struct traits {
+      static constant type();
+    };
     
   }
   

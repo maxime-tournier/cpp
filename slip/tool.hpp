@@ -8,31 +8,36 @@
 
 namespace slip {
   
-  template<class F, class Ret, class ... Args, std::size_t ... I>
-  static builtin wrap(const F& f, Ret (*)(Args... args), indices<I...> indices) {
+  template<class Value, class F, class Ret, class ... Args, std::size_t ... I>
+  static Value wrap(const F& f, Ret (*)(Args... args), indices<I...> indices, bool check = true) {
     static Ret(*ptr)(Args...) = f;
-    
-    return +[](const value* first, const value* last) -> value {
-      argument_error::check(last - first, sizeof...(Args));
-      
-      try{
-        return ptr( std::move(first[I].template cast<Args>()) ... );
-      } catch( value::bad_cast& e) {
-        throw type_error("bad type for builtin");
-      }
-      
-      // return ptr( first[I].template get<Args>() ... );      
-    };
+
+    if( check ) {
+      return +[](const Value* first, const Value* last) -> Value {
+        argument_error::check(last - first, sizeof...(Args));
+        
+        try{
+          return ptr( std::move(first[I].template cast<Args>()) ... );
+        } catch( typename Value::bad_cast& e) {
+          throw type_error("bad type for builtin arg");
+        }
+
+      };
+    } else {
+      return +[](const Value* first, const Value* last) -> Value {
+        return ptr( std::move(first[I].template get<Args>()) ... );
+      };
+    }
   } 
  
-  template<class F, class Ret, class ... Args>
-  static builtin wrap(const F& f, Ret (*ptr)(Args... args)) {
-    return wrap(f, ptr, type_indices<Args...>() );
+  template<class Value, class F, class Ret, class ... Args>
+  static Value wrap(const F& f, Ret (*ptr)(Args... args), bool check = true) {
+    return wrap<Value>(f, ptr, type_indices<Args...>(), check );
   }
   
-  template<class F>
-  static builtin wrap(const F& f) {
-    return wrap(f, +f);
+  template<class Value, class F>
+  static Value wrap(const F& f, bool check = true) {
+    return wrap<Value>(f, +f, check);
   }
 
   template<std::size_t ...I, class Value>

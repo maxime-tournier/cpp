@@ -489,9 +489,25 @@ namespace slip {
         res.push_back( n );    
         res.push_back( start );      
 
-
       }
 
+
+      void operator()(const ref<ast::application>& self, vm::bytecode& res, ref<variables>& ctx) const {
+
+        // compile function
+        compile(res, ctx, self->func);
+        
+        // compile args
+        integer n = 0;
+        for(const ast::expr& e : self->args) {
+          compile(res, ctx, e);
+          ++n;
+        }
+
+        // call
+        res.push_back( opcode::CALL );
+        res.push_back( n );
+      }
 
       
       template<class T>

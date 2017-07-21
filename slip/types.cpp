@@ -70,14 +70,6 @@ namespace slip {
     }
 
 
-    
-    
-    template<class T>
-    struct traits {
-      static constant type();
-    };
-
-
     const constant unit_type("unit", monotypes()),
       boolean_type("boolean", monotypes()),
       integer_type("integer", monotypes()),

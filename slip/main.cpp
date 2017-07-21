@@ -96,6 +96,37 @@ static const auto interpreter = [] {
 
 
 
+template<class Ret, class ... Args>
+static void bind(slip::jit& jit, slip::types::state& tc, slip::symbol id, Ret (*f)(Args...)) {
+  using namespace slip;
+  
+  jit.def(id, wrap<vm::value>(f, false));
+
+  using namespace types;
+  using ctor = constructor;
+  const ctor expand[] = { traits<Args>::type()... };
+  
+  const list<ctor> args = make_list<ctor>(expand, expand + sizeof...(Args));
+
+  const ctor ret = traits<Ret>::type();
+  const ctor sig = foldr( ret, args, [](const ctor& lhs, const ctor& rhs) {
+	  return lhs >>= rhs;
+	});
+
+  tc.def(id, sig);
+}
+
+struct binder {
+  ref<slip::jit>& jit;
+  ref<slip::types::state>& tc;
+
+  template<class Ret, class ... Args>
+  binder& operator()(slip::symbol id, Ret (*f)(Args...)) {
+	bind(*jit, *tc, id, f);
+	return *this;
+  }
+  
+};
 
 
 
@@ -104,10 +135,18 @@ static const auto compiler = [](bool dump_bytecode) {
 
   auto jit = make_ref<slip::jit>();
   auto tc = make_ref<types::state>();
-  
+
+  binder{jit, tc}
+  ("+", +[](integer x, integer y) -> integer { return x + y; })
+  ("-", +[](integer x, integer y) -> integer { return x - y; })
+  ("*", +[](integer x, integer y) -> integer { return x * y; })
+  ("/", +[](integer x, integer y) -> integer { return x / y; })
+  ("%", +[](integer x, integer y) -> integer { return x % y; })
+  ("=", +[](integer x, integer y) -> boolean { return x == y; })    
+  ;
   {
     types::constructor a = tc->fresh();
-    tc->def("pure", tc->generalize( a >>= types::io_ctor(a) ));
+    tc->def(kw::pure, tc->generalize( a >>= types::io_ctor(a) ));
   }
   
   {

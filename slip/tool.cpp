@@ -84,11 +84,11 @@ namespace slip {
     ref<environment> ctx = make_ref<environment>();
     
     (*ctx)
-      ("+", wrap([](integer x, integer y) -> integer { return x + y; }))
-      ("-", wrap([](integer x, integer y) -> integer { return x - y; }))
-      ("*", wrap([](integer x, integer y) -> integer { return x * y; }))
-      ("/", wrap([](integer x, integer y) -> integer { return x / y; }))
-      ("%", wrap([](integer x, integer y) -> integer { return x % y; }))        
+      ("+", wrap<value>([](integer x, integer y) -> integer { return x + y; }))
+      ("-", wrap<value>([](integer x, integer y) -> integer { return x - y; }))
+      ("*", wrap<value>([](integer x, integer y) -> integer { return x * y; }))
+      ("/", wrap<value>([](integer x, integer y) -> integer { return x / y; }))
+      ("%", wrap<value>([](integer x, integer y) -> integer { return x % y; }))        
       
       ("list", list_ctor)
       ("cons", cons)      
@@ -96,7 +96,7 @@ namespace slip {
       ("repr", ostream<repr_visitor>)
       ("print", ostream<print_visitor>)
       
-      ("=", wrap([](integer x, integer y) -> boolean { return x == y; }))
+      ("=", wrap<value>([](integer x, integer y) -> boolean { return x == y; }))
       ("eq?", +[](const value* first, const value* last) -> value {
         argument_error::check(last - first, 2); 
         return first[0] == first[1];
