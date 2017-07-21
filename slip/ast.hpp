@@ -25,6 +25,7 @@ namespace slip {
 
     template<class T>
     struct literal {
+      literal(const T& value = {}) : value(value) { }
       const T value;
     };
 

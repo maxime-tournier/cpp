@@ -28,54 +28,10 @@ namespace slip {
     static void compile(vm::bytecode& res, ref<variables>& ctx, const ast::expr& e);
 
 
-    template<class T>
-    static void literal(bytecode& res, const T& value) {
-      res.push_back( opcode::PUSH );
-      res.push_back( value );
-    }
-
-   
-  
-
     static void quote(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
-      literal(res, args->head);
+      // literal(res, args->head);
     }
 
-    static void seq(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
-
-      if(!args) {
-        // compile(res, ctx, unit());
-        return;
-      }
-        
-      const variables::locals_type locals = ctx->locals;
-      
-      bool first = true;
-      for(const sexpr& arg : args) {
-        if(first) first = false;
-        else {
-          res.push_back( opcode::POP );
-        }
-
-        // compile(res, ctx, arg);
-      }
-
-
-      const integer n = ctx->locals.size() - locals.size();
-      assert(n >= 0);
-      
-      if( n ) {
-        // we need to clear scope
-
-        // TODO add an opcode for that
-        for(integer i = 0; i < n; ++i) {
-          res.push_back(opcode::SWAP);
-          res.push_back(opcode::POP);          
-        }
-
-        ctx->locals = std::move(locals);
-      }
-    }
 
     static void pure(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       // return compile(res, ctx, args->head);
@@ -114,7 +70,8 @@ namespace slip {
       template<class T>
       void operator()(const ast::literal<T>& self, vm::bytecode& res, 
                       ref<variables>& ctx) const {
-        literal(res, self.value);
+        res.push_back( opcode::PUSH );
+        res.push_back( self.value );
       }
 
 
@@ -285,6 +242,44 @@ namespace slip {
         res.label(end);
       }
 
+
+
+      void operator()(const ref<ast::sequence>& self, vm::bytecode& res, ref<variables>& ctx) {
+
+        if(!self->items) {
+          compile(res, ctx, ast::literal<unit>());
+          return;
+        }
+        
+        const variables::locals_type locals = ctx->locals;
+      
+        bool first = true;
+        for(const ast::expr& arg : self->items) {
+          if(first) first = false;
+          else {
+            res.push_back( opcode::POP );
+          }
+
+          compile(res, ctx, arg);
+        }
+
+
+        const integer n = ctx->locals.size() - locals.size();
+        assert(n >= 0);
+      
+        if( n ) {
+          // we need to clear scope
+
+          // TODO add an opcode for that
+          for(integer i = 0; i < n; ++i) {
+            res.push_back(opcode::SWAP);
+            res.push_back(opcode::POP);          
+          }
+
+          ctx->locals = std::move(locals);
+        }
+        
+      }
       
       
       template<class T>
