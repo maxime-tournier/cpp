@@ -22,6 +22,10 @@ namespace slip {
     const type io_ctor = constant("io", terms() >>= terms() );
     const type list_ctor = constant("list", terms() >>= terms() );        
 
+    const type record_ctor = constant("record", rows() >>= terms());    
+    // TODO variant ctor
+
+
     
     type type::operator()(const type& arg) const {
       return make_ref<application>(*this, arg);
@@ -77,13 +81,23 @@ namespace slip {
     }
 
 
+    // term types
     const constant unit_type("unit"),
                             boolean_type("boolean"),
                             integer_type("integer"),
                             real_type("real"),
                             string_type("string"),
                             symbol_type("symbol");
-  
+    
+
+    // row types
+    const constant empty_type("{}", rows());
+
+
+    static inline type row_extension(symbol label) {
+      return constant(label.name() + ":", terms() >>= rows() >>= rows());
+    }
+    
   
     template<> constant traits< slip::unit >::type() { return unit_type; }
     template<> constant traits< slip::boolean >::type() { return boolean_type; }      
@@ -350,7 +364,13 @@ namespace slip {
         return res;
       }
 
-      
+
+      type operator()(const ast::selection& self, state& tc) const {
+
+        const type a = tc.fresh(), r = tc.fresh(rows());
+        
+        return record_ctor( row_extension(self.label)(a)(r) );
+      }
       
       
       template<class T>
@@ -601,6 +621,14 @@ namespace slip {
 
 
 
+    scheme::scheme(const type& body): body(body) {
+      if(body.kind() != terms()) {
+        std::stringstream ss;
+        ss << "expected: " << kind( terms()) << ", got: " << body.kind();
+        throw kind_error(ss.str());
+      }
+    }
+    
 
     std::ostream& operator<<(std::ostream& out, const scheme& self) {
       ostream_map osm;

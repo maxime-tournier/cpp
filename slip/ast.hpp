@@ -23,6 +23,11 @@ namespace slip {
     struct condition;
     struct binding;
     struct record;
+
+    struct selection {
+      selection(symbol label) : label(label) { }
+      symbol label;
+    };
     
     template<class T>
     struct literal {
@@ -58,7 +63,9 @@ namespace slip {
                            ref<definition>,
                            ref<binding>,                           
                            sequence,
-                           condition > {
+                           condition,
+                           selection> {
+      
       using expr::variant::variant;
 
       using list = slip::list<expr>;
@@ -87,6 +94,7 @@ namespace slip {
     };
 
 
+
     // let bindings
     struct definition {
       definition(const symbol& id, const expr& value)
@@ -109,12 +117,6 @@ namespace slip {
     };
 
 
-    // struct sequence {
-    //   sequence(const list<expr>& items) : items(items) { }
-    //   list<expr> items;
-    // };
-
-    
     struct branch {
       branch(const expr& test, const expr& value)
         : test(test), value(value) { }
@@ -122,6 +124,7 @@ namespace slip {
       expr test, value;
     };
 
+    
     // TODO type, etc
     struct toplevel : variant<expr> {
       using toplevel::variant::variant;

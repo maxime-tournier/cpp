@@ -64,6 +64,10 @@ namespace slip {
           });
       }
 
+      sexpr operator()(const selection& self) const {
+        return symbol("@" + self.label.name());
+      }
+      
       
       template<class T>
       sexpr operator()(const T& self) const {
@@ -208,6 +212,13 @@ namespace slip {
           return literal<boolean>{false};
         }
 
+        const std::string& id = self.name();
+        
+        if(id[0] == '@') {
+          const std::string label(id.data() + 1, id.data() + id.size());
+          return selection(label);
+        }
+        
         
         return self;
       }

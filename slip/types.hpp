@@ -153,11 +153,7 @@ namespace slip {
       forall_type forall;
       const type body;
 
-      scheme(const type& body) : body(body) {
-        if(body.kind() != terms()) {
-          throw kind_error("monotype expected");
-        }
-      }
+      scheme(const type& body);
       
     };
 

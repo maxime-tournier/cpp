@@ -70,6 +70,11 @@ static int process(std::istream& in, Action action) {
   catch( slip::type_error& e ) {
     std::cerr << "type error: " << e.what() << std::endl;
   }
+
+  catch( slip::kind_error& e ) {
+    std::cerr << "kind error: " << e.what() << std::endl;
+  }
+
   
   catch( slip::error& e ) {
     std::cerr << "runtime error: " << e.what() << std::endl;
@@ -161,12 +166,11 @@ static const auto compiler = [](bool dump_bytecode) {
   return [tc, jit, dump_bytecode](sexpr&& s) mutable {
 
     const ast::toplevel node = ast::check_toplevel(s);
-    const types::scheme p = infer(*tc, node);
 
-    const vm::value v = jit->eval(node, dump_bytecode);
-    
+    const types::scheme p = infer(*tc, node);
     std::cout << " : " << p;
 
+    const vm::value v = jit->eval(node, dump_bytecode);
     std::cout << " = " << v;
     
     std::cout << std::endl;
