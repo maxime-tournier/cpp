@@ -37,6 +37,15 @@ namespace slip {
     }
     
 
+    bool constant::operator==(const constant& other) const {
+      std::clog << kind << " vs. " << other.kind << std::endl;
+      return name == other.name && kind == other.kind;
+    }
+
+    bool constant::operator<(const constant& other) const {
+      return name < other.name || (name == other.name && kind < other.kind);
+    }
+
 
     
     struct type_kind_visitor {
@@ -95,7 +104,7 @@ namespace slip {
 
 
     static inline type row_extension(symbol label) {
-      return constant(label.name() + ":", terms() >>= rows() >>= rows());
+      return constant(label.name(), terms() >>= rows() >>= rows());
     }
     
   
@@ -196,6 +205,8 @@ namespace slip {
 
 
       void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
+        debug( std::clog << "unifying: ", type(self), " with: ", rhs) << std::endl;
+        
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
         
@@ -203,7 +214,12 @@ namespace slip {
           throw occurs_error{self, rhs.get< ref<application> >()};
         }
 
-        assert(self->kind == rhs.kind());
+        if( self->kind != rhs.kind() ) {
+          std::stringstream ss;
+
+          debug(ss, "when unifying: ", self, " with: ", rhs ) << " :: " << self->kind << " vs. " << rhs.kind();
+          throw kind_error(ss.str());
+        }
         
         // debug( std::clog << "linking", type(self), rhs ) << std::endl;
         uf.link(self, rhs);
@@ -212,6 +228,7 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
+        debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;        
         if( !(lhs == rhs) ) {
           throw unification_error(lhs, rhs);
         }
@@ -219,6 +236,8 @@ namespace slip {
       
 
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
+        debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;
+        
         uf.find(lhs->arg).apply( unify_visitor(), uf.find(rhs->arg), uf);        
         uf.find(lhs->func).apply( unify_visitor(), uf.find(rhs->func), uf);
       }
@@ -226,6 +245,12 @@ namespace slip {
       
     };
 
+
+    void state::unify(const type& lhs, const type& rhs) {
+      debug( std::clog << "unifying: ", lhs, " with: ", rhs) << std::endl;
+      uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
+    }
+    
     
 
 
@@ -369,7 +394,7 @@ namespace slip {
 
         const type a = tc.fresh(), r = tc.fresh(rows());
         
-        return record_ctor( row_extension(self.label)(a)(r) );
+        return record_ctor( row_extension(self.label)(a)(r) ) >>= a;
       }
       
 
@@ -647,10 +672,6 @@ namespace slip {
 
 
 
-    void state::unify(const type& lhs, const type& rhs) {
-      // debug( std::clog << "unifying: ", lhs, rhs) << std::endl;
-      uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
-    }
 
 
     static std::ostream& debug_aux(std::ostream& out,

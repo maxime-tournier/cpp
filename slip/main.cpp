@@ -169,8 +169,9 @@ static const auto compiler = [](bool dump_bytecode) {
 
     const types::scheme p = infer(*tc, node);
     std::cout << " : " << p;
-
+    
     const vm::value v = jit->eval(node, dump_bytecode);
+    
     std::cout << " = " << v;
     
     std::cout << std::endl;

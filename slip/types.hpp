@@ -62,9 +62,9 @@ namespace slip {
       
       constructor(kind from, kind to) : from(from), to(to) { }
       
-      bool operator==(const constructor& other) const {
-        return from == other.from && to == other.to;
-      }
+      // bool operator==(const constructor& other) const {
+      //   return from == other.from && to == other.to;
+      // }
       
     };
 
@@ -83,14 +83,9 @@ namespace slip {
         : name(name),
           kind(kind) { }
 
-      bool operator==(const constant& other) const {
-        return name == other.name && kind == other.kind;
-      }
-
-      bool operator<(const constant& other) const {
-        return name < other.name || (name == other.name && kind < other.kind);
-      }
-
+      bool operator==(const constant& other) const;
+      
+      bool operator<(const constant& other) const;
       
     };
 
