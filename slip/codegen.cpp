@@ -199,7 +199,7 @@ namespace slip {
 
 
 
-      void operator()(const ref<ast::condition>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::condition& self, vm::bytecode& res, ref<variables>& ctx) const {
 
         const integer id = unique();
 
@@ -212,7 +212,7 @@ namespace slip {
 
         // compile tests
         integer i = 0;
-        for(const ast::condition::branch& b : self->branches) {
+        for(const ast::branch& b : self.branches()) {
           
           const label then = "cond-" + std::to_string(id) +
             "-then-" + std::to_string(i);
@@ -244,9 +244,9 @@ namespace slip {
 
 
 
-      void operator()(const ref<ast::sequence>& self, vm::bytecode& res, ref<variables>& ctx) {
-
-        if(!self->items) {
+      void operator()(const ast::sequence& self, vm::bytecode& res, ref<variables>& ctx) {
+        
+        if(!self) {
           compile(res, ctx, ast::literal<unit>());
           return;
         }
@@ -254,7 +254,8 @@ namespace slip {
         const variables::locals_type locals = ctx->locals;
       
         bool first = true;
-        for(const ast::expr& arg : self->items) {
+
+        for(const ast::expr& arg : self.items()) {
           if(first) first = false;
           else {
             res.push_back( opcode::POP );

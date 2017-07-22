@@ -22,13 +22,30 @@ namespace slip {
     struct sequence;
     struct condition;
     struct binding;
-
+    struct record;
+    
     template<class T>
     struct literal {
       literal(const T& value = {}) : value(value) { }
       const T value;
     };
 
+
+    struct sequence : list<expr> {
+      using list<expr>::list;
+
+      const list<expr>& items() const { return *this; }
+    };
+
+
+    struct branch;
+
+    struct condition : list<branch> {
+      using list<branch>::list;
+
+      const list<branch>& branches() const { return *this; }      
+    };
+    
 
     struct expr : variant< literal<unit>,
                            literal<boolean>,
@@ -40,8 +57,8 @@ namespace slip {
                            ref<application>,
                            ref<definition>,
                            ref<binding>,                           
-                           ref<sequence>,
-                           ref<condition> > {
+                           sequence,
+                           condition > {
       using expr::variant::variant;
 
       using list = slip::list<expr>;
@@ -91,28 +108,19 @@ namespace slip {
       const expr value;
     };
 
-    
-    struct sequence {
-      sequence(const list<expr>& items) : items(items) { }
-      list<expr> items;
-    };
+
+    // struct sequence {
+    //   sequence(const list<expr>& items) : items(items) { }
+    //   list<expr> items;
+    // };
 
     
-    struct condition {
+    struct branch {
+      branch(const expr& test, const expr& value)
+        : test(test), value(value) { }
       
-      struct branch {
-        branch(const expr& test, const expr& value)
-          : test(test), value(value) { }
-
-        expr test, value;
-      };
-
-      condition(const list<branch>& branches)
-        : branches(branches) { }
-      
-      list<branch> branches;
+      expr test, value;
     };
-
 
     // TODO type, etc
     struct toplevel : variant<expr> {

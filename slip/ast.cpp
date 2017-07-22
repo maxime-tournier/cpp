@@ -45,18 +45,16 @@ namespace slip {
       }
 
 
-      sexpr operator()(const ref<sequence>& self) const {
-        return kw::seq
-          >>= map(self->items, [](const expr& e) {
-              return repr(e);
-            });
+      sexpr operator()(const sequence& self) const {
+        return kw::seq >>= map(self, [](const expr& e) {
+            return repr(e);
+          });
       }
 
-      sexpr operator()(const ref<condition>& self) const {
-        return kw::cond
-          >>= map(self->branches, [](const condition::branch& b) -> sexpr {
-              return repr(b.test) >>= repr(b.value) >>= sexpr::list();
-            });
+      sexpr operator()(const condition& self) const {
+        return kw::cond >>= map(self.branches(), [](const branch& b) -> sexpr {
+            return repr(b.test) >>= repr(b.value) >>= sexpr::list();
+          });
       }
 
 
@@ -161,9 +159,11 @@ namespace slip {
 
     
     static expr check_sequence(const sexpr::list& items) {
-      return make_ref<ast::sequence>(map(items, [](const sexpr& e) {
-            return check_expr(e);
-          }));
+      const ast::sequence res = map(items, [](const sexpr& e) {
+          return check_expr(e);
+        });
+
+      return res;
     }
 
     static expr check_condition(const sexpr::list& items) {
@@ -171,15 +171,16 @@ namespace slip {
       
       try{
 
-        return make_ref<condition>(map(items, [](const sexpr& e) {
+        const condition res = map(items, [](const sexpr& e) {
               if(!e.is<sexpr::list>()) throw fail();
               const sexpr::list& lst = e.get<sexpr::list>();
-
+              
               if(size(lst) != 2) throw fail();
 
-              return condition::branch(check_expr(lst->head),
-                                       check_expr(lst->tail->head));
-            }));
+              return branch(check_expr(lst->head), check_expr(lst->tail->head));
+          });
+
+        return res;
         
       } catch( fail ) {
         throw syntax_error("(cond (`expr` `expr`)...)");

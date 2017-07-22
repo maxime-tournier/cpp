@@ -277,10 +277,10 @@ namespace slip {
       }
 
 
-      constructor operator()(const ref<ast::condition>& self, state& tc) const {
+      constructor operator()(const ast::condition& self, state& tc) const {
         const constructor result = tc.fresh();
 
-        for(const ast::condition::branch& b : self->branches) {
+        for(const ast::branch& b : self.branches() ) {
 
           const constructor test = infer(tc, b.test);
           tc.unify(boolean_type, test);
@@ -331,10 +331,10 @@ namespace slip {
       }
       
 
-      constructor operator()(const ref<ast::sequence>& self, state& tc) const {
+      constructor operator()(const ast::sequence& self, state& tc) const {
         constructor res = io_ctor( unit_type );
 
-        for(const ast::expr& e : self->items) {
+        for(const ast::expr& e : self.items() ) {
 
           res = io_ctor( tc.fresh() );
           tc.unify( res, infer(tc, e));          

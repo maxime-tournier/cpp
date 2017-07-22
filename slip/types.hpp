@@ -37,7 +37,6 @@ namespace slip {
       
     };
 
-
     struct function;
     
     struct kind : variant<monotypes, ref<function> > {
