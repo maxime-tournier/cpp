@@ -14,13 +14,14 @@ namespace slip {
     template<class ... C>
     static std::ostream& debug(std::ostream& out, C&& ... c);
     
-    ref<function> operator>>=(const kind& lhs, const kind& rhs) {
-      return make_ref<function>(lhs, rhs);
+    ref<constructor> operator>>=(const kind& lhs, const kind& rhs) {
+      return make_ref<constructor>(lhs, rhs);
     }
 
     const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
     const type io_ctor = constant("io", terms() >>= terms() );
     const type list_ctor = constant("list", terms() >>= terms() );        
+
     
     type type::operator()(const type& arg) const {
       return make_ref<application>(*this, arg);
@@ -34,19 +35,19 @@ namespace slip {
 
 
     
-    struct kind_visitor {
+    struct type_kind_visitor {
+      
       kind operator()(const constant& self) const { return self.kind; }
       kind operator()(const ref<variable>& self) const { return self->kind; }    
-
       kind operator()(const ref<application>& self) const  {
-        return self->func.kind().get< ref<function> >()->to;
+        return self->func.kind().get< ref<constructor> >()->to;
       }  
     
     };
   
 
     struct kind type::kind() const {
-      return map<struct kind>(kind_visitor());
+      return map<struct kind>(type_kind_visitor());
     }
 
 
@@ -56,7 +57,13 @@ namespace slip {
         out << '*';
       }
 
-      void operator()(const ref<function>& self, std::ostream& out) const {
+      
+      void operator()(rows, std::ostream& out) const {
+        out << "{}";
+      }
+      
+
+      void operator()(const ref<constructor>& self, std::ostream& out) const {
         // TODO parentheses
         out << self->from << " -> " << self->to << std::endl;
       }

@@ -22,26 +22,31 @@ namespace slip {
   
   namespace types {
 
+    ////////////////////
     // kinds
     struct kind;
 
-    // the monotypes kind
+    // the kind of terms
     struct terms {
-      bool operator==(const terms& other) const {
-        return true;
-      }
-
-      bool operator<(const terms& other) const {
-        return false;
-      }
-      
+      bool operator==(const terms& other) const { return true; }
+      bool operator<(const terms& other) const { return false; }
     };
 
-    struct function;
+    // the kind of type constructors
+    struct constructor;
+
+
+    // the kind of rows
+    struct rows {
+      bool operator==(const rows& other) const { return true; }
+      bool operator<(const rows& other) const { return false; }
+    };
+                
     
-    struct kind : variant<terms, ref<function> > {
+    
+    struct kind : variant<terms, ref<constructor>, rows > {
       using kind::variant::variant;
-    
+      
       struct error : slip::error {
         using slip::error::error;
       };
@@ -51,22 +56,23 @@ namespace slip {
     std::ostream& operator<<(std::ostream& out, const kind& self);
     
 
-    // function kind
-    struct function {
+    // kind of type constructors
+    struct constructor {
       kind from, to;
-
-      function(kind from, kind to) : from(from), to(to) { }
       
-      bool operator==(const function& other) const {
+      constructor(kind from, kind to) : from(from), to(to) { }
+      
+      bool operator==(const constructor& other) const {
         return from == other.from && to == other.to;
       }
-
+      
     };
 
-    ref<function> operator>>=(const kind& lhs, const kind& rhs);
+    ref<constructor> operator>>=(const kind& lhs, const kind& rhs);
     
 
-    // type types
+    ////////////////////    
+    // types
     struct type;
 
     struct constant {
@@ -89,8 +95,6 @@ namespace slip {
     };
 
 
-    extern const type func_ctor, io_ctor, list_ctor, ref_ctor;
-    
     
     struct variable {
       struct kind kind;
@@ -104,9 +108,7 @@ namespace slip {
     };
 
 
-
     
-
     
     struct application;
 
@@ -116,7 +118,7 @@ namespace slip {
     
       struct kind kind() const;
 
-      // apply a type constructor of the function kind
+      // apply a type constructor of the constructor kind
       type operator()(const type& arg) const;
     };
 
@@ -129,11 +131,11 @@ namespace slip {
         : func(func),
           arg(arg) {
 
-        if(!func.kind().is< ref<function>>()) {
-          throw error("applied type constructor must have function kind");
+        if(!func.kind().is< ref<constructor>>()) {
+          throw error("applied type constructor must have constructor kind");
         }
       
-        if(func.kind().get< ref<function> >()->from != arg.kind() ) {
+        if(func.kind().get< ref<constructor> >()->from != arg.kind() ) {
           throw error("kind error");
         }
       }
@@ -144,9 +146,8 @@ namespace slip {
       return make_ref<application>(f(self->func), f(self->arg));
     }
     
-    
-    type operator>>=(const type& lhs, const type& rhs);
-    
+
+    // type schemes
     struct scheme {
       using forall_type = std::vector< ref<variable> >;
       forall_type forall;
@@ -157,12 +158,22 @@ namespace slip {
           throw kind_error("monotype expected");
         }
       }
+      
     };
-
 
     std::ostream& operator<<(std::ostream& out, const scheme& self);
     
-  
+    
+
+    // some type constructors
+    extern const type func_ctor, io_ctor, list_ctor, ref_ctor;
+
+    // easily construct function types
+    type operator>>=(const type& lhs, const type& rhs);
+    
+
+    
+    // typing environment
     struct environment : context< environment, scheme > {
       std::size_t depth;
 
@@ -176,7 +187,7 @@ namespace slip {
 
 
 
-  
+    // inference state monad
     class state {
       using env_type = environment;
       ref<env_type> env;
@@ -202,9 +213,10 @@ namespace slip {
       ref<variable> fresh(kind k = terms()) const;
     };
 
-
     scheme infer(state& self, const ast::toplevel& node);    
 
+
+    // some traits
     template<class T>
     struct traits {
       static constant type();
