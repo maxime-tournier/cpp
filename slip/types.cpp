@@ -91,7 +91,7 @@ namespace slip {
     
 
     // row types
-    const constant empty_type("{}", rows());
+    const type empty_row_type = constant("{}", rows());
 
 
     static inline type row_extension(symbol label) {
@@ -373,6 +373,15 @@ namespace slip {
       }
       
 
+
+      type operator()(const ast::record& self, state& tc) const {
+
+        return record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) -> type {
+              return row_extension(lhs.label)(infer(tc, lhs.value))(rhs);
+            }));
+        
+      }
+      
       type operator()(const ast::expr& self, state& tc) const {
         std::stringstream ss;
         ss << "type inference unimplemented for " << self;
