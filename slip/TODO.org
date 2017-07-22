@@ -1,11 +1,25 @@
 
+* needed
+
+- currying
+
+  - store actual argc alongside definition + rewrite program during typechecking
+
 - datatypes + pattern matching
+
+* planned
+
+- records + row polymorphism
+  - kinding system ok
+
 - typeclasses
+  - higher-order polymorphism ok
+  - needs records first
 
-- records/row-polymorphism?
-- modules?
-- lifetime inference?
+* lolwat
 
+- modules
+- lifetime inference/ownership tracing
 - macros?
 
 
