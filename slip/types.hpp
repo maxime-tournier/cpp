@@ -66,8 +66,8 @@ namespace slip {
     ref<function> operator>>=(const kind& lhs, const kind& rhs);
     
 
-    // type constructors
-    struct constructor;
+    // type types
+    struct type;
 
     struct constant {
       symbol name;
@@ -89,7 +89,7 @@ namespace slip {
     };
 
 
-    extern const constructor func_ctor, io_ctor, list_ctor, ref_ctor;
+    extern const type func_ctor, io_ctor, list_ctor, ref_ctor;
     
     
     struct variable {
@@ -110,22 +110,22 @@ namespace slip {
     
     struct application;
 
-    struct constructor : variant< constant, ref<variable>, ref<application> > {
+    struct type : variant< constant, ref<variable>, ref<application> > {
 
-      using constructor::variant::variant;
+      using type::variant::variant;
     
       struct kind kind() const;
 
       // apply a type constructor of the function kind
-      constructor operator()(const constructor& arg) const;
+      type operator()(const type& arg) const;
     };
 
     // TODO turn this into a functor goddamn it
     struct application {
-      constructor func;
-      constructor arg;
+      type func;
+      type arg;
     
-      application(constructor func, constructor arg)
+      application(type func, type arg)
         : func(func),
           arg(arg) {
 
@@ -145,14 +145,14 @@ namespace slip {
     }
     
     
-    constructor operator>>=(const constructor& lhs, const constructor& rhs);
+    type operator>>=(const type& lhs, const type& rhs);
     
     struct scheme {
       using forall_type = std::vector< ref<variable> >;
       forall_type forall;
-      const constructor body;
+      const type body;
 
-      scheme(const constructor& body) : body(body) {
+      scheme(const type& body) : body(body) {
         if(body.kind() != terms()) {
           throw kind_error("monotype expected");
         }
@@ -181,17 +181,17 @@ namespace slip {
       using env_type = environment;
       ref<env_type> env;
 
-      using uf_type = union_find<constructor>;
+      using uf_type = union_find<type>;
       ref< uf_type > uf;
     
     public:
       state(ref<env_type> env = make_ref<env_type>(),
             ref<uf_type> uf = make_ref<uf_type>());
     
-      scheme generalize(const constructor& t) const;
-      constructor instantiate(const scheme& p) const;
+      scheme generalize(const type& t) const;
+      type instantiate(const scheme& p) const;
 
-      void unify(const constructor& lhs, const constructor& rhs);    
+      void unify(const type& lhs, const type& rhs);    
     
       state scope() const;
 

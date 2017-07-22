@@ -103,11 +103,11 @@ struct binder {
 
 
   template<class Ret, class ... Args>
-  static slip::types::constructor signature( Ret(*f)(Args...) ) {
+  static slip::types::type signature( Ret(*f)(Args...) ) {
     using namespace slip;
     using namespace types;    
     
-	using ctor = constructor;
+	using ctor = type;
 	const ctor expand[] = { traits<Args>::type()... };
   
 	const list<ctor> args = make_list<ctor>(expand, expand + sizeof...(Args));
@@ -149,12 +149,12 @@ static const auto compiler = [](bool dump_bytecode) {
   ;
   
   {
-    types::constructor a = tc->fresh();
+    types::type a = tc->fresh();
     tc->def(kw::pure, tc->generalize( a >>= types::io_ctor(a) ));
   }
   
   {
-    types::constructor a = tc->fresh();
+    types::type a = tc->fresh();
     tc->def("nil", tc->generalize(types::list_ctor(a)));
   } 
   

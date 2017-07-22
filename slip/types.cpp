@@ -18,15 +18,15 @@ namespace slip {
       return make_ref<function>(lhs, rhs);
     }
 
-    const constructor func_ctor = constant("->", terms() >>= terms() >>= terms() );
-    const constructor io_ctor = constant("io", terms() >>= terms() );
-    const constructor list_ctor = constant("list", terms() >>= terms() );        
+    const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
+    const type io_ctor = constant("io", terms() >>= terms() );
+    const type list_ctor = constant("list", terms() >>= terms() );        
     
-    constructor constructor::operator()(const constructor& arg) const {
+    type type::operator()(const type& arg) const {
       return make_ref<application>(*this, arg);
     }
     
-    constructor operator>>=(const constructor& lhs, const constructor& rhs) {
+    type operator>>=(const type& lhs, const type& rhs) {
       return (func_ctor(lhs))(rhs);
 
     }
@@ -45,7 +45,7 @@ namespace slip {
     };
   
 
-    struct kind constructor::kind() const {
+    struct kind type::kind() const {
       return map<struct kind>(kind_visitor());
     }
 
@@ -71,11 +71,11 @@ namespace slip {
 
 
     const constant unit_type("unit"),
-      boolean_type("boolean"),
-      integer_type("integer"),
-      real_type("real"),
-      string_type("string"),
-      symbol_type("symbol");
+                            boolean_type("boolean"),
+                            integer_type("integer"),
+                            real_type("real"),
+                            string_type("string"),
+                            symbol_type("symbol");
   
   
     template<> constant traits< slip::unit >::type() { return unit_type; }
@@ -95,20 +95,20 @@ namespace slip {
     }
 
     
-    static constructor infer(state& self, const ast::expr& node);
+    static type infer(state& self, const ast::expr& node);
     
 
 
     // unification
     struct unification_error {
-      unification_error(constructor lhs, constructor rhs) : lhs(lhs), rhs(rhs) { }
-      const constructor lhs, rhs;
+      unification_error(type lhs, type rhs) : lhs(lhs), rhs(rhs) { }
+      const type lhs, rhs;
     };
 
     
     struct occurs_error {
       ref<variable> var;
-      constructor type;         // TODO do we want monotype here?
+      struct type type;         // TODO do we want monotype here?
     };
 
 
@@ -124,10 +124,10 @@ namespace slip {
         // TODO not sure if this should be done here
         
         if(self->depth > var->depth) {
-          // we are trying to unify var with a type constructor containing self,
+          // we are trying to unify var with a type type containing self,
           // but var has smaller depth: we need to "raise" self to var's depth
           // so that self generalizes just like var
-          const constructor raised = make_ref<variable>(var->kind, var->depth);
+          const type raised = make_ref<variable>(var->kind, var->depth);
 
           assert(uf.find(self).kind() == raised.kind());
           uf.link(uf.find(self), raised);
@@ -163,7 +163,7 @@ namespace slip {
         : try_reverse(try_reverse) { }
       
       template<class T>
-      void operator()(const T& self, const constructor& rhs, UF& uf) const {
+      void operator()(const T& self, const type& rhs, UF& uf) const {
         
         // double dispatch
         if( try_reverse ) {
@@ -174,17 +174,17 @@ namespace slip {
       }
 
 
-      void operator()(const ref<variable>& self, const constructor& rhs, UF& uf) const {
+      void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
         
-        if( constructor(self) != rhs && rhs.map<bool>(occurs_check<UF>(), self, uf)) {
+        if( type(self) != rhs && rhs.map<bool>(occurs_check<UF>(), self, uf)) {
           throw occurs_error{self, rhs.get< ref<application> >()};
         }
 
         assert(self->kind == rhs.kind());
         
-        // debug( std::clog << "linking", constructor(self), rhs ) << std::endl;
+        // debug( std::clog << "linking", type(self), rhs ) << std::endl;
         uf.link(self, rhs);
         
       }
@@ -214,18 +214,18 @@ namespace slip {
 
       
       template<class T>
-      constructor operator()(const ast::literal<T>& self, state& tc) const {
+      type operator()(const ast::literal<T>& self, state& tc) const {
         return traits<T>::type();
       }
 
       
-      constructor operator()(const symbol& self, state& tc) const {
+      type operator()(const symbol& self, state& tc) const {
         const scheme& p = tc.find(self);
         return tc.instantiate(p);
       }
 
       
-      constructor operator()(const ref<ast::lambda>& self, state& tc) const {
+      type operator()(const ref<ast::lambda>& self, state& tc) const {
 
         state sub = tc.scope();
 
@@ -238,34 +238,34 @@ namespace slip {
           });
         
         // infer body type in subcontext
-        const constructor body_type = infer(sub, self->body);
+        const type body_type = infer(sub, self->body);
 
         // return complete application type
         return foldr(body_type, args, [](const ref<variable>& lhs,
-                                         const constructor& rhs) -> constructor {
-            return lhs >>= rhs;
-          });
+                                         const type& rhs) -> type {
+                       return lhs >>= rhs;
+                     });
         
       }
 
 
 
-      constructor operator()(const ref<ast::application>& self, state& tc) const {
+      type operator()(const ref<ast::application>& self, state& tc) const {
 
-        const constructor func = infer(tc, self->func);
+        const type func = infer(tc, self->func);
 
         // infer arg types
-        const list<constructor> args = map(self->args, [&](const ast::expr& e) {
+        const list<type> args = map(self->args, [&](const ast::expr& e) {
             return infer(tc, e);
           });
 
         // construct function type
-        const constructor result = tc.fresh();
+        const type result = tc.fresh();
         
-        const constructor sig = foldr(result, args, [&](const constructor& lhs,
-                                                     const constructor& rhs) {
-                                     return lhs >>= rhs;
-                                   });
+        const type sig = foldr(result, args, [&](const type& lhs,
+                                                 const type& rhs) {
+                                 return lhs >>= rhs;
+                               });
 
         try{
           tc.unify(func, sig);
@@ -277,15 +277,15 @@ namespace slip {
       }
 
 
-      constructor operator()(const ast::condition& self, state& tc) const {
-        const constructor result = tc.fresh();
+      type operator()(const ast::condition& self, state& tc) const {
+        const type result = tc.fresh();
 
         for(const ast::branch& b : self.branches() ) {
 
-          const constructor test = infer(tc, b.test);
+          const type test = infer(tc, b.test);
           tc.unify(boolean_type, test);
           
-          const constructor value = infer(tc, b.value);
+          const type value = infer(tc, b.value);
           tc.unify(value, result);
         };
 
@@ -294,9 +294,9 @@ namespace slip {
 
 
       // let-binding
-      constructor operator()(const ref<ast::definition>& self, state& tc) const {
+      type operator()(const ref<ast::definition>& self, state& tc) const {
 
-        const constructor value = tc.fresh();
+        const type value = tc.fresh();
         
         state sub = tc.scope();
 
@@ -313,9 +313,9 @@ namespace slip {
 
 
       // monadic binding
-      constructor operator()(const ref<ast::binding>& self, state& tc) const {
+      type operator()(const ref<ast::binding>& self, state& tc) const {
 
-        const constructor value = tc.fresh();
+        const type value = tc.fresh();
 
         // note: value is bound in sub-context (monomorphic)
         tc = tc.scope();
@@ -331,8 +331,8 @@ namespace slip {
       }
       
 
-      constructor operator()(const ast::sequence& self, state& tc) const {
-        constructor res = io_ctor( unit_type );
+      type operator()(const ast::sequence& self, state& tc) const {
+        type res = io_ctor( unit_type );
 
         for(const ast::expr& e : self.items() ) {
 
@@ -347,16 +347,16 @@ namespace slip {
       
       
       template<class T>
-      constructor operator()(const T& self, state& tc) const {
+      type operator()(const T& self, state& tc) const {
         throw error("infer unimplemented");
       }
       
     };
 
 
-    static constructor infer(state& self, const ast::expr& node) {
+    static type infer(state& self, const ast::expr& node) {
       try{
-        return node.map<constructor>(expr_visitor(), self);
+        return node.map<type>(expr_visitor(), self);
       } catch( unification_error& e )  {
         std::stringstream ss;
 
@@ -373,29 +373,29 @@ namespace slip {
     struct nice {
 
       template<class UF>
-      constructor operator()(const constant& self, UF& uf) const {
+      type operator()(const constant& self, UF& uf) const {
         return self;
       }
 
 
       template<class UF>
-      constructor operator()(const ref<variable>& self, UF& uf) const {
+      type operator()(const ref<variable>& self, UF& uf) const {
 
-        const constructor res = uf->find(self);
+        const type res = uf->find(self);
         
-        if(res == constructor(self)) {
-          // debug(std::clog << "nice: ", constructor(self), res) << std::endl;          
+        if(res == type(self)) {
+          // debug(std::clog << "nice: ", type(self), res) << std::endl;          
           return res;
         }
         
-        return res.map<constructor>(nice(), uf);
+        return res.map<type>(nice(), uf);
       }
 
 
       template<class UF>
-      constructor operator()(const ref<application>& self, UF& uf) const {
-        return map(self, [&](const constructor& c) {
-            return c.map<constructor>(nice(), uf);
+      type operator()(const ref<application>& self, UF& uf) const {
+        return map(self, [&](const type& c) {
+            return c.map<type>(nice(), uf);
           });
       }
       
@@ -408,19 +408,19 @@ namespace slip {
     struct instantiate_visitor {
       using map_type = std::map< ref<variable>, ref<variable> >;
       
-      constructor operator()(const constant& self, const map_type& m) const {
+      type operator()(const constant& self, const map_type& m) const {
         return self;
       }
 
-      constructor operator()(const ref<variable>& self, const map_type& m) const {
+      type operator()(const ref<variable>& self, const map_type& m) const {
         auto it = m.find(self);
         if(it == m.end()) return self;
         return it->second;
       }
 
-      constructor operator()(const ref<application>& self, const map_type& m) const {
-        return map(self, [&](const constructor& c) {
-            return c.map<constructor>(instantiate_visitor(), m);
+      type operator()(const ref<application>& self, const map_type& m) const {
+        return map(self, [&](const type& c) {
+            return c.map<type>(instantiate_visitor(), m);
           });
       }
       
@@ -428,7 +428,7 @@ namespace slip {
     
 
 
-    constructor state::instantiate(const scheme& poly) const {
+    type state::instantiate(const scheme& poly) const {
       instantiate_visitor::map_type map;
 
       // associate each bound variable to a fresh one
@@ -437,7 +437,7 @@ namespace slip {
           return std::make_pair(v, fresh(v->kind));
         });
       
-      return poly.body.map<constructor>(instantiate_visitor(), map);
+      return poly.body.map<type>(instantiate_visitor(), map);
     }
 
 
@@ -499,7 +499,7 @@ namespace slip {
     };
 
 
-    static vars_visitor::result_type vars(const constructor& self) {
+    static vars_visitor::result_type vars(const type& self) {
       vars_visitor::result_type res;
       self.apply(vars_visitor(), res);
       return res;
@@ -508,9 +508,9 @@ namespace slip {
     
 
     // generalization
-    scheme state::generalize(const constructor& mono) const {
+    scheme state::generalize(const type& mono) const {
       // debug(std::clog << "gen: ", mono) << std::endl;
-      scheme res(mono.map<constructor>(nice(), uf));
+      scheme res(mono.map<type>(nice(), uf));
 
       const auto all = vars(res.body);
     
@@ -527,7 +527,7 @@ namespace slip {
   
   
     scheme infer(state& self, const ast::toplevel& node) {
-      const constructor res = infer(self, node.get<ast::expr>());
+      const type res = infer(self, node.get<ast::expr>());
       return self.generalize(res);
     }
 
@@ -602,14 +602,14 @@ namespace slip {
 
 
 
-    void state::unify(const constructor& lhs, const constructor& rhs) {
+    void state::unify(const type& lhs, const type& rhs) {
       // debug( std::clog << "unifying: ", lhs, rhs) << std::endl;
       uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
     }
 
 
     static std::ostream& debug_aux(std::ostream& out,
-                                   const constructor& self,
+                                   const type& self,
                                    ostream_map& osm) {
       self.apply(ostream_visitor(), out, osm);
       return out;
