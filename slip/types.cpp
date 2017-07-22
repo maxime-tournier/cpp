@@ -372,10 +372,11 @@ namespace slip {
         return record_ctor( row_extension(self.label)(a)(r) );
       }
       
-      
-      template<class T>
-      type operator()(const T& self, state& tc) const {
-        throw error("infer unimplemented");
+
+      type operator()(const ast::expr& self, state& tc) const {
+        std::stringstream ss;
+        ss << "type inference unimplemented for " << self;
+        throw error(ss.str());
       }
       
     };

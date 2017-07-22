@@ -67,11 +67,16 @@ namespace slip {
       sexpr operator()(const selection& self) const {
         return symbol("@" + self.label.name());
       }
-      
+
+      sexpr operator()(const record& self) const {
+        return symbol(kw::record) >>= map(self, [](const row& r) -> sexpr {
+            return r.label >>= repr(r.value) >>= sexpr::list();
+          });
+      }
       
       template<class T>
       sexpr operator()(const T& self) const {
-        throw error("unimplemented");
+        throw error("repr unimplemented");
       }
       
     };
