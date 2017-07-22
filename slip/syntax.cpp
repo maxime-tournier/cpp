@@ -17,7 +17,8 @@ namespace slip {
       quasiquote = "quasiquote",
       unquote = "unquote";
 
-
+    const symbol record = "record";
+    
     const symbol type = "type";
     
     const symbol var = "var", pure = "pure", run = "run";

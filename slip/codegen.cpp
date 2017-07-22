@@ -283,8 +283,7 @@ namespace slip {
       }
       
       
-      template<class T>
-      void operator()(const T& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::expr& self, vm::bytecode& res, ref<variables>& ctx) const {
         std::stringstream ss;
         ss << self;
         throw error("compile: unimplemented: " + ss.str());

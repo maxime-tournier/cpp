@@ -18,6 +18,8 @@ namespace slip {
   namespace kw {
     const extern symbol def, lambda, seq, cond, quote, unquote, quasiquote;
 
+    const extern symbol record;
+    
     const extern symbol type;
     const extern symbol var, pure, run;
     const extern symbol ref, get, set;

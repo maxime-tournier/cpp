@@ -22,8 +22,7 @@ namespace slip {
     struct sequence;
     struct condition;
     struct binding;
-    struct record;
-
+    
     struct selection {
       selection(symbol label) : label(label) { }
       symbol label;
@@ -50,6 +49,15 @@ namespace slip {
 
       const list<branch>& branches() const { return *this; }      
     };
+
+
+    struct row;
+
+    struct record : list<row> {
+      using list<row>::list;
+
+      const list<row>& rows() const { return *this; }
+    };
     
 
     struct expr : variant< literal<unit>,
@@ -64,7 +72,8 @@ namespace slip {
                            ref<binding>,                           
                            sequence,
                            condition,
-                           selection> {
+                           selection,
+                           record> {
       
       using expr::variant::variant;
 
@@ -124,6 +133,14 @@ namespace slip {
       expr test, value;
     };
 
+    struct row {
+      row(const symbol& label, const expr& value)
+        : label(label), value(value) { }
+      
+      symbol label;
+      expr value;
+    };
+    
     
     // TODO type, etc
     struct toplevel : variant<expr> {
@@ -133,7 +150,6 @@ namespace slip {
     std::ostream& operator<<(std::ostream& out, const toplevel& self);    
     
     sexpr repr(const toplevel& self);
-
     
     toplevel check_toplevel(const sexpr& e);
     

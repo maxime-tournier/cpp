@@ -97,7 +97,8 @@ namespace slip {
                     check_definition,
                     check_condition,
                     check_sequence,
-                    check_binding;
+                    check_binding,
+                    check_record;
     
     static expr check_binding(const sexpr::list&);
 
@@ -107,6 +108,7 @@ namespace slip {
       {kw::cond, check_condition},
       {kw::var, check_binding},
       {kw::seq, check_sequence},
+      {kw::record, check_record},      
     };
     
 
@@ -193,7 +195,28 @@ namespace slip {
     }
 
     
-    
+
+    static expr check_record(const sexpr::list& items) {
+      struct fail { };
+      try{ 
+        const record result = map(items, [](const sexpr& e) -> row {
+            
+
+            
+            if(!e.is<sexpr::list>() ) throw fail();
+            const sexpr::list& lst = e.get<sexpr::list>();
+            
+            if(size(lst) != 2) throw fail();
+            if(!lst->head.is<symbol>()) throw fail();
+            
+            return row(lst->head.get<symbol>(), check_expr(lst->tail->head));
+          });
+        
+        return result;
+      } catch (fail ) {
+        throw syntax_error("(record (`symbol` `expr`)...)");
+      }
+    };
     
     
     struct expr_visitor {
