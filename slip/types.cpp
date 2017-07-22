@@ -18,9 +18,9 @@ namespace slip {
       return make_ref<function>(lhs, rhs);
     }
 
-    const constructor func_ctor = constant("->", monotypes() >>= monotypes() >>= monotypes() );
-    const constructor io_ctor = constant("io", monotypes() >>= monotypes() );
-    const constructor list_ctor = constant("list", monotypes() >>= monotypes() );        
+    const constructor func_ctor = constant("->", terms() >>= terms() >>= terms() );
+    const constructor io_ctor = constant("io", terms() >>= terms() );
+    const constructor list_ctor = constant("list", terms() >>= terms() );        
     
     constructor constructor::operator()(const constructor& arg) const {
       return make_ref<application>(*this, arg);
@@ -52,7 +52,7 @@ namespace slip {
 
     struct kind_ostream {
 
-      void operator()(monotypes, std::ostream& out) const {
+      void operator()(terms, std::ostream& out) const {
         out << '*';
       }
 
@@ -70,12 +70,12 @@ namespace slip {
     }
 
 
-    const constant unit_type("unit", monotypes()),
-      boolean_type("boolean", monotypes()),
-      integer_type("integer", monotypes()),
-      real_type("real", monotypes()),
-      string_type("string", monotypes()),
-      symbol_type("symbol", monotypes());
+    const constant unit_type("unit"),
+      boolean_type("boolean"),
+      integer_type("integer"),
+      real_type("real"),
+      string_type("string"),
+      symbol_type("symbol");
   
   
     template<> constant traits< slip::unit >::type() { return unit_type; }

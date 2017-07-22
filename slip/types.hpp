@@ -26,12 +26,12 @@ namespace slip {
     struct kind;
 
     // the monotypes kind
-    struct monotypes {
-      bool operator==(const monotypes& other) const {
+    struct terms {
+      bool operator==(const terms& other) const {
         return true;
       }
 
-      bool operator<(const monotypes& other) const {
+      bool operator<(const terms& other) const {
         return false;
       }
       
@@ -39,7 +39,7 @@ namespace slip {
 
     struct function;
     
-    struct kind : variant<monotypes, ref<function> > {
+    struct kind : variant<terms, ref<function> > {
       using kind::variant::variant;
     
       struct error : slip::error {
@@ -73,7 +73,7 @@ namespace slip {
       symbol name;
       struct kind kind;
 
-      constant(symbol name, struct kind kind)
+      constant(symbol name, struct kind kind = terms())
         : name(name),
           kind(kind) { }
 
@@ -153,7 +153,7 @@ namespace slip {
       const constructor body;
 
       scheme(const constructor& body) : body(body) {
-        if(body.kind() != monotypes()) {
+        if(body.kind() != terms()) {
           throw kind_error("monotype expected");
         }
       }
@@ -199,7 +199,7 @@ namespace slip {
 
       const scheme& find(symbol id) const;
 
-      ref<variable> fresh(kind k = monotypes()) const;
+      ref<variable> fresh(kind k = terms()) const;
     };
 
 
