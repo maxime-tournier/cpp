@@ -345,9 +345,10 @@ namespace slip {
             const std::size_t min = stack.size() - c;
             const value* first = &stack[ min ];
             const value* last = first + c;
-            
-            ref<closure> res = make_closure(n, addr, first, last);
 
+            // TODO we should move from the stack            
+            ref<closure> res = make_closure(n, addr, first, last);
+            
             stack.resize(min + 1, unit());
             stack.back() = std::move(res);
             break;
@@ -365,12 +366,13 @@ namespace slip {
             const integer& magic = code[++ip].get<integer>();
             // assert(n <= integer(stack.size()));
         
-            // build closure
+            // build record value
             const std::size_t min = stack.size() - size;
             
             const value* first = &stack[ min ];
             const value* last = first + size;
-            
+
+            // TODO we should move from the stack
             ref<record> res = make_record(first, last);
             res->magic = magic;
             

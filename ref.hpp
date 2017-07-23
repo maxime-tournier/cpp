@@ -11,7 +11,9 @@ namespace detail {
     std::size_t rc = 0;
 
     friend void incref(rc_base* self) { self->rc++; }
-    friend void decref(rc_base* self) { if( --self->rc) delete self; }
+    friend void decref(rc_base* self) {
+      if(--self->rc == 0) delete self;
+    }
   };
 
 

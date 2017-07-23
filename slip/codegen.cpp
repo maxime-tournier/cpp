@@ -281,7 +281,26 @@ namespace slip {
         }
         
       }
-      
+
+
+
+      void operator()(const ast::record& self, vm::bytecode& res, ref<variables>& ctx) const {
+
+       // compile row values
+        std::size_t size = 0;
+        for(const ast::row& r : self.rows() ) {
+          compile(res, ctx, r.value);
+          ++size;
+        }
+
+        // TODO compute magic
+        const std::size_t magic = 0;
+
+        res.push_back( opcode::RECORD );
+        res.push_back( integer(size) );
+        res.push_back( integer(magic) );
+        
+      }
       
       void operator()(const ast::expr& self, vm::bytecode& res, ref<variables>& ctx) const {
         std::stringstream ss;
