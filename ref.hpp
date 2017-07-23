@@ -6,15 +6,18 @@
 
 namespace detail {
   
-  struct control_block_base {
-    virtual ~control_block_base() { }
-    std::size_t rc = 1;
+  struct rc_base {
+    virtual ~rc_base() { }
+    std::size_t rc = 0;
+
+    friend void incref(rc_base* self) { self->rc++; }
+    friend void decref(rc_base* self) { if( --self->rc) delete self; }
   };
 
 
-  // TODO wrap integral types
+  // TODO wrap integral types?
   template<class T>
-  struct control_block : control_block_base, T {
+  struct control_block : rc_base, T {
     
     template<class ... Args>
     control_block(Args&& ... args) :
@@ -23,47 +26,59 @@ namespace detail {
     }
     
   };
+
+
+  // block_type must be derived from pointer_type, and implicitely convertible
+  // to T
+  template<class T, class = void >
+  struct ref_traits {
+    using block_type = control_block<T>;
+  };
+
+
+  // intrusive version
+  template<class T>
+  struct ref_traits< T, typename std::enable_if< std::is_base_of<rc_base, T>::value >::type > {
+    using block_type = T;
+  };
+  
 }
 
 // a simple non-intrusive ref-counting pointer
 template<class T>
 class ref {
 protected:
-  using block_type = detail::control_block_base;  
-  ref(block_type* block) : block(block) { }
 
-private:
-  block_type* block;
-public:
+  using traits = detail::ref_traits<T>;
+  using pointer_type = detail::rc_base; // typename traits::pointer_type;
   
-  explicit operator bool() const { return block; }
+private:
+  pointer_type* ptr;
+public:
 
-  // default
-  ref() noexcept : block(nullptr) { }
-
-  ~ref() {
-    assert(!block || block->rc );
-    if(block && --block->rc == 0) {
-      delete block;
-    }
-    
+  ref(pointer_type* ptr = nullptr) noexcept : ptr(ptr) {
+    if(ptr) incref(ptr);
   }
+  
+  explicit operator bool() const { return ptr; }
+
+  ~ref() { if(ptr) decref(ptr); }
 
   // copy
-  ref(const ref& other) noexcept : block(other.block) {
-    if(block) ++block->rc;
+  ref(const ref& other) noexcept : ptr(other.ptr) {
+    if(ptr) incref(ptr);
   }
 
 
   ref& operator=(const ref& other) noexcept {
     if(this == &other) return *this;
     
-    if(block && (--block->rc == 0)) {
-      delete block;
+    if(ptr) {
+      decref(ptr);
     }
-
-    if((block = other.block)) {
-      ++block->rc;
+    
+    if((ptr = other.ptr)) {
+      incref(ptr);
     }
     
     return *this;
@@ -71,38 +86,42 @@ public:
 
 
   // move
-  ref(ref&& other) noexcept : block(other.block) {
-    other.block = nullptr;
+  ref(ref&& other) noexcept : ptr(other.ptr) {
+    other.ptr = nullptr;
   }
 
   template<class Derived>
-  ref(ref<Derived>&& other) noexcept : block( other.template cast<T>().block) {
-    other.template cast<T>().block = nullptr;
+  ref(ref<Derived>&& other) noexcept : ptr( other.template cast<T>().ptr) {
+    other.template cast<T>().ptr = nullptr;
   }
   
   
   ref& operator=(ref&& other) noexcept {
     if(this == &other) return *this;
     
-    if(block && --block->rc == 0) {
-      delete block;
+    if(ptr) {
+      decref(ptr);
     }
     
-    block = other.block;
-    other.block = nullptr;
+    ptr = other.ptr;
+    other.ptr = nullptr;
     return *this;
   }    
 
   
   template<class ... Args>
   static inline ref make(Args&& ... args) {
-    return new detail::control_block<T>(std::forward<Args>(args)...);
+    using block_type = typename traits::block_type;
+    
+    pointer_type* ptr = new block_type(std::forward<Args>(args)...);
+    return ref(ptr);
   }
-
+  
   T* get() const {
-    return static_cast<detail::control_block<T>*>(block);
+    using block_type = typename traits::block_type;    
+    return static_cast< block_type* >(ptr);
   }
-
+  
 
   template<class Base>
   const ref<Base>& cast() const {
@@ -122,11 +141,11 @@ public:
 
   
   bool operator==(const ref& other) const {
-    return block == other.block;
+    return get() == other.get();
   }
 
   bool operator<(const ref& other) const {
-    return block < other.block;
+    return get() < other.get();
   }
 
   

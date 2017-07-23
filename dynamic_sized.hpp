@@ -75,11 +75,6 @@ public:
     }
   };
   
-  dynamic_sized() {
-    for(T* it = data, *last = data + count; it != last; ++it) {
-      new (it) T;
-    }
-  }
 
   
   ~dynamic_sized() {
@@ -89,6 +84,14 @@ public:
   }
 
 private:
+  
+  dynamic_sized() {
+    for(T* it = data, *last = data + count; it != last; ++it) {
+      new (it) T;
+    }
+  }
+
+  
   dynamic_sized(const dynamic_sized&) = delete;
   
 };

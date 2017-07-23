@@ -45,7 +45,7 @@ namespace slip {
 
 
     struct closure;
-    struct array;
+    struct record;
 
     
     using slip::unit;
@@ -69,7 +69,7 @@ namespace slip {
   
     struct value : variant< unit, boolean, integer, real, symbol, ref<string>, list<value>,
                             builtin,
-                            ref<closure>, ref<array>,
+                            ref<closure>, ref<record>,
                             opcode,
                             label> {
       using list = slip::list<value>;
@@ -85,18 +85,19 @@ namespace slip {
     };
 
 
-    struct closure_head {
+    struct closure_head : detail::rc_base {
       const std::size_t argc;
       const std::size_t addr;
+
+      closure_head(std::size_t argc, std::size_t addr)
+        : argc(argc),
+          addr(addr) {
+        
+      }
     };
     
     struct closure : closure_head, dynamic_sized<value> {
       
-
-      ~closure() {
-        // std::clog << "closure deleted: " << addr << std::endl;
-      }
-
 
       // private:
       template<class Iterator>
@@ -116,12 +117,16 @@ namespace slip {
 
     
 
-    struct array : dynamic_sized<value> {
-      // private:
-      using array::dynamic_sized::dynamic_sized;
+    struct record_head : detail::rc_base {
+      std::size_t magic;
     };
 
-    ref<array> make_array(const value* first, const value* last);    
+    struct record : record_head, dynamic_sized<value> {
+      using record::dynamic_sized::dynamic_sized;
+    };
+    
+    ref<record> make_record(const value* first, const value* last);
+    
     
     class bytecode : public std::vector<value> {
       std::map< vm::label, integer > labels;
