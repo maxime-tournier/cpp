@@ -36,6 +36,7 @@ namespace slip {
         CLOS,
 
         RECORD,
+        GETATTR,
         
         JNZ,
         JMP,

@@ -6,6 +6,8 @@
 
 #include <sstream>
 
+#include "../prime.hpp"
+
 namespace slip {
 
   // codegen
@@ -16,6 +18,20 @@ namespace slip {
     using vm::opcode;
 
 
+    // TODO 
+    static std::size_t prime_hash(symbol label) {
+      static std::map<symbol, std::size_t> cache;
+      static prime_enumerator<std::size_t> gen;
+
+      auto it = cache.find(label);
+      if(it != cache.end()) return it->second;
+
+      const std::size_t value = gen();
+      cache.emplace( std::make_pair(label, value) );
+      
+      return value;
+    }
+    
   
   
     static integer unique() {
@@ -180,8 +196,22 @@ namespace slip {
       }
 
 
+      void select(const ast::selection& self, const ast::expr& arg, vm::bytecode& res, ref<variables>& ctx) const {
+        compile(res, ctx, arg);
+        const std::size_t hash = prime_hash(self.label);
+
+        res.push_back( opcode::GETATTR );
+        res.push_back( integer(hash) );        
+      }
+
+      
       void operator()(const ref<ast::application>& self, vm::bytecode& res, ref<variables>& ctx) const {
 
+        // special applications
+        if(self->func.is< ast::selection >() ) {
+          return select(self->func.get<ast::selection>(), self->args->head, res, ctx);
+        }
+        
         // compile function
         compile(res, ctx, self->func);
         
@@ -286,21 +316,42 @@ namespace slip {
 
       void operator()(const ast::record& self, vm::bytecode& res, ref<variables>& ctx) const {
 
-       // compile row values
-        std::size_t size = 0;
+       // compile row values + build signature
+        std::vector< symbol > sig;
         for(const ast::row& r : self.rows() ) {
           compile(res, ctx, r.value);
-          ++size;
+          sig.emplace_back(r.label);
+        }
+        
+        static std::map< std::vector<symbol>, std::size_t > magic_cache;
+
+        const std::size_t size = sig.size();
+        
+        auto it = magic_cache.find(sig);
+        if( it == magic_cache.end() ) {
+
+          // compute magic
+          std::size_t a[ size ];
+          std::size_t n[ size ];
+
+          std::size_t i = 0;
+          for(const ast::row& r : self.rows() ) {
+            a[i] = i;
+            n[i] = prime_hash(r.label);
+            ++i;
+          }
+          
+          const std::size_t magic = chinese_remainders(a, n, size);
+          it = magic_cache.emplace( std::make_pair(sig, magic)).first;
         }
 
-        // TODO compute magic
-        const std::size_t magic = 0;
-
-        res.push_back( opcode::RECORD );
-        res.push_back( integer(size) );
-        res.push_back( integer(magic) );
         
+        res.push_back( opcode::RECORD );
+        res.push_back( integer( size ) );
+        res.push_back( integer( it->second ) );
       }
+
+
       
       void operator()(const ast::expr& self, vm::bytecode& res, ref<variables>& ctx) const {
         std::stringstream ss;

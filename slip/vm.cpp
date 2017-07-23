@@ -119,6 +119,10 @@ namespace slip {
         case opcode::RECORD:
           out << "record";
           break;
+
+        case opcode::GETATTR:
+          out << "getattr";
+          break;
           
         case opcode::JNZ:
           out << "jnz";
@@ -380,6 +384,22 @@ namespace slip {
             stack.back() = std::move(res);
             break;
           }
+
+
+            // getattr, hash
+          case opcode::GETATTR: {
+
+            // hash
+            const std::size_t hash = code[++ip].get<integer>();
+            
+            assert( stack.back().is< ref<record> >() );
+            const ref<record>& arg = stack.back().get< ref<record> >();
+
+            const std::size_t index = arg->magic % hash;
+            
+            stack.back() = (*arg)[index];
+            break;
+          }            
 
             
             // call, #argc
