@@ -226,7 +226,13 @@ namespace slip {
     };
 
     
-    struct occurs_error {
+    struct occurs_error // : unification_error
+    {
+      occurs_error(const ref<variable>& var, const struct type& type)
+        : var(var), type(type) {
+
+      }
+      
       ref<variable> var;
       struct type type;
     };
@@ -247,27 +253,25 @@ namespace slip {
           // we are trying to unify var with a type type containing self,
           // but var has smaller depth: we need to "raise" self to var's depth
           // so that self generalizes just like var
-          const type raised = make_ref<variable>(var->kind, var->depth);
 
-          assert(uf.find(self).kind() == raised.kind());
+          // note: we keep self->kind
+          const ref<variable> raised = make_ref<variable>(self->kind, var->depth);
+          assert( type(self).kind() == uf.find(self).kind());
+          
+          assert(uf.find(self).kind() == type(raised).kind());
           uf.link(uf.find(self), raised);
         }
         
+        std::clog << self.get() << " " << var.get() << std::endl;
         return self == var;
       }
 
 
       bool operator()(const ref<application>& self, const ref<variable>& var, UF& uf) const {
 
-        if( uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ) {
-          return true;
-        }
-        
-        if( uf.find(self->func).template map<bool>(occurs_check(), var, uf) ) {
-          return true;
-        }
-        
-        return false;
+        return
+          uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ||
+          uf.find(self->func).template map<bool>(occurs_check(), var, uf);
       }
       
     };
@@ -326,13 +330,56 @@ namespace slip {
           throw unification_error(lhs, rhs);
         }
       }
+
+
+      type tail(const type& row) const {
+        assert( row.is<ref<application> >() );
+
+        const ref<application>& app = row.get< ref<application> >();
+
+        assert( app->arg.kind() == rows() );
+        return app->arg;
+      }
       
 
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
         pretty_printer(std::clog) << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;        
+
+        try{
+          UF tmp = uf;
+          tmp.find(lhs->arg).apply( unify_visitor(), tmp.find(rhs->arg), tmp);
+          tmp.find(lhs->func).apply( unify_visitor(), tmp.find(rhs->func), tmp);
+          uf = std::move(tmp);
+        } catch( unification_error& e ) {
+
+          // if we're unifying row types and error is on labels
+          if( type(lhs).kind() == rows() && e.lhs.kind() != terms() ) {
+
+            try {
+              // try lhs tail with rhs
+              pretty_printer(std::clog) << "trying: " << tail(lhs) << " with: " << type(rhs) << std::endl;
+              uf.find( tail(lhs) ).apply(unify_visitor(), rhs, uf);
+              
+              std::clog << "success !" << std::endl;
+              return;
+              
+            } catch( unification_error& e ) {
+              pretty_printer(std::clog) << "nope, trying: " << type(lhs) << " with: " << tail(rhs) << std::endl;
+              type(lhs).apply(unify_visitor(), uf.find( tail(rhs)), uf);            
+
+              // success!
+              std::clog << "success !" << std::endl;
+              return;
+            }
+
+            
+          }
+          
+          throw;
+        }
+
+
         
-        uf.find(lhs->arg).apply( unify_visitor(), uf.find(rhs->arg), uf);        
-        uf.find(lhs->func).apply( unify_visitor(), uf.find(rhs->func), uf);
       }
 
       
