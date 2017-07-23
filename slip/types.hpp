@@ -32,8 +32,21 @@ namespace slip {
       bool operator<(const terms& other) const { return false; }
     };
 
-    // the kind of type constructors
-    struct constructor;
+
+    // kind of type constructors
+    struct constructor {
+      ref<kind> from, to;
+      
+      constructor(const kind& from, const kind& to)
+        : from( make_ref<kind>(from)),
+          to( make_ref<kind>(to)) { }
+      
+      bool operator==(const constructor& other) const;
+      bool operator<(const constructor& other) const;      
+      
+    };
+
+    constructor operator>>=(const kind& lhs, const kind& rhs);
 
 
     // the kind of rows
@@ -44,7 +57,7 @@ namespace slip {
                 
     
     
-    struct kind : variant<terms, ref<constructor>, rows > {
+    struct kind : variant<terms, constructor, rows > {
       using kind::variant::variant;
       
       struct error : slip::error {
@@ -56,19 +69,6 @@ namespace slip {
     std::ostream& operator<<(std::ostream& out, const kind& self);
     
 
-    // kind of type constructors
-    struct constructor {
-      kind from, to;
-      
-      constructor(kind from, kind to) : from(from), to(to) { }
-      
-      // bool operator==(const constructor& other) const {
-      //   return from == other.from && to == other.to;
-      // }
-      
-    };
-
-    ref<constructor> operator>>=(const kind& lhs, const kind& rhs);
     
 
     ////////////////////    
@@ -126,11 +126,11 @@ namespace slip {
         : func(func),
           arg(arg) {
 
-        if(!func.kind().is< ref<constructor>>()) {
+        if(!func.kind().is< constructor>()) {
           throw error("applied type constructor must have constructor kind");
         }
       
-        if(func.kind().get< ref<constructor> >()->from != arg.kind() ) {
+        if(*func.kind().get< constructor >().from != arg.kind() ) {
           throw error("kind error");
         }
       }

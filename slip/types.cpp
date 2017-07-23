@@ -14,10 +14,21 @@ namespace slip {
     template<class ... C>
     static std::ostream& debug(std::ostream& out, C&& ... c);
     
-    ref<constructor> operator>>=(const kind& lhs, const kind& rhs) {
-      return make_ref<constructor>(lhs, rhs);
+    constructor operator>>=(const kind& lhs, const kind& rhs) {
+      return constructor(lhs, rhs);
     }
 
+
+    bool constructor::operator==(const constructor& other) const {
+      return *from == *other.from && *to == *other.to;
+    }
+
+    bool constructor::operator<(const constructor& other) const {
+      return *from < *other.from || (*from == *other.from && *to < *other.to);
+    }
+
+    
+    
     const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
     const type io_ctor = constant("io", terms() >>= terms() );
     const type list_ctor = constant("list", terms() >>= terms() );        
@@ -38,7 +49,7 @@ namespace slip {
     
 
     bool constant::operator==(const constant& other) const {
-      std::clog << kind << " vs. " << other.kind << std::endl;
+      // std::clog << kind << " vs. " << other.kind << std::endl;
       return name == other.name && kind == other.kind;
     }
 
@@ -53,7 +64,7 @@ namespace slip {
       kind operator()(const constant& self) const { return self.kind; }
       kind operator()(const ref<variable>& self) const { return self->kind; }    
       kind operator()(const ref<application>& self) const  {
-        return self->func.kind().get< ref<constructor> >()->to;
+        return *self->func.kind().get<constructor >().to;
       }  
     
     };
@@ -66,19 +77,19 @@ namespace slip {
 
     struct kind_ostream {
 
-      void operator()(terms, std::ostream& out) const {
+      void operator()(const terms&, std::ostream& out) const {
         out << '*';
       }
 
       
-      void operator()(rows, std::ostream& out) const {
+      void operator()(const rows&, std::ostream& out) const {
         out << "{}";
       }
       
 
-      void operator()(const ref<constructor>& self, std::ostream& out) const {
+      void operator()(const constructor& self, std::ostream& out) const {
         // TODO parentheses
-        out << self->from << " -> " << self->to << std::endl;
+        out << *self.from << " -> " << *self.to;
       }
       
       
@@ -205,7 +216,7 @@ namespace slip {
 
 
       void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
-        debug( std::clog << "unifying: ", type(self), " with: ", rhs) << std::endl;
+        // debug( std::clog << "unifying: ", type(self), " with: ", rhs) << std::endl;
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -217,7 +228,7 @@ namespace slip {
         if( self->kind != rhs.kind() ) {
           std::stringstream ss;
 
-          debug(ss, "when unifying: ", self, " with: ", rhs ) << " :: " << self->kind << " vs. " << rhs.kind();
+          // debug(ss, "when unifying: ", self, " with: ", rhs ) << " :: " << self->kind << " vs. " << rhs.kind();
           throw kind_error(ss.str());
         }
         
@@ -228,7 +239,7 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
-        debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;        
+        // debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;        
         if( !(lhs == rhs) ) {
           throw unification_error(lhs, rhs);
         }
@@ -236,7 +247,7 @@ namespace slip {
       
 
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
-        debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;
+        // debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;
         
         uf.find(lhs->arg).apply( unify_visitor(), uf.find(rhs->arg), uf);        
         uf.find(lhs->func).apply( unify_visitor(), uf.find(rhs->func), uf);
@@ -247,7 +258,7 @@ namespace slip {
 
 
     void state::unify(const type& lhs, const type& rhs) {
-      debug( std::clog << "unifying: ", lhs, " with: ", rhs) << std::endl;
+      // debug( std::clog << "unifying: ", lhs, " with: ", rhs) << std::endl;
       uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
     }
     
