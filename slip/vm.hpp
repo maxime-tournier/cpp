@@ -34,7 +34,9 @@ namespace slip {
         RET,
       
         CLOS,
-      
+
+        RECORD,
+        
         JNZ,
         JMP,
 
@@ -101,7 +103,7 @@ namespace slip {
 
       // private:
       template<class Iterator>
-      closure(std::size_t argc,
+      closure(std::size_t argc, // TODO do we actually need this?
               std::size_t addr,
               Iterator first, Iterator last)
         : closure_head{argc, addr},
@@ -126,6 +128,7 @@ namespace slip {
     };
     
     ref<record> make_record(const value* first, const value* last);
+
     
     
     class bytecode : public std::vector<value> {

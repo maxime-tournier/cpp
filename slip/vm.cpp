@@ -116,6 +116,10 @@ namespace slip {
           out << "clos";
           break;
 
+        case opcode::RECORD:
+          out << "record";
+          break;
+          
         case opcode::JNZ:
           out << "jnz";
           break;
@@ -339,8 +343,8 @@ namespace slip {
         
             // build closure
             const std::size_t min = stack.size() - c;
-            value* first = &stack[ min ];
-            value* last = first + c;
+            const value* first = &stack[ min ];
+            const value* last = first + c;
             
             ref<closure> res = make_closure(n, addr, first, last);
 
@@ -349,6 +353,33 @@ namespace slip {
             break;
           }
 
+
+            // record, #size, magic
+          case opcode::RECORD: {
+
+            // size
+            const integer& size = code[++ip].get<integer>();
+            assert(size <= integer(stack.size()));
+            
+            // magic
+            const integer& magic = code[++ip].get<integer>();
+            // assert(n <= integer(stack.size()));
+        
+            // build closure
+            const std::size_t min = stack.size() - size;
+            
+            const value* first = &stack[ min ];
+            const value* last = first + size;
+            
+            ref<record> res = make_record(first, last);
+            res->magic = magic;
+            
+            stack.resize(min + 1, unit());
+            stack.back() = std::move(res);
+            break;
+          }
+
+            
             // call, #argc
           case opcode::CALL: {
             
