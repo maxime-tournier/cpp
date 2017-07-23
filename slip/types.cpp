@@ -262,7 +262,6 @@ namespace slip {
           uf.link(uf.find(self), raised);
         }
         
-        std::clog << self.get() << " " << var.get() << std::endl;
         return self == var;
       }
 
@@ -352,12 +351,14 @@ namespace slip {
           uf = std::move(tmp);
         } catch( unification_error& e ) {
 
+          pretty_printer(std::clog) << "derp: " << e.lhs << " vs. " << e.rhs << std::endl;
+          
           // if we're unifying row types and error is on labels
           if( type(lhs).kind() == rows() && e.lhs.kind() != terms() ) {
 
             try {
               // try lhs tail with rhs
-              pretty_printer(std::clog) << "trying: " << tail(lhs) << " with: " << type(rhs) << std::endl;
+              pretty_printer(std::clog) << "error with: " << type(lhs) << " vs. " << type(rhs) << ", trying: " << tail(lhs) << " with: " << type(rhs) << std::endl;
               uf.find( tail(lhs) ).apply(unify_visitor(), rhs, uf);
               
               std::clog << "success !" << std::endl;
