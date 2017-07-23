@@ -10,10 +10,84 @@ namespace slip {
 
   namespace types {
 
+    // pretty-printing types
+    struct pretty_printer {
 
-    template<class ... C>
-    static std::ostream& debug(std::ostream& out, C&& ... c);
-    
+      struct var {
+        std::size_t index;
+        bool quantified;
+
+        friend  std::ostream& operator<<(std::ostream& out, const var& self) {
+          if( self.quantified ) out << "'";
+          else out << "!";
+          return out << char('a' + self.index);
+        }
+        
+      };
+
+      using ostream_map = std::map< ref<variable>, var >;
+
+      struct ostream_visitor;
+
+      
+      ostream_map osm;
+      std::ostream& out;
+      pretty_printer(std::ostream& out) : out(out) { }
+
+
+      template<class T>
+      pretty_printer& operator<<(const T& self) {
+        out << self;
+        return *this;
+      }
+
+      pretty_printer& operator<<(const type& self);
+      
+    };
+
+    struct pretty_printer::ostream_visitor {
+
+      void operator()(const constant& self, std::ostream& out, 
+                      ostream_map& osm) const {
+        out << self.name;
+      }
+
+      void operator()(const ref<variable>& self, std::ostream& out, 
+                      ostream_map& osm) const {
+        auto err = osm.emplace( std::make_pair(self, var{osm.size(), false} ));
+        out << err.first->second;
+      }
+
+      void operator()(const ref<application>& self, std::ostream& out,
+                      ostream_map& osm) const {
+        // TODO parentheses
+
+        if(self->func == func_ctor) {
+          self->arg.apply(ostream_visitor(), out, osm);
+          out << ' ';
+          self->func.apply(ostream_visitor(), out, osm);
+        } else {
+          self->func.apply(ostream_visitor(), out, osm);
+          out << ' ';
+          self->arg.apply(ostream_visitor(), out, osm);
+        }
+         
+      }
+
+      
+    };
+
+
+    pretty_printer& pretty_printer::operator<<(const type& self) {
+      self.apply( ostream_visitor(), out, osm );        
+      return *this;
+    }
+
+
+
+
+
+    // kinds
     constructor operator>>=(const kind& lhs, const kind& rhs) {
       return constructor(lhs, rhs);
     }
@@ -433,7 +507,8 @@ namespace slip {
       } catch( unification_error& e )  {
         std::stringstream ss;
 
-        debug(ss, "cannot unify: ", e.lhs, " with: ", e.rhs);
+        pretty_printer pp(ss);
+        pp << "cannot unify: " << e.lhs << " with: " << e.rhs;
         
         throw type_error(ss.str());
       }
@@ -608,65 +683,15 @@ namespace slip {
     // ostream
 
 
-    struct var_repr {
-      std::size_t index;
-      bool quantified;
-    };
 
-    static std::ostream& operator<<(std::ostream& out, const var_repr& self) {
-      if( self.quantified ) out << "'";
-      else out << "!";
-      return out << char('a' + self.index);
-    }
+
+
+
 
     
-    using ostream_map = std::map< ref<variable>, var_repr >;
+
+
     
-    struct ostream_visitor {
-
-      void operator()(const constant& self, std::ostream& out, 
-                      ostream_map& osm) const {
-        out << self.name;
-      }
-
-      void operator()(const ref<variable>& self, std::ostream& out, 
-                      ostream_map& osm) const {
-        auto err = osm.emplace( std::make_pair(self, var_repr{osm.size(), false} ));
-        out << err.first->second;
-      }
-
-      void operator()(const ref<application>& self, std::ostream& out,
-                      ostream_map& osm) const {
-        // TODO parentheses
-
-        if(self->func == func_ctor) {
-          self->arg.apply(ostream_visitor(), out, osm);
-          out << ' ';
-          self->func.apply(ostream_visitor(), out, osm);
-        } else {
-          self->func.apply(ostream_visitor(), out, osm);
-          out << ' ';
-          self->arg.apply(ostream_visitor(), out, osm);
-        }
-         
-      }
-
-      
-    };
-
-
-    static std::ostream& ostream(std::ostream& out, const scheme& self, 
-                                 ostream_map& osm) {
-      for(const ref<variable>& var : self.forall) {
-        osm.emplace( std::make_pair(var, var_repr{osm.size(), true} ) );
-      }
-      
-      self.body.apply( ostream_visitor(), out, osm );
-      return out;
-    }
-
-
-
     scheme::scheme(const type& body): body(body) {
       if(body.kind() != terms()) {
         std::stringstream ss;
@@ -677,39 +702,20 @@ namespace slip {
     
 
     std::ostream& operator<<(std::ostream& out, const scheme& self) {
-      ostream_map osm;
-      return ostream(out, self, osm);
-    }
-
-
-
-
-
-    static std::ostream& debug_aux(std::ostream& out,
-                                   const type& self,
-                                   ostream_map& osm) {
-      self.apply(ostream_visitor(), out, osm);
-      return out;
-    }
-
-
-    static std::ostream& debug_aux(std::ostream& out,
-                                   const std::string& self,
-                                   ostream_map& osm) {
-      return out << self;
-    }
-
-    
-    template<class ... C>
-    static std::ostream& debug(std::ostream& out, C&& ... c) {
-      ostream_map osm;
-      const int expand[] = {
-        
-        ( debug_aux(out, c, osm), 0)...
-      }; (void) expand;
+      pretty_printer pp(out);
       
+      for(const ref<variable>& var : self.forall) {
+        pp.osm.emplace( std::make_pair(var, pretty_printer::var{pp.osm.size(), true} ) );
+      }
+      
+      pp << self.body;
       return out;
     }
+
+
+
+
+
   }
   
 }
