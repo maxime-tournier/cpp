@@ -228,7 +228,7 @@ namespace slip {
     
     struct occurs_error {
       ref<variable> var;
-      struct type type;         // TODO do we want monotype here?
+      struct type type;
     };
 
 
@@ -380,10 +380,9 @@ namespace slip {
         const type body_type = infer(sub, self->body);
 
         // return complete application type
-        return foldr(body_type, args, [](const ref<variable>& lhs,
-                                         const type& rhs) -> type {
-                       return lhs >>= rhs;
-                     });
+        return foldr(body_type, args, [](const ref<variable>& lhs, const type& rhs) {
+            return lhs >>= rhs;
+          });
         
       }
 
@@ -401,10 +400,9 @@ namespace slip {
         // construct function type
         const type result = tc.fresh();
         
-        const type sig = foldr(result, args, [&](const type& lhs,
-                                                 const type& rhs) {
-                                 return lhs >>= rhs;
-                               });
+        const type sig = foldr(result, args, [&](const type& lhs, const type& rhs) {
+            return lhs >>= rhs;
+          });
 
         try{
           tc.unify(func, sig);
@@ -494,7 +492,7 @@ namespace slip {
 
       type operator()(const ast::record& self, state& tc) const {
 
-        return record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) -> type {
+        return record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) {
               return row_extension(lhs.label)(infer(tc, lhs.value))(rhs);
             }));
         
