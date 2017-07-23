@@ -42,6 +42,11 @@ namespace slip {
       }
 
       pretty_printer& operator<<(const type& self);
+
+      pretty_printer& operator<<( std::ostream& (*f)(std::ostream& )) {
+        out << f;
+        return *this;
+      }
       
     };
 
@@ -290,7 +295,7 @@ namespace slip {
 
 
       void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
-        // debug( std::clog << "unifying: ", type(self), " with: ", rhs) << std::endl;
+        pretty_printer(std::clog) << "unifying: " << type(self) << " with: " << rhs << std::endl;
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -302,7 +307,9 @@ namespace slip {
         if( self->kind != rhs.kind() ) {
           std::stringstream ss;
 
-          // debug(ss, "when unifying: ", self, " with: ", rhs ) << " :: " << self->kind << " vs. " << rhs.kind();
+          pretty_printer(ss) << "when unifying: " << type(self) << " :: " << self->kind 
+                             << "with: " << rhs << " :: " << rhs.kind();
+          
           throw kind_error(ss.str());
         }
         
@@ -313,7 +320,8 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
-        // debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;        
+        pretty_printer(std::clog) << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;
+        
         if( !(lhs == rhs) ) {
           throw unification_error(lhs, rhs);
         }
@@ -321,7 +329,7 @@ namespace slip {
       
 
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
-        // debug( std::clog << "unifying: ", type(lhs), " with: ", rhs) << std::endl;
+        pretty_printer(std::clog) << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;        
         
         uf.find(lhs->arg).apply( unify_visitor(), uf.find(rhs->arg), uf);        
         uf.find(lhs->func).apply( unify_visitor(), uf.find(rhs->func), uf);
@@ -332,7 +340,7 @@ namespace slip {
 
 
     void state::unify(const type& lhs, const type& rhs) {
-      // debug( std::clog << "unifying: ", lhs, " with: ", rhs) << std::endl;
+      pretty_printer(std::clog) << "unifying: " << lhs << " with: " << rhs << std::endl;              
       uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
     }
     
@@ -680,14 +688,7 @@ namespace slip {
     }
 
 
-    // ostream
-
-
-
-
-
-
-
+    
     
 
 
