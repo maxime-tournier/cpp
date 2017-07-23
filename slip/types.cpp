@@ -193,9 +193,13 @@ namespace slip {
     const type empty_row_type = constant("{}", rows());
 
 
-    static inline type row_extension(symbol label) {
+    // row extension type constructor
+    static inline type row_extension_ctor(symbol label) {
       return constant(label.name(), terms() >>= rows() >>= rows());
     }
+
+
+
     
   
     template<> constant traits< slip::unit >::type() { return unit_type; }
@@ -280,17 +284,19 @@ namespace slip {
     template<class UF>
     struct unify_visitor {
 
+      pretty_printer& pp;
       const bool try_reverse;
       
-      unify_visitor(bool try_reverse = true) 
-        : try_reverse(try_reverse) { }
+      unify_visitor(pretty_printer& pp, bool try_reverse = true) 
+        : pp(pp),
+          try_reverse(try_reverse) { }
       
       template<class T>
       void operator()(const T& self, const type& rhs, UF& uf) const {
         
         // double dispatch
         if( try_reverse ) {
-          return rhs.apply( unify_visitor(false), self, uf);
+          return rhs.apply( unify_visitor(pp, false), self, uf);
         } else {
           throw unification_error(self, rhs);
         }
@@ -298,7 +304,7 @@ namespace slip {
 
 
       void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
-        pretty_printer(std::clog) << "unifying: " << type(self) << " with: " << rhs << std::endl;
+        pp << "unifying: " << type(self) << " with: " << rhs << std::endl;
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -323,7 +329,7 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
-        pretty_printer(std::clog) << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;
+        pp << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;
         
         if( !(lhs == rhs) ) {
           throw unification_error(lhs, rhs);
@@ -339,37 +345,82 @@ namespace slip {
         assert( app->arg.kind() == rows() );
         return app->arg;
       }
+
+      
+      type head(const type& row) const {
+        assert( row.is<ref<application> >() );
+
+        const ref<application>& app = row.get< ref<application> >();
+
+        assert( app->func.kind() == (rows() >>= rows()) );
+        return app->func;
+      }
       
 
-      void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
-        pretty_printer(std::clog) << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;        
+      type last(const type& row) const {
+        if(row.is< ref<application> >()) {
+          return tail(row);
+        } else {
+          assert( row.is< ref<variable> >() || row == empty_row_type );
+          return row;
+        }
+      }
 
+
+      type concat(const type& lhs, const type& rhs) const {
+        assert( lhs.kind() == rows() );
+        assert( rhs.kind() == rows() );
+
+        if(lhs == empty_row_type) return rhs;
+        
+        return head(lhs)(concat(tail(lhs), rhs));
+      }
+
+
+      
+      type pull(symbol label, const type& row) const {
+
+        if( row.is< ref<application> >() ) {
+          const ref<application>& app = row.get< ref<application> >();
+          
+        }
+
+      }
+
+
+      
+      void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
+        pp << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;        
+        
         try{
           UF tmp = uf;
-          tmp.find(lhs->arg).apply( unify_visitor(), tmp.find(rhs->arg), tmp);
-          tmp.find(lhs->func).apply( unify_visitor(), tmp.find(rhs->func), tmp);
+          tmp.find(lhs->arg).apply( unify_visitor(pp), tmp.find(rhs->arg), tmp);
+          tmp.find(lhs->func).apply( unify_visitor(pp), tmp.find(rhs->func), tmp);
           uf = std::move(tmp);
         } catch( unification_error& e ) {
 
-          pretty_printer(std::clog) << "derp: " << e.lhs << " vs. " << e.rhs << std::endl;
+          pp << "derp: " << e.lhs << " vs. " << e.rhs << std::endl;
           
           // if we're unifying row types and error is on labels
           if( type(lhs).kind() == rows() && e.lhs.kind() != terms() ) {
 
             try {
               // try lhs tail with rhs
-              pretty_printer(std::clog) << "error with: " << type(lhs) << " vs. " << type(rhs) << ", trying: " << tail(lhs) << " with: " << type(rhs) << std::endl;
-              uf.find( tail(lhs) ).apply(unify_visitor(), rhs, uf);
+              pp << "error with: " << type(lhs) << " vs. " << type(rhs)
+                 << ", trying: " << tail(lhs) << " with: " << type(rhs) << std::endl;
               
-              std::clog << "success !" << std::endl;
+              uf.find( tail(lhs) ).apply(unify_visitor(pp), rhs, uf);
+
+              
+              pp << "success !" << std::endl;
               return;
               
             } catch( unification_error& e ) {
-              pretty_printer(std::clog) << "nope, trying: " << type(lhs) << " with: " << tail(rhs) << std::endl;
-              type(lhs).apply(unify_visitor(), uf.find( tail(rhs)), uf);            
+              pp << "nope, trying: " << type(lhs) << " with: " << tail(rhs) << std::endl;
+              type(lhs).apply(unify_visitor(pp), uf.find( tail(rhs)), uf);            
 
               // success!
-              std::clog << "success !" << std::endl;
+              pp << "success !" << std::endl;
               return;
             }
 
@@ -388,8 +439,11 @@ namespace slip {
 
 
     void state::unify(const type& lhs, const type& rhs) {
-      pretty_printer(std::clog) << "unifying: " << lhs << " with: " << rhs << std::endl;              
-      uf->find(lhs).apply( unify_visitor<uf_type>(), uf->find(rhs), *uf);
+      pretty_printer pp(std::clog);
+      pp << "unifying: " << lhs << " with: " << rhs << std::endl;              
+      uf->find(lhs).apply( unify_visitor<uf_type>(pp), uf->find(rhs), *uf);
+      pp << "unification end" << std::endl;
+     
     }
     
     
@@ -533,7 +587,7 @@ namespace slip {
 
         const type a = tc.fresh(), r = tc.fresh(rows());
         
-        return record_ctor( row_extension(self.label)(a)(r) ) >>= a;
+        return record_ctor( row_extension_ctor(self.label)(a)(r) ) >>= a;
       }
       
 
@@ -541,7 +595,7 @@ namespace slip {
       type operator()(const ast::record& self, state& tc) const {
 
         return record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) {
-              return row_extension(lhs.label)(infer(tc, lhs.value))(rhs);
+              return row_extension_ctor(lhs.label)(infer(tc, lhs.value))(rhs);
             }));
         
       }
@@ -596,7 +650,7 @@ namespace slip {
 
       template<class UF>
       type operator()(const ref<application>& self, UF& uf) const {
-        return map(self, [&](const type& c) {
+         return map(self, [&](const type& c) {
             return c.map<type>(nice(), uf);
           });
       }
