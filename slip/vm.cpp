@@ -397,11 +397,6 @@ namespace slip {
 
             const std::size_t index = arg->magic % hash;
 
-            std::clog << "vm getattr"
-                      << " hash: " << hash 
-                      << " magic: " << arg->magic 
-                      << " index: " << index << std::endl;
-            
             stack.back() = (*arg)[index];
             break;
           }            
