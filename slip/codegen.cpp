@@ -20,12 +20,15 @@ namespace slip {
     using vm::opcode;
 
 
+    static constexpr std::size_t max_record_size = 256;
+    
     // TODO 
     static std::size_t prime_hash(symbol label) {
 
       static const auto make_gen = [] {
         prime_enumerator<std::size_t> res;
-        for(unsigned i = 0; i < 208; ++i) {
+        
+        for(unsigned i = 0; i < max_record_size; ++i) {
           res();
         }
 
@@ -339,6 +342,7 @@ namespace slip {
         static std::map< std::vector<symbol>, std::size_t > magic_cache;
 
         const std::size_t size = sig.size();
+        assert(size < max_record_size);
         
         auto it = magic_cache.find(sig);
         if( it == magic_cache.end() ) {

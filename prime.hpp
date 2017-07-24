@@ -81,17 +81,22 @@ static void bezout(U a, U b, T* s, T* t) {
 template<class U>
 static U chinese_remainders(const U* a, const U* n, std::size_t size) {
 
-  static const auto modular_inverse = [] (U a, U b) {
+  // let's be cautious
+  using uint = unsigned long;
+  using sint = long;
+  
+  static const auto modular_inverse = [] (uint a, uint b) {
     // return a * v, where 0 <= v = inv(a) mod b
-  
-    const U prod = a * b;
-    long e_prev = a, e = 0;
-  
-    while(U r = a % b) {
-      const U q = a / b;
     
-      const long e_next = e_prev - q * e;
+    const uint prod = a * b;
+    sint e_prev = a, e = 0;
     
+    while(uint r = a % b) {
+      const uint q = a / b;
+      
+      // TODO fix case when < 0?
+      const sint e_next = e_prev - q * e;
+      
       e_prev = e;
       e = e_next;
     
@@ -105,12 +110,13 @@ static U chinese_remainders(const U* a, const U* n, std::size_t size) {
   };
 
   
-  const U prod = std::accumulate(n, n + size, 1, std::multiplies<U>());
+  const uint prod = std::accumulate(n, n + size, uint(1), std::multiplies<uint>());
   
-  U x = 0;
+  uint x = 0;
 
   for(std::size_t i = 0; i < size; ++i) {
-    const U m = prod / n[i];
+    assert(a[i] < n[i]);
+    const uint m = prod / n[i];
     x += a[i] * modular_inverse(m, n[i]);
   }
 
