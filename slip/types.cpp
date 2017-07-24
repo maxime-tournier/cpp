@@ -304,7 +304,7 @@ namespace slip {
 
 
       void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
-        pp << "unifying: " << type(self) << " with: " << rhs << std::endl;
+        pp << "unifying: " << type(self) << " ~ " << rhs << std::endl;
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -317,7 +317,7 @@ namespace slip {
           std::stringstream ss;
 
           pretty_printer(ss) << "when unifying: " << type(self) << " :: " << self->kind 
-                             << "with: " << rhs << " :: " << rhs.kind();
+                             << " ~ " << rhs << " :: " << rhs.kind();
           
           throw kind_error(ss.str());
         }
@@ -329,7 +329,7 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;
+        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;
         
         if( !(lhs == rhs) ) {
           throw unification_error(lhs, rhs);
@@ -373,28 +373,7 @@ namespace slip {
         }
 
         
-        struct compare {
-
-          template<class Key, class Value>
-          bool operator()(Key k, const std::pair<Key, Value>& p) const {
-            return k < p.first;
-          }
-
-          template<class Key, class Value>
-          bool operator()(const std::pair<Key, Value>& p, Key k) const {
-            return p.first < k;
-          }
-
-          template<class Key, class Value>
-          bool operator()(const std::pair<Key, Value>& p, const std::pair<Key, Value>& q) const {
-            return p.first < q.first;
-          }
-
-          
-        };
-
-
-        void unify_difference(const expand& other, UF& uf)  const {
+        void unify_difference(const expand& other, pretty_printer& pp, UF& uf)  const {
           std::map<symbol, type> tmp;
           
           std::set_difference(rows.begin(), rows.end(),
@@ -413,8 +392,11 @@ namespace slip {
               row = row_extension_ctor(s.first)( rows.find(s.first)->second )(row);
             }
 
+
+            pp << "unifying row difference: " << row << " ~ " << other.last << std::endl;                          
+            
             // and link it
-            uf.link(other.last, row);
+            uf.link( uf.find(other.last), row);
           }
         }
         
@@ -428,12 +410,13 @@ namespace slip {
 
           // unify types in intersection
           for(auto& s : tmp) {
+            pp << "unifying row intersection: " << s.first << std::endl;
             uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp), uf.find(other.rows.find(s.first)->second), uf);
           }
 
 
-          this->unify_difference(other, uf);
-          other.unify_difference(*this, uf);
+          this->unify_difference(other, pp, uf);
+          other.unify_difference(*this, pp, uf);
         }
 
         
@@ -445,10 +428,11 @@ namespace slip {
 
       
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << " with: " << type(rhs) << std::endl;        
+        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
 
 
         if(type(lhs).kind() == rows() && type(rhs).kind() == rows() ) {
+          pp << "row unification" << std::endl;
           expand(lhs).unify(expand(rhs), pp, uf);
         } else {
           uf.find(lhs->func).apply( unify_visitor(pp), uf.find(rhs->func), uf);
@@ -463,9 +447,9 @@ namespace slip {
 
     void state::unify(const type& lhs, const type& rhs) {
       pretty_printer pp(std::clog);
-      pp << "unifying: " << lhs << " with: " << rhs << std::endl;              
+      pp << ">> unifying: " << lhs << " ~ " << rhs << std::endl;              
       uf->find(lhs).apply( unify_visitor<uf_type>(pp), uf->find(rhs), *uf);
-      pp << "unification end" << std::endl;
+      pp << "<< unification end" << std::endl;
      
     }
     
@@ -639,7 +623,7 @@ namespace slip {
         std::stringstream ss;
 
         pretty_printer pp(ss);
-        pp << "cannot unify: " << e.lhs << " with: " << e.rhs;
+        pp << "unification error: " << e.lhs << " !~ " << e.rhs;
         
         throw type_error(ss.str());
       }
