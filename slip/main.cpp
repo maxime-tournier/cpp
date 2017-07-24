@@ -168,10 +168,9 @@ static const auto compiler = [](bool dump_bytecode) {
     const ast::toplevel node = ast::check_toplevel(s);
 
     const types::scheme p = infer(*tc, node);
-    std::cout << " : " << p;
-    
     const vm::value v = jit->eval(node, dump_bytecode);
     
+    std::cout << " : " << p;
     std::cout << " = " << v;
     
     std::cout << std::endl;

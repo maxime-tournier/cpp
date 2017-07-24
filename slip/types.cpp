@@ -279,7 +279,12 @@ namespace slip {
       
     };
 
-    
+
+
+
+
+
+
 
     template<class UF>
     struct unify_visitor {
@@ -337,51 +342,84 @@ namespace slip {
       }
 
 
-      struct expand {
 
-        // TODO multimap for duplicate labels
-        using rows_type = std::map<symbol, type>;
-        rows_type rows;
+
+
+
+
+
+    struct row_helper {
+
+      // TODO multimap for duplicate labels
+      using rows_type = std::map<symbol, type>;
+      rows_type rows;
         
-        type last;
+      type last;
 
-        static type fill(rows_type& rows, const type& row) {
-          if(row.is< ref<application> >() ) {
+      static type fill(rows_type& rows, const type& row) {
+        if(row.is< ref<application> >() ) {
 
-            const auto& app = row.get< ref<application> >();
+          const auto& app = row.get< ref<application> >();
 
-            assert(app->func.is< ref<application> >());
+          assert(app->func.is< ref<application> >());
 
-            const auto& head = app->func.get< ref<application> >();
-            assert( head->arg.kind() == terms() );
+          const auto& head = app->func.get< ref<application> >();
+          assert( head->arg.kind() == terms() );
 
-            assert( head->func.is<constant>() );
-            assert( head->func.kind() == (terms() >>= types::rows() >>= types::rows()) );
+          assert( head->func.is<constant>() );
+          assert( head->func.kind() == (terms() >>= types::rows() >>= types::rows()) );
 
-            rows.emplace( std::make_pair(head->func.get<constant>().name, head->arg) );
-            return fill(rows, app->arg);
+          rows.emplace( std::make_pair(head->func.get<constant>().name, head->arg) );
+          return fill(rows, app->arg);
             
-          } else {
-            return row;
-          }
-          
+        } else {
+          return row;
         }
+          
+      }
         
-        expand(const type& row) : last( fill(rows, row) ) {
-          assert( last == empty_row_type || last.is< ref<variable> >() );
-          assert( last.kind() == types::rows() );
+      row_helper(const type& row) : last( fill(rows, row) ) {
+        assert( last == empty_row_type || last.is< ref<variable> >() );
+        assert( last.kind() == types::rows() );
+      }
+
+
+
+      struct compare {
+
+        template<class Pair>
+        bool operator()(const Pair& lhs, const Pair& rhs) const {
+          return lhs.first < rhs.first;
         }
 
-        
-        void unify_difference(const expand& other, pretty_printer& pp, UF& uf)  const {
-          std::map<symbol, type> tmp;
+      };
+      
+
+      bool unify_difference(const row_helper& other, pretty_printer& pp, UF& uf)  const {
+        std::map<symbol, type> tmp;
           
-          std::set_difference(rows.begin(), rows.end(),
-                              other.rows.begin(), other.rows.end(),
-                              std::inserter(tmp, tmp.end()) );
+        std::set_difference(rows.begin(), rows.end(),
+                            other.rows.begin(), other.rows.end(),
+                            std::inserter(tmp, tmp.end()), compare() );
 
           if( other.last == empty_row_type && tmp.size() > 0) {
+
+            for(auto& s : rows) {
+              std::clog << s.first << std::endl;
+            }
+
+            for(auto& s : other.rows) {
+              std::clog << s.first << std::endl;
+            }
+            
+            
+            for(auto& s : tmp) {
+              std::clog << s.first << std::endl;
+            }
+            
+            pp << tmp.size() << std::endl;
             throw error("unification error");
+            return false;
           }
           
           if( other.last.template is<ref<variable>>() ) {
@@ -397,34 +435,37 @@ namespace slip {
             
             // and link it
             uf.link( uf.find(other.last), row);
-          }
-        }
-        
-
-        void unify(const expand& other, pretty_printer& pp, UF& uf) const {
-
-          std::map<symbol, type> tmp;
-          std::set_intersection(rows.begin(), rows.end(),
-                                other.rows.begin(), other.rows.end(),
-                                std::inserter(tmp, tmp.end()) );
-
-          // unify types in intersection
-          for(auto& s : tmp) {
-            pp << "unifying row intersection: " << s.first << std::endl;
-            uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp), uf.find(other.rows.find(s.first)->second), uf);
+            return true;
           }
 
+          return false;
+      }
+      
+        
+      void unify(const row_helper& other, pretty_printer& pp, UF& uf) const {
 
-          this->unify_difference(other, pp, uf);
-          other.unify_difference(*this, pp, uf);
+        std::map<symbol, type> tmp;
+        std::set_intersection(rows.begin(), rows.end(),
+                              other.rows.begin(), other.rows.end(),
+                              std::inserter(tmp, tmp.end()), compare() );
+
+        // unify types in intersection
+        for(auto& s : tmp) {
+          pp << "unifying row intersection: " << s.first << std::endl;
+          uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp), uf.find(other.rows.find(s.first)->second), uf);
         }
 
+
+        const bool lhs = this->unify_difference(other, pp, uf);
+        const bool rhs = other.unify_difference(*this, pp, uf);
         
-      };
+      }
 
+        
+    };
 
       
-      
+
 
       
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
@@ -432,8 +473,7 @@ namespace slip {
 
 
         if(type(lhs).kind() == rows() && type(rhs).kind() == rows() ) {
-          pp << "row unification" << std::endl;
-          expand(lhs).unify(expand(rhs), pp, uf);
+          row_helper(lhs).unify(row_helper(rhs), pp, uf);
         } else {
           uf.find(lhs->func).apply( unify_visitor(pp), uf.find(rhs->func), uf);
           uf.find(lhs->arg).apply( unify_visitor(pp), uf.find(rhs->arg), uf);

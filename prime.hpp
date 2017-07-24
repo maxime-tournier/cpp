@@ -100,6 +100,7 @@ static U chinese_remainders(const U* a, const U* n, std::size_t size) {
     }
 
     if(e < 0) e += prod;
+    assert(e >= 0);
     return e;
   };
 

@@ -8,6 +8,8 @@
 
 #include "../prime.hpp"
 
+#include <iostream>
+
 namespace slip {
 
   // codegen
@@ -20,8 +22,18 @@ namespace slip {
 
     // TODO 
     static std::size_t prime_hash(symbol label) {
+
+      static const auto make_gen = [] {
+        prime_enumerator<std::size_t> res;
+        for(unsigned i = 0; i < 208; ++i) {
+          res();
+        }
+
+        return res;
+      };
+      
       static std::map<symbol, std::size_t> cache;
-      static prime_enumerator<std::size_t> gen;
+      static prime_enumerator<std::size_t> gen = make_gen();
 
       auto it = cache.find(label);
       if(it != cache.end()) return it->second;
@@ -198,6 +210,7 @@ namespace slip {
 
       void select(const ast::selection& self, const ast::expr& arg, vm::bytecode& res, ref<variables>& ctx) const {
         compile(res, ctx, arg);
+        
         const std::size_t hash = prime_hash(self.label);
 
         res.push_back( opcode::GETATTR );
@@ -342,6 +355,7 @@ namespace slip {
           }
           
           const std::size_t magic = chinese_remainders(a, n, size);
+
           it = magic_cache.emplace( std::make_pair(sig, magic)).first;
         }
 
