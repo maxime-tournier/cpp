@@ -12,3 +12,11 @@
 (foo-bar x false)
                         
 
+(def obj
+     (record (method (lambda (x) x))))
+obj
+
+
+(@method obj 3)
+
+

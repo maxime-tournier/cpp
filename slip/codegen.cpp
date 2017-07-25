@@ -128,7 +128,8 @@ namespace slip {
 
       
       void operator()(const ref<ast::definition>& self, vm::bytecode& res, ref<variables>& ctx) const {
-        
+
+        // 
         ctx->add_local(self->id);
       
         // save some space on the stack by pushing a dummy var
@@ -144,6 +145,11 @@ namespace slip {
         res.push_back( opcode::SWAP );
       }
 
+
+      // TODO rewrite program upstream with def instead?
+      void operator()(const ref<ast::binding>& self, vm::bytecode& res, ref<variables>& ctx) const {
+        operator()(make_ref<ast::definition>(self->id, self->value), res, ctx);
+      }
       
       void operator()(const ref<ast::lambda>& self, vm::bytecode& res, ref<variables>& ctx) const {
         // sub variables
@@ -211,7 +217,8 @@ namespace slip {
       }
 
 
-      void select(const ast::selection& self, const ast::expr& arg, vm::bytecode& res, ref<variables>& ctx) const {
+      void select(const ast::selection& self, const ast::expr& arg, 
+                  vm::bytecode& res, ref<variables>& ctx) const {
         compile(res, ctx, arg);
         
         const std::size_t hash = prime_hash(self.label);

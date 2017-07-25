@@ -86,6 +86,13 @@ namespace slip {
 
     struct pretty_printer::ostream_visitor {
 
+      bool parens;
+      
+      ostream_visitor(bool parens = false)
+        : parens(parens) {
+
+      }
+      
       void operator()(const constant& self, std::ostream& out, 
                       ostream_map& osm) const {
         out << self.name;
@@ -99,18 +106,21 @@ namespace slip {
 
       void operator()(const ref<application>& self, std::ostream& out,
                       ostream_map& osm) const {
-        // TODO parentheses
 
+        // i have no idea what i'm doing lol
+        if(parens) out << '(';
+        
         if(self->func == func_ctor) {
-          self->arg.apply(ostream_visitor(), out, osm);
+          self->arg.apply(ostream_visitor(true), out, osm);
           out << ' ';
-          self->func.apply(ostream_visitor(), out, osm);
+          self->func.apply(ostream_visitor(false), out, osm);
         } else {
-          self->func.apply(ostream_visitor(), out, osm);
+          self->func.apply(ostream_visitor(false), out, osm);
           out << ' ';
-          self->arg.apply(ostream_visitor(), out, osm);
+          self->arg.apply(ostream_visitor(true), out, osm);
         }
-         
+
+        if(parens) out << ')';
       }
 
       
