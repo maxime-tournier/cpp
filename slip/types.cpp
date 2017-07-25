@@ -365,59 +365,59 @@ namespace slip {
 
 
 
-    struct row_helper {
+      struct row_helper {
 
-      // TODO multimap for duplicate labels
-      using rows_type = std::map<symbol, type>;
-      rows_type rows;
+        // TODO multimap for duplicate labels
+        using rows_type = std::map<symbol, type>;
+        rows_type rows;
         
-      type last;
+        type last;
 
-      static type fill(rows_type& rows, const type& row) {
-        if(row.is< ref<application> >() ) {
+        static type fill(rows_type& rows, const type& row) {
+          if(row.is< ref<application> >() ) {
 
-          const auto& app = row.get< ref<application> >();
+            const auto& app = row.get< ref<application> >();
 
-          assert(app->func.is< ref<application> >());
+            assert(app->func.is< ref<application> >());
 
-          const auto& head = app->func.get< ref<application> >();
-          assert( head->arg.kind() == terms() );
+            const auto& head = app->func.get< ref<application> >();
+            assert( head->arg.kind() == terms() );
 
-          assert( head->func.is<constant>() );
-          assert( head->func.kind() == (terms() >>= types::rows() >>= types::rows()) );
+            assert( head->func.is<constant>() );
+            assert( head->func.kind() == (terms() >>= types::rows() >>= types::rows()) );
 
-          rows.emplace( std::make_pair(head->func.get<constant>().name, head->arg) );
-          return fill(rows, app->arg);
+            rows.emplace( std::make_pair(head->func.get<constant>().name, head->arg) );
+            return fill(rows, app->arg);
             
-        } else {
-          return row;
-        }
+          } else {
+            return row;
+          }
           
-      }
+        }
         
-      row_helper(const type& row) : last( fill(rows, row) ) {
-        assert( last == empty_row_type || last.is< ref<variable> >() );
-        assert( last.kind() == types::rows() );
-      }
-
-
-
-      struct compare {
-
-        template<class Pair>
-        bool operator()(const Pair& lhs, const Pair& rhs) const {
-          return lhs.first < rhs.first;
+        row_helper(const type& row) : last( fill(rows, row) ) {
+          assert( last == empty_row_type || last.is< ref<variable> >() );
+          assert( last.kind() == types::rows() );
         }
 
-      };
+
+
+        struct compare {
+
+          template<class Pair>
+          bool operator()(const Pair& lhs, const Pair& rhs) const {
+            return lhs.first < rhs.first;
+          }
+
+        };
       
 
-      bool unify_difference(const row_helper& other, pretty_printer& pp, UF& uf)  const {
-        std::map<symbol, type> tmp;
+        bool unify_difference(const row_helper& other, pretty_printer& pp, UF& uf)  const {
+          std::map<symbol, type> tmp;
           
-        std::set_difference(rows.begin(), rows.end(),
-                            other.rows.begin(), other.rows.end(),
-                            std::inserter(tmp, tmp.end()), compare() );
+          std::set_difference(rows.begin(), rows.end(),
+                              other.rows.begin(), other.rows.end(),
+                              std::inserter(tmp, tmp.end()), compare() );
 
           if( other.last == empty_row_type && tmp.size() > 0) {
 
@@ -456,35 +456,35 @@ namespace slip {
           }
 
           return false;
-      }
+        }
       
         
-      void unify(const row_helper& other, pretty_printer& pp, UF& uf) const {
+        void unify(const row_helper& other, pretty_printer& pp, UF& uf) const {
 
-        std::map<symbol, type> tmp;
-        std::set_intersection(rows.begin(), rows.end(),
-                              other.rows.begin(), other.rows.end(),
-                              std::inserter(tmp, tmp.end()), compare() );
+          std::map<symbol, type> tmp;
+          std::set_intersection(rows.begin(), rows.end(),
+                                other.rows.begin(), other.rows.end(),
+                                std::inserter(tmp, tmp.end()), compare() );
 
-        // unify types in intersection
-        for(auto& s : tmp) {
-          pp << "unifying row intersection: " << s.first << std::endl;
-          uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp),
-                                                       uf.find(other.rows.find(s.first)->second), uf);
+          // unify types in intersection
+          for(auto& s : tmp) {
+            pp << "unifying row intersection: " << s.first << std::endl;
+            uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp),
+                                                         uf.find(other.rows.find(s.first)->second), uf);
+          }
+
+
+          // 
+          this->unify_difference(other, pp, uf);
+          other.unify_difference(*this, pp, uf);
+        
         }
 
-
-        // 
-        this->unify_difference(other, pp, uf);
-        other.unify_difference(*this, pp, uf);
         
-      }
-
-        
-    };
+      };
 
       
-
+      
 
       
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
@@ -542,18 +542,23 @@ namespace slip {
         state sub = tc.scope();
 
         // create/define arg types
-        const list< ref<variable> > args = map(self->args, [&](const symbol& s) {
-            const ref<variable> var = tc.fresh();
+        list< type > args = map(self->args, [&](const symbol& s) {
+            const type a = tc.fresh();
             // note: var stays monomorphic after generalization
-            sub.def(s, sub.generalize(var) );
-            return var;
+            sub.def(s, sub.generalize(a) );
+            return a;
           });
+
+        // fix nullary functions
+        if(!args) {
+          args = unit_type >>= args;
+        }
         
         // infer body type in subcontext
         const type body_type = infer(sub, self->body);
 
         // return complete application type
-        return foldr(body_type, args, [](const ref<variable>& lhs, const type& rhs) {
+        return foldr(body_type, args, [](const type& lhs, const type& rhs) {
             return lhs >>= rhs;
           });
         
@@ -566,10 +571,15 @@ namespace slip {
         const type func = infer(tc, self->func);
 
         // infer arg types
-        const list<type> args = map(self->args, [&](const ast::expr& e) {
+        list<type> args = map(self->args, [&](const ast::expr& e) {
             return infer(tc, e);
           });
 
+        // fix nullary applications
+        if(!args) {
+          args = unit_type >>= args;
+        }
+        
         // construct function type
         const type result = tc.fresh();
         
@@ -721,7 +731,7 @@ namespace slip {
 
       template<class UF>
       type operator()(const ref<application>& self, UF& uf) const {
-         return map(self, [&](const type& c) {
+        return map(self, [&](const type& c) {
             return c.map<type>(nice(), uf);
           });
       }
