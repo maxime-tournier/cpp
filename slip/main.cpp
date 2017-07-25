@@ -175,11 +175,23 @@ static const auto compiler = [](bool dump_bytecode) {
       });
   }
 
-  
+
+  // lists
   {
     types::type a = tc->fresh();
     tc->def("nil", tc->generalize(types::list_ctor(a)));
+    jit->def("nil", vm::value::list());
   } 
+
+
+  {
+    types::type a = tc->fresh();
+    tc->def("cons", tc->generalize(a >>= types::list_ctor(a) >>= types::list_ctor(a) ));
+    jit->def("cons", +[](const vm::value* first, const vm::value* last) -> vm::value {
+        return first[0] >>= first[1].get< vm::value::list >();
+      });
+  } 
+
   
   return [tc, jit, dump_bytecode](sexpr&& s) mutable {
 

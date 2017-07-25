@@ -158,7 +158,7 @@ namespace slip {
 
     // some type constructors
     extern const type func_ctor, io_ctor, list_ctor, ref_ctor;
-
+    
     // easily construct function types
     type operator>>=(const type& lhs, const type& rhs);
     
