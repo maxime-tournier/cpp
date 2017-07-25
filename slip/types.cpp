@@ -251,21 +251,6 @@ namespace slip {
       }
 
       bool operator()(const ref<variable>& self, const ref<variable>& var, UF& uf) const {
-        // TODO not sure if this should be done here
-        
-        if(self->depth > var->depth) {
-          // we are trying to unify var with a type type containing self,
-          // but var has smaller depth: we need to "raise" self to var's depth
-          // so that self generalizes just like var
-
-          // note: we keep self->kind
-          const ref<variable> raised = make_ref<variable>(self->kind, var->depth);
-          assert( type(self).kind() == uf.find(self).kind());
-          
-          assert(uf.find(self).kind() == type(raised).kind());
-          uf.link(uf.find(self), raised);
-        }
-        
         return self == var;
       }
 
@@ -280,9 +265,7 @@ namespace slip {
     };
 
 
-
-
-
+    
 
 
 
@@ -452,12 +435,14 @@ namespace slip {
         // unify types in intersection
         for(auto& s : tmp) {
           pp << "unifying row intersection: " << s.first << std::endl;
-          uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp), uf.find(other.rows.find(s.first)->second), uf);
+          uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp),
+                                                       uf.find(other.rows.find(s.first)->second), uf);
         }
 
 
-        const bool lhs = this->unify_difference(other, pp, uf);
-        const bool rhs = other.unify_difference(*this, pp, uf);
+        // 
+        this->unify_difference(other, pp, uf);
+        other.unify_difference(*this, pp, uf);
         
       }
 

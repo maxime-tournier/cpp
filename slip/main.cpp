@@ -152,11 +152,29 @@ static const auto compiler = [](bool dump_bytecode) {
   ("%", [](integer x, integer y) -> integer { return x % y; })
   ("=", [](integer x, integer y) -> boolean { return x == y; })    
   ;
+
+  
   
   {
     types::type a = tc->fresh();
     tc->def(kw::pure, tc->generalize( a >>= types::io_ctor(a) ));
+    jit->def(kw::pure, +[](const vm::value* first, const vm::value* last) {
+        return *first;
+      });
   }
+
+
+  const types::type string_type = types::traits< ref<vm::string> >::type();
+  const types::type unit_type = types::traits< vm::unit >::type();
+  
+  {
+    tc->def("print", tc->generalize( string_type >>= types::io_ctor( unit_type )  ));
+    jit->def("print", +[](const vm::value* first, const vm::value* last) -> vm::value {
+        std::cout << *first->get< ref<vm::string> >() << std::endl;
+        return vm::unit();
+      });
+  }
+
   
   {
     types::type a = tc->fresh();

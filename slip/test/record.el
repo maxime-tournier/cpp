@@ -1,4 +1,7 @@
-(def x (record (foo 1) (marcel "derp") (bar 2)))
+(def x (record
+        (foo 1)
+        (marcel "derp")
+        (bar 2)))
 
 (@marcel x)
 
