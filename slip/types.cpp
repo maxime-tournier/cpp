@@ -108,19 +108,23 @@ namespace slip {
                       ostream_map& osm) const {
 
         // i have no idea what i'm doing lol
-        if(parens) out << '(';
+
         
         if(self->func == func_ctor) {
           self->arg.apply(ostream_visitor(true), out, osm);
           out << ' ';
-          self->func.apply(ostream_visitor(false), out, osm);
+          self->func.apply(ostream_visitor(true), out, osm);
         } else {
-          self->func.apply(ostream_visitor(false), out, osm);
+          if(parens) out << '(';
+          // const bool sub = self->func.is< ref<application> >();
+          
+          self->func.apply(ostream_visitor(true), out, osm);
           out << ' ';
-          self->arg.apply(ostream_visitor(true), out, osm);
+          self->arg.apply(ostream_visitor(false), out, osm);
+          if(parens) out << ')';
+        
         }
 
-        if(parens) out << ')';
       }
 
       

@@ -19,4 +19,3 @@ obj
 
 (@method obj 3)
 
-
