@@ -31,20 +31,54 @@ namespace slip {
 
       
       ostream_map osm;
-      std::ostream& out;
-      pretty_printer(std::ostream& out) : out(out) { }
+      std::ostream& ostream;
+      bool flag = true;
+      
+      std::size_t depth = 0;
+      
+      pretty_printer(std::ostream& ostream) : ostream(ostream) { }
 
+      struct indent_type {
+        pretty_printer* owner;
+        indent_type(pretty_printer* owner) : owner(owner) {
+          ++owner->depth;
+        }
 
+        ~indent_type() {
+          --owner->depth;
+        }
+      };
+
+      indent_type indent() { return {this}; }
+      
+      std::ostream& out() {
+        if(flag) {
+          for(std::size_t i = 0; i < depth; ++i) {
+            ostream << "  ";
+          }
+          
+          flag = false;
+        }
+
+        return ostream;
+      }
+      
       template<class T>
       pretty_printer& operator<<(const T& self) {
-        out << self;
+        out() << self;
         return *this;
       }
 
       pretty_printer& operator<<(const type& self);
 
       pretty_printer& operator<<( std::ostream& (*f)(std::ostream& )) {
-        out << f;
+        out() << f;
+
+        using type = decltype(f);
+        
+        if(f == (type)std::endl) {
+          flag = true;
+        }
         return *this;
       }
       
@@ -84,7 +118,7 @@ namespace slip {
 
 
     pretty_printer& pretty_printer::operator<<(const type& self) {
-      self.apply( ostream_visitor(), out, osm );        
+      self.apply( ostream_visitor(), out(), osm );        
       return *this;
     }
 
@@ -455,7 +489,7 @@ namespace slip {
       
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
         pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
-
+        const auto indent = pp.indent();        
 
         if(type(lhs).kind() == rows() && type(rhs).kind() == rows() ) {
           row_helper(lhs).unify(row_helper(rhs), pp, uf);
@@ -471,10 +505,15 @@ namespace slip {
 
 
     void state::unify(const type& lhs, const type& rhs) {
+
       pretty_printer pp(std::clog);
-      pp << ">> unifying: " << lhs << " ~ " << rhs << std::endl;              
-      uf->find(lhs).apply( unify_visitor<uf_type>(pp), uf->find(rhs), *uf);
-      pp << "<< unification end" << std::endl;
+      pp << "unify: " << lhs << " ~ " << rhs << std::endl;
+      const auto indent = pp.indent();
+
+      const type flhs = uf->find(lhs);
+      const type frhs = uf->find(rhs);
+
+      flhs.apply( unify_visitor<uf_type>(pp), frhs, *uf);
      
     }
     
