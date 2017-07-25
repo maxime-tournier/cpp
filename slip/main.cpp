@@ -154,21 +154,21 @@ static const auto compiler = [](bool dump_bytecode) {
   ;
 
   
-  
+  using namespace types;
   {
-    types::type a = tc->fresh();
-    tc->def(kw::pure, tc->generalize( a >>= types::io_ctor(a) ));
+    type a = tc->fresh();
+    tc->def(kw::pure, tc->generalize( a >>= io_ctor(a) ));
     jit->def(kw::pure, +[](const vm::value* first, const vm::value* last) {
         return *first;
       });
   }
 
 
-  const types::type string_type = types::traits< ref<vm::string> >::type();
-  const types::type unit_type = types::traits< vm::unit >::type();
+  const type string_type = traits< ref<vm::string> >::type();
+  const type unit_type = traits< vm::unit >::type();
   
   {
-    tc->def("print", tc->generalize( string_type >>= types::io_ctor( unit_type )  ));
+    tc->def("print", tc->generalize( string_type >>= io_ctor( unit_type )  ));
     jit->def("print", +[](const vm::value* first, const vm::value* last) -> vm::value {
         std::cout << *first->get< ref<vm::string> >() << std::endl;
         return vm::unit();
@@ -178,15 +178,15 @@ static const auto compiler = [](bool dump_bytecode) {
 
   // lists
   {
-    types::type a = tc->fresh();
-    tc->def("nil", tc->generalize(types::list_ctor(a)));
+    type a = tc->fresh();
+    tc->def("nil", tc->generalize( list_ctor(a)));
     jit->def("nil", vm::value::list());
   } 
 
 
   {
-    types::type a = tc->fresh();
-    tc->def("cons", tc->generalize(a >>= types::list_ctor(a) >>= types::list_ctor(a) ));
+    type a = tc->fresh();
+    tc->def("cons", tc->generalize(a >>= list_ctor(a) >>= list_ctor(a) ));
     jit->def("cons", +[](const vm::value* first, const vm::value* last) -> vm::value {
         return first[0] >>= first[1].get< vm::value::list >();
       });
