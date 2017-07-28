@@ -266,8 +266,14 @@ namespace slip {
       
     }
 
+
+    template<class Type, class Node>
+    struct inferred {
+      Type type;
+      Node node;
+    };
     
-    static type infer(state& self, const ast::expr& node);
+    static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
     
 
 
@@ -540,18 +546,19 @@ namespace slip {
 
       
       template<class T>
-      type operator()(const ast::literal<T>& self, state& tc) const {
-        return traits<T>::type();
+      inferred<type, ast::expr> operator()(const ast::literal<T>& self, state& tc) const {
+        return {traits<T>::type(), self};
       }
 
       
-      type operator()(const symbol& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const symbol& self, state& tc) const {
         const scheme& p = tc.find(self);
-        return tc.instantiate(p);
+        const type res = tc.instantiate(p);
+        return {res, self};
       }
 
       
-      type operator()(const ref<ast::lambda>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ref<ast::lambda>& self, state& tc) const {
 
         state sub = tc.scope();
 
@@ -569,24 +576,26 @@ namespace slip {
         }
         
         // infer body type in subcontext
-        const type body_type = infer(sub, self->body);
+        const inferred<type, ast::expr> body = infer(sub, self->body);
 
         // return complete application type
-        return foldr(body_type, args, [](const type& lhs, const type& rhs) {
+        const type res = foldr(body.type, args, [](const type& lhs, const type& rhs) {
             return lhs >>= rhs;
           });
-        
+
+        return {res, self};
       }
 
 
 
-      type operator()(const ref<ast::application>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ref<ast::application>& self, state& tc) const {
 
-        const type func = infer(tc, self->func);
+        const inferred<type, ast::expr> func = infer(tc, self->func);
 
         // infer arg types
         list<type> args = map(self->args, [&](const ast::expr& e) {
-            return infer(tc, e);
+            const inferred<type, ast::expr> arg = infer(tc, e);
+            return arg.type;
           });
 
         // fix nullary applications
@@ -602,100 +611,106 @@ namespace slip {
           });
 
         try{
-          tc.unify(func, sig);
+          tc.unify(func.type, sig);
         } catch( occurs_error ) {
           throw type_error("occurs check");
         }
 
-        return result;
+        return {result, self};
       }
 
 
-      type operator()(const ast::condition& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::condition& self, state& tc) const {
         const type result = tc.fresh();
 
         for(const ast::branch& b : self.branches() ) {
 
-          const type test = infer(tc, b.test);
-          tc.unify(boolean_type, test);
+          const inferred<type, ast::expr> test = infer(tc, b.test);
+          tc.unify(boolean_type, test.type);
           
-          const type value = infer(tc, b.value);
-          tc.unify(value, result);
+          const inferred<type, ast::expr> value = infer(tc, b.value);
+          tc.unify(value.type, result);
         };
 
-        return result;
+        return {result, self};
       }
 
 
       // let-binding
-      type operator()(const ref<ast::definition>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ref<ast::definition>& self, state& tc) const {
 
-        const type value = tc.fresh();
+        const type forward = tc.fresh();
         
         state sub = tc.scope();
 
         // note: value is bound in sub-context (monomorphic)
-        sub.def(self->id, sub.generalize(value));
+        sub.def(self->id, sub.generalize(forward));
 
-        tc.unify(value, infer(sub, self->value));
+        const inferred<type, ast::expr> value = infer(sub, self->value);       
+        tc.unify(forward, value.type);
 
-        tc.def(self->id, tc.generalize(value));
+        tc.def(self->id, tc.generalize(value.type));
         
-        return io_ctor( unit_type );
+        return {io_ctor( unit_type ), self};
         
       }
 
 
       // monadic binding
-      type operator()(const ref<ast::binding>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ref<ast::binding>& self, state& tc) const {
 
-        const type value = tc.fresh();
+        const type forward = tc.fresh();
 
         // note: value is bound in sub-context (monomorphic)
         tc = tc.scope();
         
-        tc.def(self->id, tc.generalize(value));
+        tc.def(self->id, tc.generalize(forward));
 
-        tc.unify(io_ctor(value), infer(tc, self->value));
+        const inferred<type, ast::expr> value = infer(tc, self->value);        
+        tc.unify(io_ctor(forward), value.type);
 
         tc.find(self->id);
         
-        return io_ctor( unit_type );
+        return {io_ctor( unit_type ), self};
         
       }
       
 
-      type operator()(const ast::sequence& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::sequence& self, state& tc) const {
         type res = io_ctor( unit_type );
 
         for(const ast::expr& e : self.items() ) {
 
           res = io_ctor( tc.fresh() );
-          tc.unify( res, infer(tc, e));          
+          const inferred<type, ast::expr> item = infer(tc, e);
+          tc.unify(res, item.type);          
         }
           
-        return res;
+        return {res, self};
       }
 
 
-      type operator()(const ast::selection& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::selection& self, state& tc) const {
 
         const type a = tc.fresh(), r = tc.fresh(rows());
         
-        return record_ctor( row_extension_ctor(self.label)(a)(r) ) >>= a;
+        const type res = record_ctor( row_extension_ctor(self.label)(a)(r) ) >>= a;
+        return {res, self};
       }
       
 
 
-      type operator()(const ast::record& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::record& self, state& tc) const {
 
-        return record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) {
-              return row_extension_ctor(lhs.label)(infer(tc, lhs.value))(rhs);
+        const type res = record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) {
+              const inferred<type, ast::expr> value = infer(tc, lhs.value);
+              return row_extension_ctor(lhs.label)(value.type)(rhs);
             }));
-        
+
+        return {res, self};
       }
       
-      type operator()(const ast::expr& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::expr& self, state& tc) const {
         std::stringstream ss;
         ss << "type inference unimplemented for " << self;
         throw error(ss.str());
@@ -704,9 +719,9 @@ namespace slip {
     };
 
 
-    static type infer(state& self, const ast::expr& node) {
+    static inferred<type, ast::expr> infer(state& self, const ast::expr& node) {
       try{
-        return node.map<type>(expr_visitor(), self);
+        return node.map< inferred<type, ast::expr> >(expr_visitor(), self);
       } catch( unification_error& e )  {
         std::stringstream ss;
 
@@ -878,8 +893,8 @@ namespace slip {
   
   
     scheme infer(state& self, const ast::toplevel& node) {
-      const type res = infer(self, node.get<ast::expr>());
-      return self.generalize(res);
+      const inferred<type, ast::expr> res = infer(self, node.get<ast::expr>());
+      return self.generalize(res.type);
     }
 
 

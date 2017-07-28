@@ -204,6 +204,7 @@ namespace slip {
       ref<variable> fresh(kind k = terms()) const;
     };
 
+
     scheme infer(state& self, const ast::toplevel& node);    
 
 
