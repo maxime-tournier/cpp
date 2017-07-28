@@ -205,8 +205,15 @@ namespace slip {
     };
 
 
-    scheme infer(state& self, const ast::toplevel& node);    
+    template<class Type, class Node>
+    struct inferred {
+      Type type;
+      Node node;
+    };
 
+    
+    inferred<scheme, ast::toplevel> infer(state& self, const ast::toplevel& node);    
+    
 
     // some traits
     template<class T>

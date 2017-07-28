@@ -267,11 +267,6 @@ namespace slip {
     }
 
 
-    template<class Type, class Node>
-    struct inferred {
-      Type type;
-      Node node;
-    };
     
     static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
     
@@ -892,9 +887,9 @@ namespace slip {
     }
   
   
-    scheme infer(state& self, const ast::toplevel& node) {
+    inferred<scheme, ast::toplevel> infer(state& self, const ast::toplevel& node) {
       const inferred<type, ast::expr> res = infer(self, node.get<ast::expr>());
-      return self.generalize(res.type);
+      return {self.generalize(res.type), node};
     }
 
 
