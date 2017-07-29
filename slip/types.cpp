@@ -619,19 +619,21 @@ namespace slip {
       }
 
 
+      // conditions
       inferred<type, ast::expr> operator()(const ast::condition& self, state& tc) const {
         const type result = tc.fresh();
 
-        for(const ast::branch& b : self.branches() ) {
+        const ast::expr node = ast::condition( map(self.branches(), [&](const ast::branch& b) {
+            const inferred<type, ast::expr> test = infer(tc, b.test);
+            tc.unify(boolean_type, test.type);
+            
+            const inferred<type, ast::expr> value = infer(tc, b.value);
+            tc.unify(value.type, result);
 
-          const inferred<type, ast::expr> test = infer(tc, b.test);
-          tc.unify(boolean_type, test.type);
-          
-          const inferred<type, ast::expr> value = infer(tc, b.value);
-          tc.unify(value.type, result);
-        };
-
-        return {result, self};
+            return ast::branch(test.node, value.node);
+            }));
+        
+        return {result, node};
       }
 
 
