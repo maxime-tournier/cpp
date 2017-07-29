@@ -710,17 +710,26 @@ namespace slip {
       
 
       // record literals
-      // TODO this could be done better
+      // TODO this could be done better by typechecking rows individually?
       inferred<type, ast::expr> operator()(const ast::record& self, state& tc) const {
-        
-        const type res = record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) {
-              const inferred<type, ast::expr> value = infer(tc, lhs.value);
-              return row_extension_ctor(lhs.label)(value.type)(rhs);
-            }));
 
-        return {res, self};
+        using chunk = inferred< type, list<ast::row> >;
+        chunk init = {empty_row_type, {}},
+          result = foldr(init, self.rows(), [&](const ast::row& lhs, const chunk& rhs) -> chunk {
+
+              // infer current row
+              const inferred<type, ast::expr> value = infer(tc, lhs.value);
+
+              // extend rhs with it
+              return {row_extension_ctor(lhs.label)(value.type)(rhs.type), 
+                  ast::row(lhs.label, value.node) >>= rhs.node};
+            });
+
+        return { record_ctor(result.type), ast::record( std::move(result.node) ) };
       }
-      
+
+
+      // fallback case
       inferred<type, ast::expr> operator()(const ast::expr& self, state& tc) const {
         std::stringstream ss;
         ss << "type inference unimplemented for " << self;
