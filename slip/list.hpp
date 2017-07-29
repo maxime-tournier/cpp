@@ -38,6 +38,11 @@ namespace slip {
       inline head_type& operator*() const { return ptr->head; }
       inline bool operator!=(iterator other) const { return ptr != other.ptr; }
       inline iterator& operator++() { ptr = ptr->tail.get(); return *this; }
+      inline iterator operator++(int) {
+        iterator res = *this;
+        ptr = ptr->tail.get();
+        return res;
+      }
     };
 
 
@@ -45,6 +50,9 @@ namespace slip {
     
   };
 
+  struct empty_list : error {
+    empty_list() : error("empty list") { } 
+  };
 
   
 
@@ -90,6 +98,26 @@ namespace slip {
       });
   }
 
+  // TODO finish
+  template<class Ret, class Head, class F, std::size_t ... I>
+  static inline Ret unpack(const list<Head>& self, const F& f) {
+    auto it = begin(self);
+    
+    const Head* expand [] = { (I, *it++)... };
+    
+    return f( expand[I]... );
+  };
+  
+  template<class Head>
+  static inline list< list<Head> > split(std::size_t at, const list<Head>& arg) {
+    if(at == 0) return list<Head>() >>= arg >>= list<list<Head>>();
+    if(!arg) throw empty_list();
+
+    const list<list<Head>>& sub = split(at - 1, arg->tail);
+    return (arg->head >>= sub->head) >>= (sub->tail->head) >>= list<list<Head>>();;
+  }
+
+  
   template<class Head>
   const Head& get( const list<Head>& self, std::size_t i ) {
     if(i == 0) return self->head;
@@ -111,9 +139,6 @@ namespace slip {
   }
  
 
-  struct empty_list : error {
-    empty_list() : error("empty list") { } 
-  };
 
   
   // static inline const list& unpack(const list& from) { return from; }
