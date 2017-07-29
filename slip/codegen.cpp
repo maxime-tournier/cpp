@@ -237,10 +237,17 @@ namespace slip {
         
         // compile function
         compile(res, ctx, self->func);
+
+        // fix nullary application
+        // TODO do this during ast generation + optimize ?
+        list<ast::expr> args = self->args;
+        if( args->head.is< ast::literal<unit> >() ) {
+          args = args->tail;
+        }
         
         // compile args
         integer n = 0;
-        for(const ast::expr& e : self->args) {
+        for(const ast::expr& e : args) {
           compile(res, ctx, e);
           ++n;
         }

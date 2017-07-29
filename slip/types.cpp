@@ -268,10 +268,6 @@ namespace slip {
 
 
     
-    static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
-    
-
-
     // unification
     struct unification_error {
       unification_error(type lhs, type rhs) : lhs(lhs), rhs(rhs) { }
@@ -536,7 +532,9 @@ namespace slip {
 
 
     
-    // expression inference
+    // type inference for expressions
+    static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
+    
     struct expr_visitor {
 
       
@@ -578,31 +576,31 @@ namespace slip {
             return lhs >>= rhs;
           });
 
-        return {res, self};
+        // and rewritten lambda body
+        const ast::expr node = make_ref<ast::lambda>(self->args, body.node);
+        
+        return {res, node};
       }
 
 
 
       inferred<type, ast::expr> operator()(const ref<ast::application>& self, state& tc) const {
 
+        // TODO currying 
+        
         const inferred<type, ast::expr> func = infer(tc, self->func);
 
         // infer arg types
-        list<type> args = map(self->args, [&](const ast::expr& e) {
-            const inferred<type, ast::expr> arg = infer(tc, e);
-            return arg.type;
+        list< inferred<type, ast::expr> > args = map(self->args, [&](const ast::expr& e) {
+            return infer(tc, e);
           });
 
-        // fix nullary applications
-        if(!args) {
-          args = unit_type >>= args;
-        }
-        
+
         // construct function type
         const type result = tc.fresh();
         
-        const type sig = foldr(result, args, [&](const type& lhs, const type& rhs) {
-            return lhs >>= rhs;
+        const type sig = foldr(result, args, [&](const inferred<type, ast::expr>& lhs, const type& rhs) {
+            return lhs.type >>= rhs;
           });
 
         try{
@@ -611,7 +609,13 @@ namespace slip {
           throw type_error("occurs check");
         }
 
-        return {result, self};
+        // rewrite ast node
+        const ast::expr node =
+          make_ref<ast::application>(func.node, map(args, [](const inferred<type, ast::expr>& e) {
+                return e.node;
+              }));
+        
+        return {result, node};
       }
 
 

@@ -144,12 +144,16 @@ namespace slip {
         throw syntax_error("empty list in application");
       }
 
-      return make_ref<application>( check_expr(self->head),
-                                    map(self->tail, [](const sexpr& e) {
-                                        return check_expr(e);
-                                      }));
-    }
+      list<expr> args = map(self->tail, [](const sexpr& e) {
+          return check_expr(e);
+        });
 
+      // fix nullary applications
+      if(!args) args = literal<unit>() >>= args;
+      
+      return make_ref<application>( check_expr(self->head), args);
+    }
+    
     
     static expr check_definition(const sexpr::list& items) {
       struct fail { };
