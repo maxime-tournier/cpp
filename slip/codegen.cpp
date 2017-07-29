@@ -159,12 +159,16 @@ namespace slip {
         if(ctx->defining) {
           sub->add_local(*ctx->defining);
         } else {
-          sub->add_local("__self__");
+          sub->add_local();
         }
 
         // populate sub with args
         for(const symbol& s : self->args) {
-          sub->add_local(s);
+          if(s == kw::wildcard) {
+            sub->add_local();
+          } else {
+            sub->add_local(s);
+          }
         }
 
         // reserve space for return address
@@ -238,16 +242,11 @@ namespace slip {
         // compile function
         compile(res, ctx, self->func);
 
-        // fix nullary application
-        // TODO FIXME do this during ast generation + optimize ?
-        list<ast::expr> args = self->args;
-        if( args->head.is< ast::literal<unit> >() ) {
-          args = args->tail;
-        }
+        // TODO optimize nullary applications
         
         // compile args
         integer n = 0;
-        for(const ast::expr& e : args) {
+        for(const ast::expr& e : self->args) {
           compile(res, ctx, e);
           ++n;
         }

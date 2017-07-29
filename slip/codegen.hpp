@@ -21,15 +21,24 @@ namespace slip {
     
     struct variables : slip::context<variables, std::size_t> {
 
+      std::size_t size;
+      
       using context::context;
       
       locals_type captured;
-
+      
       const symbol* defining = nullptr;
 
+      // push unnamed local variable, return its index
+      integer add_local() { return size++; }
+
+      // push named (unique) local variable
       integer add_local(symbol s) {
-        auto res = locals.insert( std::make_pair(s, locals.size()));
-        if(!res.second) throw slip::error("duplicate local");
+        auto res = locals.insert( std::make_pair(s, add_local() ) );
+        if(!res.second) {
+          throw slip::error("duplicate local");
+        }
+        
         return res.first->second;
       }
 

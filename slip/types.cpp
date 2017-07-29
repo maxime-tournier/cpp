@@ -3,6 +3,8 @@
 #include "sexpr.hpp"
 #include "ast.hpp"
 
+#include "syntax.hpp"
+
 #include <algorithm>
 #include <sstream>
 
@@ -553,24 +555,33 @@ namespace slip {
         return {res, self};
       }
 
+
       // lambdas
       inferred<type, ast::expr> operator()(const ref<ast::lambda>& self, state& tc) const {
 
         state sub = tc.scope();
 
         // create/define arg types
-        list< type > args = map(self->args, [&](const symbol& s) {
+        const list< type > args = map(self->args, [&](const symbol& s) {
             const type a = tc.fresh();
+
             // note: var stays monomorphic after generalization
-            sub.def(s, sub.generalize(a) );
+            if(!(s == kw::wildcard) ) {
+              sub.def(s, sub.generalize(a) );
+            }
+            
             return a;
           });
 
-        // fix nullary functions
-        if(!args) {
-          args = unit_type >>= args;
+
+        // TODO FIXME this is to fix nullary applications until typed function
+        // args are available
+        if(size(self->args) == 1 && self->args->head == kw::wildcard) {
+          args->head = unit_type;
         }
         
+        
+
         // infer body type in subcontext
         const inferred<type, ast::expr> body = infer(sub, self->body);
 
@@ -584,6 +595,7 @@ namespace slip {
         
         return {res, node};
       }
+
 
 
       // applications

@@ -124,11 +124,14 @@ namespace slip {
       try {
         if(size(args) != 2 || !args->head.is<sexpr::list>() ) throw fail();
         
-        const list<symbol> vars =
+        list<symbol> vars =
           map(args->head.get<sexpr::list>(), [&](const sexpr& e) {
               if(!e.is<symbol>()) throw fail();
               return e.get<symbol>();
             });
+
+        // fix nullary functions
+        if(!vars) vars = kw::wildcard >>= vars;
         
         return make_ref<lambda>(vars, check_expr(args->tail->head));
         

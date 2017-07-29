@@ -102,10 +102,9 @@ namespace slip {
       
     };
 
-
-    
     
     struct application;
+
 
     struct type : variant< constant, ref<variable>, ref<application> > {
 
@@ -113,15 +112,18 @@ namespace slip {
     
       struct kind kind() const;
 
-      // apply a type constructor of the constructor kind
+      // apply a type constructor to a type.
+      // TODO only for applications
       type operator()(const type& arg) const;
+      
     };
 
-    // TODO turn this into a functor goddamn it
+    
+    // application of a type constructor to a type
     struct application {
       type func;
       type arg;
-    
+
       application(type func, type arg)
         : func(func),
           arg(arg) {
@@ -134,6 +136,10 @@ namespace slip {
           throw error("kind error");
         }
       }
+
+
+      // used to remember "true" argcount in lambdas when currying
+      std::size_t argc = 0;
     };
 
     template<class F>

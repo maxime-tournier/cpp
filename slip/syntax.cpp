@@ -13,6 +13,8 @@ namespace slip {
       lambda = "lambda",
       seq = "do",
       cond = "cond",
+      wildcard = "_",
+
       quote = "quote",
       quasiquote = "quasiquote",
       unquote = "unquote";
