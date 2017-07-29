@@ -112,13 +112,12 @@ struct binder {
     using namespace slip;
     using namespace types;    
     
-	using ctor = type;
-	const ctor expand[] = { traits<Args>::type()... };
+	const type expand[] = { traits<Args>::type()... };
   
-	const list<ctor> args = make_list<ctor>(expand, expand + sizeof...(Args));
+	const list<type> args = make_list<type>(expand, expand + sizeof...(Args));
 
-	const ctor ret = traits<Ret>::type();
-	return foldr( ret, args, [](const ctor& lhs, const ctor& rhs) {
+	const type ret = traits<Ret>::type();
+	return foldr( ret, args, [](const type& lhs, const type& rhs) {
 		return lhs >>= rhs;
 	  });
   }
