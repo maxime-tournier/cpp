@@ -534,23 +534,26 @@ namespace slip {
     
     // type inference for expressions
     static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
-    
+
+
+    // expression switch
     struct expr_visitor {
 
-      
+
+      // literals
       template<class T>
       inferred<type, ast::expr> operator()(const ast::literal<T>& self, state& tc) const {
         return {traits<T>::type(), self};
       }
 
-      
+      // variables
       inferred<type, ast::expr> operator()(const symbol& self, state& tc) const {
         const scheme& p = tc.find(self);
         const type res = tc.instantiate(p);
         return {res, self};
       }
 
-      
+      // lambdas
       inferred<type, ast::expr> operator()(const ref<ast::lambda>& self, state& tc) const {
 
         state sub = tc.scope();
@@ -583,7 +586,7 @@ namespace slip {
       }
 
 
-
+      // applications
       inferred<type, ast::expr> operator()(const ref<ast::application>& self, state& tc) const {
 
         // TODO currying 
@@ -651,9 +654,9 @@ namespace slip {
         tc.unify(forward, value.type);
 
         tc.def(self->id, tc.generalize(value.type));
-        
-        return {io_ctor( unit_type ), self};
-        
+
+        const ast::expr node = make_ref<ast::definition>(self->id, value.node);
+        return {io_ctor( unit_type ), node};
       }
 
 
@@ -671,26 +674,32 @@ namespace slip {
         tc.unify(io_ctor(forward), value.type);
 
         tc.find(self->id);
-        
-        return {io_ctor( unit_type ), self};
+
+        // TODO should we rewrite as a def?
+        const ast::expr node = make_ref<ast::binding>(self->id, value.node);
+        return {io_ctor( unit_type ), node};
         
       }
       
 
+      // sequences
       inferred<type, ast::expr> operator()(const ast::sequence& self, state& tc) const {
         type res = io_ctor( unit_type );
 
-        for(const ast::expr& e : self.items() ) {
+        const ast::expr node = ast::sequence( map(self.items(), [&](const ast::expr& e) {
+              res = io_ctor( tc.fresh() );
+              
+              const inferred<type, ast::expr> item = infer(tc, e);
+              tc.unify(res, item.type);
 
-          res = io_ctor( tc.fresh() );
-          const inferred<type, ast::expr> item = infer(tc, e);
-          tc.unify(res, item.type);          
-        }
-          
-        return {res, self};
+              return item.node;
+            }));
+        
+        return {res, node};
       }
 
 
+      // record attribute selection
       inferred<type, ast::expr> operator()(const ast::selection& self, state& tc) const {
 
         const type a = tc.fresh(), r = tc.fresh(rows());
@@ -700,9 +709,10 @@ namespace slip {
       }
       
 
-
+      // record literals
+      // TODO this could be done better
       inferred<type, ast::expr> operator()(const ast::record& self, state& tc) const {
-
+        
         const type res = record_ctor( foldr(empty_row_type, self, [&](const ast::row& lhs, const type& rhs) {
               const inferred<type, ast::expr> value = infer(tc, lhs.value);
               return row_extension_ctor(lhs.label)(value.type)(rhs);
