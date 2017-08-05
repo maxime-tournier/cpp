@@ -265,7 +265,7 @@ namespace slip {
           case opcode::STOP: return;
 
           case opcode::PUSH:
-            // note: cannot move here
+            // note: cannot move, maybe needed multiple times
             data_stack.emplace_back( code[++ip] );
             break;
       
