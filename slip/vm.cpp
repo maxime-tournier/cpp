@@ -113,6 +113,11 @@ namespace slip {
         out << "#<closure: @" << self->addr << ">";
       }
 
+      void operator()(const ref<partial>& self, std::ostream& out) const {
+        out << "#<partial>";
+      }
+
+      
       void operator()(const ref<record>& self, std::ostream& out) const {
         out << "{" << make_list<value>(self->begin(), self->end()) << '}';
       }
@@ -237,6 +242,11 @@ namespace slip {
       return record::create< record >(last - first, first, last);
     }
 
+
+    ref<partial> make_partial(const value* first, const value* last) {
+      return partial::create< partial >(last - first, first, last);
+    }
+    
 
 
     
@@ -450,18 +460,27 @@ namespace slip {
             switch( func.type() ) {
             case value::type_index< ref<closure> >(): {
 
+              const ref<closure>& f = func.get<ref<closure>>();
+              const int cont = argc - f->argc;
+
+              if( cont < 0 ) {
+                // TODO this also works for builtins
+                // partial application: save stack slice
+                const std::size_t start = data_stack.size() - (argc + 1);
+                
+                const ref<partial> res = make_partial(data_stack.data() + start,
+                                                      data_stack.data() + data_stack.size());
+                // put result and shrink stack
+                data_stack[start] = std::move(res);
+                data_stack.resize(start + 1, unit());
+
+                // and move along
+                break;
+              }
+
               const std::size_t fp = data_stack.size();
               const std::size_t return_addr = ip + 1;
 
-              const ref<closure>& f = func.get<ref<closure>>();
-              const int cont = argc - f->argc;
-              
-              assert(cont >= 0 && "partial applications not implemented");
-
-              // if( cont > 0 ) {
-              //   std::clog << "over-saturated" << std::endl;
-              // }
-              
               // push frame
               call_stack.emplace_back( frame{fp, return_addr, f->argc, std::size_t(cont)} );
               
@@ -470,28 +489,45 @@ namespace slip {
               continue;
             }
 
-            case value::type_index< builtin >():
-
-              {
-                const builtin ptr = func.get<builtin>();
+            case value::type_index< builtin >(): {
+              const builtin ptr = func.get<builtin>();
                 
-                // pop self off the stack
-                data_stack.pop_back();
+              // pop self off the stack
+              data_stack.pop_back();
                 
-                // call builtin
-                const std::size_t start = data_stack.size() - argc;
+              // call builtin
+              const std::size_t start = data_stack.size() - argc;
                 
-                stack* args = static_cast<stack*>(&data_stack);
-                const value result = ptr(args);
-                assert( data_stack.size() >= start && "function popped too many args");
+              stack* args = static_cast<stack*>(&data_stack);
+              const value result = ptr(args);
+              assert( data_stack.size() >= start && "function popped too many args");
                 
-                // pop args + push result
-                data_stack.resize( start + 1, unit() );
+              // pop args + push result
+              data_stack.resize( start + 1, unit() );
                 
-                data_stack[start] = std::move(result);
-              }
-            
+              data_stack[start] = std::move(result);
               break;
+            }
+
+            case value::type_index< ref<partial> >(): {
+              const ref<partial> self = func.get< ref<partial> >();
+
+              // pop self off the stack
+              data_stack.pop_back();
+
+              // unpack stack slice
+              for(const value& x : *self) {
+                // note: cannot move x since it may be used multiple times
+                data_stack.emplace_back(x);
+              }
+              
+              // increment argc
+              argc += (self->size() - 1);
+
+              // and retry with this call
+              goto call;
+            }
+              
             default:
               // TODO optimize default jump test
               throw error("callable expected");

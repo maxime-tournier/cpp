@@ -58,8 +58,9 @@ namespace slip {
 
 
     struct closure;
-    struct record;
 
+    struct record;
+    struct partial;
     
     using slip::unit;
     using slip::boolean;    
@@ -82,7 +83,8 @@ namespace slip {
   
     struct value : variant< unit, boolean, integer, real, symbol, ref<string>, list<value>,
                             builtin,
-                            ref<closure>, ref<record>,
+                            ref<closure>, ref<partial>,
+                            ref<record>,
                             opcode,
                             label> {
       using list = slip::list<value>;
@@ -129,7 +131,16 @@ namespace slip {
                               const value* first, const value* last);
 
     
+    // partial application
+    // TODO use records instead?
+    struct partial : detail::rc_base, dynamic_sized<value> {
+      using partial::dynamic_sized::dynamic_sized;
+    };
 
+    // simply a stack slice
+    ref<partial> make_partial(const value* first, const value* last);
+
+    
     struct record_head : detail::rc_base {
       std::size_t magic;
     };

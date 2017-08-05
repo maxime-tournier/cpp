@@ -9,8 +9,11 @@
 (over2 1 2 3)
 (over3 1 2 3)
 
-;; partial applications
-;; (def add1 (+ 1))
-;; (add1 2)
+; partial applications
+(def add (lambda (x y z) (+ z(+ x y))))
+(def add1 (add 1))
+
+((add1 2) 3)
+
 
 
