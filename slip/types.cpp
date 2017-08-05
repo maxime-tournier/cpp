@@ -339,7 +339,7 @@ namespace slip {
 
 
       void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
-        pp << "unifying: " << type(self) << " ~ " << rhs << std::endl;
+        // pp << "unifying: " << type(self) << " ~ " << rhs << std::endl;
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -364,7 +364,7 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;
+        // pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;
         
         if( !(lhs == rhs) ) {
           throw unification_error(lhs, rhs);
@@ -461,7 +461,7 @@ namespace slip {
             }
 
 
-            pp << "unifying row difference: " << row << " ~ " << other.last << std::endl;                          
+            // pp << "unifying row difference: " << row << " ~ " << other.last << std::endl;
             
             // and link it
             uf.link( uf.find(other.last), row);
@@ -481,7 +481,7 @@ namespace slip {
 
           // unify types in intersection
           for(auto& s : tmp) {
-            pp << "unifying row intersection: " << s.first << std::endl;
+            // pp << "unifying row intersection: " << s.first << std::endl;
             uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp),
                                                          uf.find(other.rows.find(s.first)->second), uf);
           }
@@ -501,7 +501,7 @@ namespace slip {
 
       
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
+        // pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
         const auto indent = pp.indent();        
 
         if(type(lhs).kind() == rows() && type(rhs).kind() == rows() ) {
@@ -520,8 +520,8 @@ namespace slip {
     void state::unify(const type& lhs, const type& rhs) {
 
       pretty_printer pp(std::clog);
-      pp << "unify: " << lhs << " ~ " << rhs << std::endl;
-      const auto indent = pp.indent();
+      // pp << "unify: " << lhs << " ~ " << rhs << std::endl;
+      // const auto indent = pp.indent();
 
       const type flhs = uf->find(lhs);
       const type frhs = uf->find(rhs);

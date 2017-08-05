@@ -9,11 +9,13 @@
                    (z z) ))
         (pure
          (record
-          (add-x (lambda (y) (+ (@x self) y))))))))
+          (add-x (lambda (arg) (+ (@x self) arg)))
+          (add-y (lambda (arg) (+ (@y self) arg)))
+          )))))
 
 (do
- (var foo (make-foo 1 2 3))
+ (var foo (make-foo 8 2 3))
  (pure (@add-x foo 2))
- ;; (pure foo)
+ ;; (pure (@add-y foo 5)) 
  )
 ;; ((@add-x foo) 2)

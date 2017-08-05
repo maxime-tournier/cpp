@@ -184,7 +184,7 @@ namespace slip {
 
         // compile function body with sub variables      
         res.label(start);
-        // res.push_back( opcode::PEEK );
+        res.push_back( opcode::PEEK );
 
         compile(res, sub, self->body);
         res.push_back( opcode::RET );
@@ -220,10 +220,7 @@ namespace slip {
       }
 
 
-      void select(const ast::selection& self, const ast::expr& arg, 
-                  vm::bytecode& res, ref<variables>& ctx) const {
-        compile(res, ctx, arg);
-        
+      void select(const ast::selection& self, vm::bytecode& res, ref<variables>& ctx) const {
         const std::size_t hash = prime_hash(self.label);
 
         res.push_back( opcode::GETATTR );
@@ -233,16 +230,25 @@ namespace slip {
       
       void operator()(const ref<ast::application>& self, vm::bytecode& res, ref<variables>& ctx) const {
 
-        // special applications
-        if(self->func.is< ast::selection >() ) {
-          return select(self->func.get<ast::selection>(), self->args->head, res, ctx);
-        }
-        
         // compile args in reverse order
         const std::size_t n = foldr(0, self->args, [&](const ast::expr& e, std::size_t i) {
             compile(res, ctx, e);
             return i + 1;
           });
+
+        // special applications
+        if(self->func.is< ast::selection >() ) {
+          select(self->func.get<ast::selection>(), res, ctx);
+
+          // extra args
+          if(n > 1) {
+            res.push_back( opcode::CALL );
+            res.push_back( integer(n - 1) );
+          }
+
+          return;
+        }
+        
         
         // compile function
         compile(res, ctx, self->func);
