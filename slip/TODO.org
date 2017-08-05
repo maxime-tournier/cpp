@@ -1,24 +1,44 @@
 
+* done
+
+- basic HM calculus
+
+- vm with function currying 
+[https://www.microsoft.com/en-us/research/publication/make-fast-curry-pushenter-vs-evalapply/]
+
+- polymorphic variants
+[https://www.microsoft.com/en-us/research/publication/extensible-records-with-scoped-labels/]
+  - needs actual label scoping
+  - attribute selection using chinese remainders
+
 * needed
 
-- currying
-
-  - store actual argc alongside definition + rewrite program during typechecking
-
+- currying: store argc for builtin functions
 - datatypes + pattern matching
+ 
+- runst-like monad escape (almost done)
+
+- mutable refs, records
+  
+- record selector + separate compilation?
+  - find a way to hash symbols with prime numbers globally
+  - fix minimum record size
 
 * planned
 
-- records + row polymorphism
-  - kinding system ok
-
 - typeclasses
-  - higher-order polymorphism ok
-  - needs records first
+  - need higher-order polymorphism for monads
+  - maybe [http://web.cecs.pdx.edu/~mpj/pubs/popl97-fcp.pdf] could work?
+
 
 * lolwat
 
 - modules
+  - at least, some kind of separate compilation strategy w/ parametric polymorphism?
+
+- existentials ? 
+  - could row-polymorphism be used instead to package interfaces?
+
 - lifetime inference/ownership tracing
 - macros?
 
