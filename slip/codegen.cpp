@@ -182,8 +182,9 @@ namespace slip {
         res.push_back( opcode::JMP ); 
         res.push_back( end );      
 
-        // generate function body with sub variables      
+        // compile function body with sub variables      
         res.label(start);
+        // res.push_back( opcode::PEEK );
 
         compile(res, sub, self->body);
         res.push_back( opcode::RET );

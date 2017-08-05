@@ -18,14 +18,27 @@ namespace slip {
 
     struct stack : machine::data_stack_type { };
 
-    
     value pop(stack* self) {
       assert(self->size() > 0);
       const value res = std::move(self->back());
       self->pop_back();
-      std::clog << "popping: " << res << std::endl;
       return res;
     }
+
+
+    template<class Iterator>
+    std::ostream& peek(std::ostream& out, Iterator first, Iterator last) {
+      out << '[';
+      bool flag = true;
+      for(Iterator it = first; it != last; ++it) {
+        if( flag ) flag = false;
+        else out << ", ";
+
+        out << *it;
+      }
+      return out << ']';
+    }
+    
     
     
     void bytecode::label(vm::label s) {
@@ -320,10 +333,11 @@ namespace slip {
           case opcode::LOADC: {
             // fetch index
             const integer& i = code[++ip].get<integer>();
-        
-            const closure& f = *data_stack[call_stack.back().fp].get< ref<closure> >();
-            assert( i < integer(f.size()) );
-            data_stack.emplace_back( f[i] );
+            
+            const ref<closure>& f = data_stack[call_stack.back().fp - 1].get< ref<closure> >();
+            
+            assert( i < integer(f->size()) );
+            data_stack.emplace_back( (*f)[i] );
             break;
           }
         
@@ -331,11 +345,11 @@ namespace slip {
             // fetch index
             const integer& i = code[++ip].get<integer>();
         
-            closure& f = *data_stack[call_stack.back().fp].get< ref<closure> >();
-            assert( i < integer(f.size()) );
+            ref<closure>& f = data_stack[call_stack.back().fp - 1].get< ref<closure> >();
+            assert( i < integer(f->size()) );
             
             // pop value in capture
-            f[i] = std::move(data_stack.back());
+            (*f)[i] = std::move(data_stack.back());
             data_stack.pop_back();
             break;
           }
@@ -419,7 +433,7 @@ namespace slip {
             //   ^- fp
             
             // (a_n, ... a_1, f, locals...)
-            //                   ^- fp 
+            //                   ^- fp
           
             // fetch argc
             const integer n = code[++ip].get<integer>();
@@ -470,7 +484,7 @@ namespace slip {
               break;
             default:
               // TODO optimize default jump test
-              throw type_error("callable expected");
+              throw error("callable expected");
             };
           
             break;
@@ -478,19 +492,19 @@ namespace slip {
 
 
           case opcode::RET: {
-            
+
+            // move result where it belongs
             const std::size_t start = call_stack.back().fp - (call_stack.back().argc + 1);
-            const std::size_t ret = call_stack.back().addr;
-            
             data_stack[start] = std::move(data_stack.back());
             
-            // cleanup frame
+            // shrink stack
             data_stack.resize( start + 1, unit() );
-
+            
             // TODO handle over-staturated calls
             assert(call_stack.back().cont == 0);
             
             // pop frame pointer
+            const std::size_t ret = call_stack.back().addr;            
             call_stack.pop_back();
 
             // jump back
@@ -499,7 +513,15 @@ namespace slip {
           }
 
           case opcode::PEEK:
-            std::clog << *this << std::endl;
+            // peek current stack frame
+            peek(std::cout,
+                 data_stack.data() + call_stack.back().fp - (call_stack.back().argc + 1),
+                 data_stack.data() + call_stack.back().fp);
+            
+            peek(std::cout,
+                 data_stack.data() + call_stack.back().fp,
+                 data_stack.data() + data_stack.size()) << std::endl;
+                 
             break;
             
           default:
@@ -510,18 +532,10 @@ namespace slip {
         };
     }
 
+    
+
     std::ostream& operator<<(std::ostream& out, const machine& self) {
-      out << "[";
-
-      bool first = true;
-      for(const value& x: self.data_stack) {
-        if( first ) first = false;
-        else out << ", ";
-
-        out << x;
-      }
-      
-      return out << "]";
+      return peek(out, self.data_stack.begin(), self.data_stack.end());
     }
   }  
   
