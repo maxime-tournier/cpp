@@ -257,6 +257,9 @@ namespace slip {
       // instruction pointer
       std::size_t ip = start;
 
+      // argc register
+      std::size_t argc = 0;
+      
         while(true) {
           
           switch( code[ip].get<opcode>()) {
@@ -426,7 +429,7 @@ namespace slip {
 
             
             // call, #argc
-          case opcode::CALL: {
+          case opcode::CALL: 
             
             // calling convention:
             // (func, args..., retaddr, locals...)
@@ -436,9 +439,11 @@ namespace slip {
             //                   ^- fp
           
             // fetch argc
-            const integer n = code[++ip].get<integer>();
-            assert( call_stack.back().fp + n + 1 <= data_stack.size() );
-        
+            argc = code[++ip].get<integer>();
+
+          call: {
+            assert( call_stack.back().fp + argc + 1 <= data_stack.size() );
+
             // get function
             const value& func = data_stack.back();
             
@@ -449,15 +454,20 @@ namespace slip {
               const std::size_t return_addr = ip + 1;
 
               const ref<closure>& f = func.get<ref<closure>>();
-              assert(f->argc == std::size_t(n));
+              const int cont = argc - f->argc;
+              
+              assert(cont >= 0 && "partial applications not implemented");
+
+              // if( cont > 0 ) {
+              //   std::clog << "over-saturated" << std::endl;
+              // }
               
               // push frame
-              call_stack.emplace_back( frame{fp, return_addr, f->argc, 0} );
+              call_stack.emplace_back( frame{fp, return_addr, f->argc, std::size_t(cont)} );
               
               // jump to function address
               ip = f->addr;
               continue;
-              break;
             }
 
             case value::type_index< builtin >():
@@ -469,7 +479,7 @@ namespace slip {
                 data_stack.pop_back();
                 
                 // call builtin
-                const std::size_t start = data_stack.size() - n;
+                const std::size_t start = data_stack.size() - argc;
                 
                 stack* args = static_cast<stack*>(&data_stack);
                 const value result = ptr(args);
@@ -500,13 +510,20 @@ namespace slip {
             // shrink stack
             data_stack.resize( start + 1, unit() );
             
-            // TODO handle over-staturated calls
-            assert(call_stack.back().cont == 0);
-            
-            // pop frame pointer
-            const std::size_t ret = call_stack.back().addr;            
-            call_stack.pop_back();
+            // return address
+            const std::size_t ret = call_stack.back().addr;
+            const std::size_t cont = call_stack.back().cont;
 
+            // pop frame pointer            
+            call_stack.pop_back();
+            
+            if(cont > 0) {
+              ip = ret - 1;
+              argc = cont;
+              // std::clog << "continuing with: " << cont << std::endl;
+              goto call;
+            }
+            
             // jump back
             ip = ret;
             continue;
