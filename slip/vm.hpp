@@ -7,7 +7,7 @@
 
 #include "../indices.hpp"
 
-// #include <iostream>
+#include <iostream>
 
 namespace slip {
 
@@ -206,7 +206,10 @@ namespace slip {
       
       return +[](vm::stack* args) -> value {
         const vm::value expand[] = { ((void)I, pop(args))...};
-        return ptr( std::move(expand[I].template get<Args>()) ... );
+
+        const value res = ptr( std::move(expand[I].template get<Args>()) ... );
+
+        return res;
       };
       
     } 

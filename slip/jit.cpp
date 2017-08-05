@@ -21,7 +21,7 @@ namespace slip {
 
 
   jit& jit::def(symbol name, const vm::value& value) {
-    ctx->add_local(name);
+    ctx->add_var(name);
     machine.data_stack.emplace_back( value );
     return *this;
   }

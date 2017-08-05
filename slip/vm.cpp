@@ -16,14 +16,15 @@ namespace slip {
   namespace vm {
 
 
-    struct stack {
-      machine::data_stack_type& data;
-      std::size_t start;
-    };
+    struct stack : machine::data_stack_type { };
 
+    
     value pop(stack* self) {
-      assert(self->start < self->data.size());
-      return std::move(self->data[self->start++]);
+      assert(self->size() > 0);
+      const value res = std::move(self->back());
+      self->pop_back();
+      std::clog << "popping: " << res << std::endl;
+      return res;
     }
     
     
@@ -416,23 +417,24 @@ namespace slip {
             // calling convention:
             // (func, args..., retaddr, locals...)
             //   ^- fp
+            
+            // (a_n, ... a_1, f, locals...)
+            //                   ^- fp 
           
             // fetch argc
             const integer n = code[++ip].get<integer>();
             assert( call_stack.back().fp + n + 1 <= data_stack.size() );
         
             // get function
-            const std::size_t start = data_stack.size() - (n + 1);
-            const value& func = data_stack[start];
-        
+            const value& func = data_stack.back();
+            
             switch( func.type() ) {
             case value::type_index< ref<closure> >(): {
 
-              const std::size_t fp = start;
+              const std::size_t fp = data_stack.size();
               const std::size_t return_addr = ip + 1;
 
               const ref<closure>& f = func.get<ref<closure>>();
-              
               assert(f->argc == std::size_t(n));
               
               // push frame
@@ -447,16 +449,22 @@ namespace slip {
             case value::type_index< builtin >():
 
               {
-                // TODO problem here if calling builtin triggers data_stack growth
+                const builtin ptr = func.get<builtin>();
+                
+                // pop self off the stack
+                data_stack.pop_back();
                 
                 // call builtin
-                const std::size_t first_index = start + 1;
-                stack view{data_stack, first_index};
+                const std::size_t start = data_stack.size() - n;
                 
-                data_stack[start] = func.get<builtin>()(&view);
+                stack* args = static_cast<stack*>(&data_stack);
+                const value result = ptr(args);
+                assert( data_stack.size() >= start && "function popped too many args");
                 
                 // pop args + push result
-                data_stack.resize( first_index, unit() ); // warning: func is invalidated
+                data_stack.resize( start + 1, unit() );
+                
+                data_stack[start] = std::move(result);
               }
             
               break;
@@ -471,7 +479,7 @@ namespace slip {
 
           case opcode::RET: {
             
-            const std::size_t start = call_stack.back().fp; // - call_stack.back().argc;
+            const std::size_t start = call_stack.back().fp - (call_stack.back().argc + 1);
             const std::size_t ret = call_stack.back().addr;
             
             data_stack[start] = std::move(data_stack.back());

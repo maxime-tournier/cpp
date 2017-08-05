@@ -73,7 +73,7 @@ namespace slip {
       const symbol& name = args->head.get<symbol>();
       const sexpr& value = args->tail->head;
       
-      if( std::size_t* index = ctx->find(name) ) {
+      if( integer* index = ctx->find(name) ) {
 
         // compile(res, ctx, value);
         
@@ -130,7 +130,7 @@ namespace slip {
       void operator()(const ref<ast::definition>& self, vm::bytecode& res, ref<variables>& ctx) const {
 
         // 
-        ctx->add_local(self->id);
+        ctx->add_var(self->id);
       
         // save some space on the stack by pushing a dummy var
         res.push_back( opcode::PUSH );
@@ -155,25 +155,23 @@ namespace slip {
         // sub variables
         ref<variables> sub = make_ref<variables>(ctx);
 
-        // populate sub with locals for self
+        // populate sub with self arg
         if(ctx->defining) {
-          sub->add_local(*ctx->defining);
+          sub->add_arg(*ctx->defining);
         } else {
-          sub->add_local();
+          sub->add_arg();
         }
 
         // populate sub with args
         for(const symbol& s : self->args) {
           if(s == kw::wildcard) {
-            sub->add_local();
+            sub->add_arg();
           } else {
-            sub->add_local(s);
+            sub->add_arg(s);
           }
         }
 
-        // reserve space for return address
-        sub->add_local("__return__");
-        
+
         // label for function code
         const integer id = unique();
         
@@ -239,21 +237,20 @@ namespace slip {
           return select(self->func.get<ast::selection>(), self->args->head, res, ctx);
         }
         
+        // compile args in reverse order
+        const std::size_t n = foldr(0, self->args, [&](const ast::expr& e, std::size_t i) {
+            compile(res, ctx, e);
+            return i + 1;
+          });
+        
         // compile function
         compile(res, ctx, self->func);
 
         // TODO optimize nullary applications
         
-        // compile args
-        integer n = 0;
-        for(const ast::expr& e : self->args) {
-          compile(res, ctx, e);
-          ++n;
-        }
-
         // call
         res.push_back( opcode::CALL );
-        res.push_back( n );
+        res.push_back( integer(n) );
       }
 
 

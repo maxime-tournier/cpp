@@ -19,9 +19,8 @@ namespace slip {
   namespace codegen {
 
     
-    struct variables : slip::context<variables, std::size_t> {
-
-      std::size_t size;
+    struct variables : slip::context<variables, integer> {
+      std::size_t size = 0, args = 1;
       
       using context::context;
       
@@ -30,17 +29,28 @@ namespace slip {
       const symbol* defining = nullptr;
 
       // push unnamed local variable, return its index
-      integer add_local() { return size++; }
+      integer add_var() { return size++; }
 
       // push named (unique) local variable
-      integer add_local(symbol s) {
-        auto res = locals.insert( std::make_pair(s, add_local() ) );
+      integer add_var(symbol s) {
+        auto res = locals.insert( std::make_pair(s, add_var() ) );
         if(!res.second) {
-          throw slip::error("duplicate local");
+          throw slip::error("duplicate variable");
         }
         
         return res.first->second;
       }
+
+      integer add_arg() { return args++; }
+      integer add_arg(symbol s) {
+        auto res = locals.insert( std::make_pair(s, -add_arg() ) );
+        if(!res.second) {
+          throw slip::error("duplicate argument");
+        }
+        return res.first->second;
+      }
+      
+      
 
       integer capture(symbol s) {
         if(!parent) throw slip::unbound_variable(s);
