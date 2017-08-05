@@ -127,7 +127,7 @@ struct binder {
     
 	using namespace slip;
   
-	jit->def(id, wrap<vm::value>(f, false));
+	jit->def(id, vm::wrap(f));
 	tc->def(id, signature(+f));
 
 	return *this;
@@ -157,8 +157,9 @@ static const auto compiler = [](bool dump_bytecode) {
   {
     type a = tc->fresh();
     tc->def(kw::pure, tc->generalize( a >>= io_ctor(a) ));
-    jit->def(kw::pure, +[](const vm::value* first, const vm::value* last) {
-        return *first;
+    
+    jit->def(kw::pure, +[](vm::stack* args) {
+        return pop(args);
       });
   }
 
@@ -168,8 +169,8 @@ static const auto compiler = [](bool dump_bytecode) {
   
   {
     tc->def("print", tc->generalize( string_type >>= io_ctor( unit_type )  ));
-    jit->def("print", +[](const vm::value* first, const vm::value* last) -> vm::value {
-        std::cout << *first->get< ref<vm::string> >() << std::endl;
+    jit->def("print", +[](vm::stack* args) -> vm::value {
+        std::cout << *pop(args).get< ref<vm::string> >() << std::endl;
         return vm::unit();
       });
   }
@@ -186,8 +187,11 @@ static const auto compiler = [](bool dump_bytecode) {
   {
     type a = tc->fresh();
     tc->def("cons", tc->generalize(a >>= list_ctor(a) >>= list_ctor(a) ));
-    jit->def("cons", +[](const vm::value* first, const vm::value* last) -> vm::value {
-        return first[0] >>= first[1].get< vm::value::list >();
+    jit->def("cons", +[](vm::stack* args) -> vm::value {
+        const vm::value head = pop(args);
+        const vm::value tail = pop(args);
+        // TODO move
+        return head >>= tail.get< vm::value::list >();
       });
   } 
 

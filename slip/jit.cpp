@@ -101,8 +101,10 @@ namespace slip {
       assert(machine.data_stack.size() == init_stack_size);
       return result;
     }
+      
     case vm::value::type_index< vm::builtin >(): {
-      return func.get<vm::builtin>()( first, last );
+      throw error("unimplemented");
+      // return func.get<vm::builtin>()( first, last );
     }
 
     default:

@@ -15,7 +15,18 @@
 namespace slip {
   namespace vm {
 
-  
+
+    struct stack {
+      machine::data_stack_type& data;
+      std::size_t start;
+    };
+
+    value pop(stack* self) {
+      assert(self->start < self->data.size());
+      return std::move(self->data[self->start++]);
+    }
+    
+    
     void bytecode::label(vm::label s) {
       auto it = labels.insert( std::make_pair(s, size()) );
       if( !it.second ) throw slip::error("duplicate label: " + s.name());
@@ -440,11 +451,9 @@ namespace slip {
                 
                 // call builtin
                 const std::size_t first_index = start + 1;
-
-                const value* first = data_stack.data() + first_index;
-                const value* last = first + n;
-
-                data_stack[start] = func.get<builtin>()(first, last);
+                stack view{data_stack, first_index};
+                
+                data_stack[start] = func.get<builtin>()(&view);
                 
                 // pop args + push result
                 data_stack.resize( first_index, unit() ); // warning: func is invalidated

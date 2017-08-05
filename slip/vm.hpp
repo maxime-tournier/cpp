@@ -5,6 +5,8 @@
 
 #include "../dynamic_sized.hpp"
 
+#include "../indices.hpp"
+
 // #include <iostream>
 
 namespace slip {
@@ -15,7 +17,15 @@ namespace slip {
 
     struct value;
     struct closure;
-  
+
+
+    // abstract data stack api for builtin functions
+    struct stack;
+    value pop(stack* );
+
+    using builtin = value (*)(stack*);
+    
+    
     enum class opcode : slip::integer {
       NOOP,
         STOP, 
@@ -58,7 +68,7 @@ namespace slip {
     using slip::real;
     using slip::list;
 
-    using builtin = value (*)(const value* first, const value* last);
+
     
     using slip::string;
 
@@ -185,7 +195,32 @@ namespace slip {
     };
 
     std::ostream& operator<<(std::ostream& out, const machine& self);
-  
+
+
+
+
+    // a few helpers
+    template<class F, class Ret, class ... Args, std::size_t ... I>
+    static value wrap(const F& f, Ret (*)(Args... args), indices<I...> indices) {
+      static Ret(*ptr)(Args...) = f;
+      
+      return +[](vm::stack* args) -> value {
+        const vm::value expand[] = { ((void)I, pop(args))...};
+        return ptr( std::move(expand[I].template get<Args>()) ... );
+      };
+      
+    } 
+ 
+    template<class F, class Ret, class ... Args>
+    static value wrap(const F& f, Ret (*ptr)(Args... args)) {
+      return wrap(f, ptr, type_indices<Args...>() );
+    }
+    
+    template<class F>
+    static value wrap(const F& f) {
+      return wrap(f, +f);
+    }
+    
 
 
   }
