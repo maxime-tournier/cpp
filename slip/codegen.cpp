@@ -184,7 +184,7 @@ namespace slip {
 
         // compile function body with sub variables      
         res.label(start);
-        res.push_back( opcode::PEEK );
+        // res.push_back( opcode::PEEK );
 
         compile(res, sub, self->body);
         res.push_back( opcode::RET );
