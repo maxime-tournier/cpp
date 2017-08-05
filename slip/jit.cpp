@@ -22,7 +22,7 @@ namespace slip {
 
   jit& jit::def(symbol name, const vm::value& value) {
     ctx->add_local(name);
-    machine.stack.emplace_back( value );
+    machine.data_stack.emplace_back( value );
     return *this;
   }
   
@@ -41,18 +41,18 @@ namespace slip {
     
     code.link(start);
 
-    const std::size_t stack_size = machine.stack.size();
+    const std::size_t stack_size = machine.data_stack.size();
     
     machine.run(code, start);
-    const vm::value res = std::move(machine.stack.back());
-    machine.stack.pop_back();
+    const vm::value res = std::move(machine.data_stack.back());
+    machine.data_stack.pop_back();
 
     if( dump ) {
       std::cout << "stack:" << std::endl;      
       std::cout << machine << std::endl;
     }
 
-    if( machine.stack.size() == stack_size ) {
+    if( machine.data_stack.size() == stack_size ) {
       // code chunk was expression evaluation without binding: clear
       code.resize(start, slip::unit());
     }
@@ -64,7 +64,7 @@ namespace slip {
 
 
   vm::value jit::call(const vm::value& func, const vm::value* first, const vm::value* last) {
-    const std::size_t init_stack_size = machine.stack.size(); (void) init_stack_size;
+    const std::size_t init_stack_size = machine.data_stack.size(); (void) init_stack_size;
 
     // TODO switch on func type
     switch( func.type() ) {
@@ -74,11 +74,11 @@ namespace slip {
       static stub_type stub;
     
       // push callable on the stack
-      machine.stack.emplace_back(func);
+      machine.data_stack.emplace_back(func);
     
       // push args on the stack
       for(const vm::value* it = first; it != last; ++it) {
-        machine.stack.emplace_back( std::move(*it) );
+        machine.data_stack.emplace_back( std::move(*it) );
       }
 
       const std::size_t argc = last - first;
@@ -96,9 +96,9 @@ namespace slip {
       }
     
       machine.run(code, err.first->second);
-      vm::value result = machine.stack.back();
-      machine.stack.pop_back();
-      assert(machine.stack.size() == init_stack_size);
+      vm::value result = machine.data_stack.back();
+      machine.data_stack.pop_back();
+      assert(machine.data_stack.size() == init_stack_size);
       return result;
     }
     case vm::value::type_index< vm::builtin >(): {

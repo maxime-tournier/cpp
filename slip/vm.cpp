@@ -16,10 +16,6 @@ namespace slip {
   namespace vm {
 
   
-    machine::machine() {
-      fp.emplace_back(0);
-    }
-
     void bytecode::label(vm::label s) {
       auto it = labels.insert( std::make_pair(s, size()) );
       if( !it.second ) throw slip::error("duplicate label: " + s.name());
@@ -221,6 +217,11 @@ namespace slip {
     
 
 
+    // machine
+    machine::machine() {
+      call_stack.emplace_back( frame{0, 0, 0} );
+      data_stack.reserve( 1 << 10 );
+    }
 
     
 
@@ -228,32 +229,29 @@ namespace slip {
 
       assert( start < code.size() );
 
+      // instruction pointer
       std::size_t ip = start;
-      
-      const std::size_t init_stack_size = stack.size();
-      const std::size_t init_fp_size = fp.size();    
-    
-      try{ 
-        
-        while(true) {
 
+        while(true) {
+          
           switch( code[ip].get<opcode>()) {
             
           case opcode::NOOP: break;
           case opcode::STOP: return;
 
-          case opcode::PUSH: 
-            stack.emplace_back( code[++ip] );
+          case opcode::PUSH:
+            // note: cannot move here
+            data_stack.emplace_back( code[++ip] );
             break;
       
           case opcode::POP:
-            assert( !stack.empty() );
-            stack.pop_back();
+            assert( !data_stack.empty() );
+            data_stack.pop_back();
             break;
 
           case opcode::SWAP: {
-            assert( stack.size() > 1 );
-            auto last = stack.rbegin();
+            assert( data_stack.size() > 1 );
+            auto last = data_stack.rbegin();
             std::swap(*last, *(last + 1));
             break;
           }
@@ -263,7 +261,6 @@ namespace slip {
             ++ip;
             ip = code[ip].get<integer>();
             continue;
-            break;
           }
 
           case opcode::JNZ: {
@@ -271,17 +268,17 @@ namespace slip {
             const integer& addr = code[++ip].get<integer>();
             
             // pop value
-            const value& top = stack.back();
-
+            const value& top = data_stack.back();
             assert(top.is<boolean>() && "boolean expected for jnz");
             
             // jnz
             if( top.get<boolean>() ) {
-              stack.pop_back(); // warning: top is invalidated
+              data_stack.pop_back(); // warning: top is invalidated
               ip = addr;
               continue;
             }
-            stack.pop_back();
+            
+            data_stack.pop_back();
             break;
           }
 
@@ -289,8 +286,8 @@ namespace slip {
           case opcode::LOAD: {
             // fetch index
             const integer& i = code[++ip].get<integer>();
-            assert( fp.back() + i < stack.size() );
-            stack.emplace_back( stack[fp.back() + i]);
+            assert( call_stack.back().fp + i < data_stack.size() );
+            data_stack.emplace_back( data_stack[call_stack.back().fp + i]);
             break;
           }
 
@@ -298,12 +295,12 @@ namespace slip {
           case opcode::STORE: {
             // fetch index
             const integer& i = code[++ip].get<integer>();
-            assert( fp.back() + i < stack.size() );
+            assert( call_stack.back().fp + i < data_stack.size() );
 
             // pop value into cell
-            value& dest = stack[fp.back() + i];
-            dest = std::move(stack.back());
-            stack.pop_back();
+            value& dest = data_stack[call_stack.back().fp + i];
+            dest = std::move(data_stack.back());
+            data_stack.pop_back();
             break;
           }
 
@@ -312,9 +309,9 @@ namespace slip {
             // fetch index
             const integer& i = code[++ip].get<integer>();
         
-            const closure& f = *stack[fp.back()].get< ref<closure> >();
+            const closure& f = *data_stack[call_stack.back().fp].get< ref<closure> >();
             assert( i < integer(f.size()) );
-            stack.emplace_back( f[i] );
+            data_stack.emplace_back( f[i] );
             break;
           }
         
@@ -322,12 +319,12 @@ namespace slip {
             // fetch index
             const integer& i = code[++ip].get<integer>();
         
-            closure& f = *stack[fp.back()].get< ref<closure> >();
+            closure& f = *data_stack[call_stack.back().fp].get< ref<closure> >();
             assert( i < integer(f.size()) );
             
             // pop value in capture
-            f[i] = std::move(stack.back());
-            stack.pop_back();
+            f[i] = std::move(data_stack.back());
+            data_stack.pop_back();
             break;
           }
 
@@ -336,25 +333,25 @@ namespace slip {
           case opcode::CLOS: {
             // fetch and close over the last n variables
             const integer& c = code[++ip].get<integer>();
-            assert(c <= integer(stack.size()));
+            assert(c <= integer(data_stack.size()));
 
             // argc
             const integer& n = code[++ip].get<integer>();
-            // assert(n <= integer(stack.size()));
+            // assert(n <= integer(data_stack.size()));
         
             // fetch code address from bytecode start
             const integer& addr = code[++ip].get<integer>();
         
             // build closure
-            const std::size_t min = stack.size() - c;
-            const value* first = &stack[ min ];
+            const std::size_t min = data_stack.size() - c;
+            const value* first = &data_stack[ min ];
             const value* last = first + c;
 
-            // TODO we should move from the stack            
+            // TODO we should move from the data_stack            
             ref<closure> res = make_closure(n, addr, first, last);
             
-            stack.resize(min + 1, unit());
-            stack.back() = std::move(res);
+            data_stack.resize(min + 1, unit());
+            data_stack.back() = std::move(res);
             break;
           }
 
@@ -364,24 +361,24 @@ namespace slip {
 
             // size
             const integer& size = code[++ip].get<integer>();
-            assert(size <= integer(stack.size()));
+            assert(size <= integer(data_stack.size()));
             
             // magic
             const integer& magic = code[++ip].get<integer>();
-            // assert(n <= integer(stack.size()));
+            // assert(n <= integer(data_stack.size()));
         
             // build record value
-            const std::size_t min = stack.size() - size;
+            const std::size_t min = data_stack.size() - size;
             
-            const value* first = &stack[ min ];
+            const value* first = &data_stack[ min ];
             const value* last = first + size;
 
-            // TODO we should move from the stack
+            // TODO we should move from the data_stack
             ref<record> res = make_record(first, last);
             res->magic = magic;
             
-            stack.resize(min + 1, unit());
-            stack.back() = std::move(res);
+            data_stack.resize(min + 1, unit());
+            data_stack.back() = std::move(res);
             break;
           }
 
@@ -392,12 +389,12 @@ namespace slip {
             // hash
             const std::size_t hash = code[++ip].get<integer>();
             
-            assert( stack.back().is< ref<record> >() );
-            const ref<record>& arg = stack.back().get< ref<record> >();
+            assert( data_stack.back().is< ref<record> >() );
+            const ref<record>& arg = data_stack.back().get< ref<record> >();
 
             const std::size_t index = arg->magic % hash;
 
-            stack.back() = (*arg)[index];
+            data_stack.back() = (*arg)[index];
             break;
           }            
 
@@ -411,24 +408,22 @@ namespace slip {
           
             // fetch argc
             const integer n = code[++ip].get<integer>();
-            assert( fp.back() + n + 1 <= stack.size() );
+            assert( call_stack.back().fp + n + 1 <= data_stack.size() );
         
             // get function
-            const std::size_t start = stack.size() - (n + 1);
-            const value& func = stack[start];
+            const std::size_t start = data_stack.size() - (n + 1);
+            const value& func = data_stack[start];
         
             switch( func.type() ) {
             case value::type_index< ref<closure> >(): {
 
               const closure& f = *func.get<ref<closure>>();
-              
-              // push frame pointer (to the closure, to be replaced with result)
-              fp.emplace_back( start );
-              
-              // push return address
-              const integer return_addr = ip + 1;
-              stack.emplace_back( return_addr ); // warning: func is invalidated here
 
+              const std::size_t fp = start;
+              const std::size_t return_addr = ip + 1;
+              
+              // push frame
+              call_stack.emplace_back( frame{fp, return_addr, 0} );
               assert(f.argc == std::size_t(n));
               
               // jump to function address
@@ -440,17 +435,18 @@ namespace slip {
             case value::type_index< builtin >():
 
               {
-                // TODO problem here if calling builtin triggers stack growth
+                // TODO problem here if calling builtin triggers data_stack growth
                 
                 // call builtin
                 const std::size_t first_index = start + 1;
-                const value* first = stack.data() + first_index;
+
+                const value* first = data_stack.data() + first_index;
                 const value* last = first + n;
 
-                stack[start] = func.get<builtin>()(first, last);
+                data_stack[start] = func.get<builtin>()(first, last);
                 
                 // pop args + push result
-                stack.resize( first_index, unit() ); // warning: func is invalidated
+                data_stack.resize( first_index, unit() ); // warning: func is invalidated
               }
             
               break;
@@ -465,23 +461,19 @@ namespace slip {
 
           case opcode::RET: {
             // put result and pop
-            const std::size_t start = fp.back();
-            stack[start] = std::move(stack.back());
-            stack.pop_back();
-        
-            // pop return address
-            const integer addr = stack.back().get<integer>();
+            const std::size_t start = call_stack.back().fp;
+            const std::size_t ret = call_stack.back().ret;
+            data_stack[start] = std::move(data_stack.back());
             
             // cleanup frame
-            stack.resize( fp.back() + 1, unit() );
+            data_stack.resize( start + 1, unit() );
 
             // pop frame pointer
-            fp.pop_back();
-            
+            call_stack.pop_back();
+
             // jump back
-            ip = addr;
+            ip = ret;
             continue;
-            break;
           }
 
           case opcode::PEEK:
@@ -494,19 +486,13 @@ namespace slip {
         
           ++ip;
         };
-      } catch(slip::error& e) {
-        fp.resize(init_fp_size); // should be 1 anyways?
-        stack.resize(init_stack_size, unit());
-        throw;
-      }
-      
     }
 
     std::ostream& operator<<(std::ostream& out, const machine& self) {
       out << "[";
 
       bool first = true;
-      for(const value& x: self.stack) {
+      for(const value& x: self.data_stack) {
         if( first ) first = false;
         else out << ", ";
 

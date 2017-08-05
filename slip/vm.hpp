@@ -131,7 +131,7 @@ namespace slip {
     ref<record> make_record(const value* first, const value* last);
 
     
-    
+    // TODO value should be something else
     class bytecode : public std::vector<value> {
       std::map< vm::label, integer > labels;
     public:
@@ -161,12 +161,24 @@ namespace slip {
     struct machine {
       machine();
 
-      // frame pointer stack
-      std::vector<std::size_t> fp;
+      // call stack
+      struct frame {
+        // frame pointer
+        const std::size_t fp;
 
+        // return address
+        const std::size_t ret;
+
+        // remaining args (over-saturated calls)
+        const std::size_t argc;
+      };
+
+      using call_stack_type = std::vector<frame>;
+      call_stack_type call_stack;
+      
       // data stack
-      using stack_type = std::vector<value>;
-      stack_type stack;
+      using data_stack_type = std::vector<value>;
+      data_stack_type data_stack;
       
       void run(const bytecode& code, std::size_t start = 0);
 
