@@ -167,10 +167,10 @@ namespace slip {
         const std::size_t fp;
 
         // return address
-        const std::size_t ret;
+        const std::size_t addr;
 
-        // remaining args (over-saturated calls)
-        const std::size_t argc;
+        // frame current + remaining argument count (over-saturated calls)
+        const std::size_t argc, cont;
       };
 
       using call_stack_type = std::vector<frame>;

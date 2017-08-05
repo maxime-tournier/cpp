@@ -219,7 +219,7 @@ namespace slip {
 
     // machine
     machine::machine() {
-      call_stack.emplace_back( frame{0, 0, 0} );
+      call_stack.emplace_back( frame{0, 0, 0, 0} );
       data_stack.reserve( 1 << 10 );
     }
 
@@ -417,17 +417,18 @@ namespace slip {
             switch( func.type() ) {
             case value::type_index< ref<closure> >(): {
 
-              const closure& f = *func.get<ref<closure>>();
-
               const std::size_t fp = start;
               const std::size_t return_addr = ip + 1;
+
+              const ref<closure>& f = func.get<ref<closure>>();
+              
+              assert(f->argc == std::size_t(n));
               
               // push frame
-              call_stack.emplace_back( frame{fp, return_addr, 0} );
-              assert(f.argc == std::size_t(n));
+              call_stack.emplace_back( frame{fp, return_addr, f->argc, 0} );
               
               // jump to function address
-              ip = f.addr;
+              ip = f->addr;
               continue;
               break;
             }
@@ -460,14 +461,18 @@ namespace slip {
 
 
           case opcode::RET: {
-            // put result and pop
-            const std::size_t start = call_stack.back().fp;
-            const std::size_t ret = call_stack.back().ret;
+            
+            const std::size_t start = call_stack.back().fp; // - call_stack.back().argc;
+            const std::size_t ret = call_stack.back().addr;
+            
             data_stack[start] = std::move(data_stack.back());
             
             // cleanup frame
             data_stack.resize( start + 1, unit() );
 
+            // TODO handle over-staturated calls
+            assert(call_stack.back().cont == 0);
+            
             // pop frame pointer
             call_stack.pop_back();
 
