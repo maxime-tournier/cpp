@@ -20,7 +20,7 @@ namespace slip {
 
     value pop(stack* self) {
       assert(self->size() > 0);
-      const value res = std::move(self->back());
+      value res = std::move(self->back());
       self->pop_back();
       return res;
     }
@@ -468,8 +468,8 @@ namespace slip {
                 // partial application: save stack slice
                 const std::size_t start = data_stack.size() - (argc + 1);
                 
-                const ref<partial> res = make_partial(data_stack.data() + start,
-                                                      data_stack.data() + data_stack.size());
+                ref<partial> res = make_partial(data_stack.data() + start,
+                                                data_stack.data() + data_stack.size());
                 // put result and shrink stack
                 data_stack[start] = std::move(res);
                 data_stack.resize(start + 1, unit());
@@ -499,7 +499,7 @@ namespace slip {
               const std::size_t start = data_stack.size() - argc;
                 
               stack* args = static_cast<stack*>(&data_stack);
-              const value result = ptr(args);
+              value result = ptr(args);
               assert( data_stack.size() >= start && "function popped too many args");
                 
               // pop args + push result
