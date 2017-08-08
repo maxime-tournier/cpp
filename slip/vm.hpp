@@ -139,7 +139,8 @@ namespace slip {
       PUSHU,                    
       PUSHB,
       PUSHI,
-      PUSHR,      
+      PUSHR,
+      PUSHS,
       
       POP,
       SWAP,
@@ -175,6 +176,7 @@ namespace slip {
       explicit instruction(integer i) : as_integer(i) { }
       explicit instruction(real r) : as_real(r) { }
       explicit instruction(bool b) : as_boolean(b) { }
+      explicit instruction(const char* s) : as_string(s) { }      
       
       opcode op;
       std::size_t value;
@@ -184,6 +186,7 @@ namespace slip {
       integer as_integer;
       real as_real;
       bool as_boolean;
+      const char* as_string;
     };
 
     static_assert(sizeof(instruction) == sizeof(void*), "instruction size error");

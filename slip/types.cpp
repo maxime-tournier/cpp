@@ -30,7 +30,6 @@ namespace slip {
       using ostream_map = std::map< ref<variable>, var >;
 
       struct ostream_visitor;
-
       
       ostream_map osm;
       std::ostream& ostream;
@@ -159,7 +158,9 @@ namespace slip {
     
     
     const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
-    const type io_ctor = constant("io", terms() >>= terms() );
+
+    const type io_ctor = constant("io", threads() >>= terms() >>= terms() );
+    
     const type list_ctor = constant("list", terms() >>= terms() );        
 
     const type record_ctor = constant("record", rows() >>= terms());    
@@ -212,10 +213,14 @@ namespace slip {
 
       
       void operator()(const rows&, std::ostream& out) const {
-        out << "{}";
+        out << "row";
       }
       
-
+      void operator()(const threads&, std::ostream& out) const {
+        out << "thread";
+      }
+      
+      
       void operator()(const constructor& self, std::ostream& out) const {
         // TODO parentheses
         out << *self.from << " -> " << *self.to;
@@ -355,6 +360,13 @@ namespace slip {
                              << " ~ " << rhs << " :: " << rhs.kind();
           
           throw kind_error(ss.str());
+        }
+
+
+        if( rhs.is<ref<variable> >() && self->depth < rhs.get< ref<variable> >()->depth) {
+          // the topmost variable wins
+          uf.link(rhs, self);
+          return;
         }
         
         // debug( std::clog << "linking", type(self), rhs ) << std::endl;
@@ -656,6 +668,7 @@ namespace slip {
       inferred<type, ast::expr> operator()(const ref<ast::definition>& self, state& tc) const {
 
         const type forward = tc.fresh();
+        const type thread = tc.fresh( threads() );        
         
         state sub = tc.scope();
 
@@ -668,7 +681,8 @@ namespace slip {
         tc.def(self->id, tc.generalize(value.type));
 
         const ast::expr node = make_ref<ast::definition>(self->id, value.node);
-        return {io_ctor( unit_type ), node};
+
+        return {io_ctor(thread)(unit_type), node};
       }
 
 
@@ -676,34 +690,40 @@ namespace slip {
       inferred<type, ast::expr> operator()(const ref<ast::binding>& self, state& tc) const {
 
         const type forward = tc.fresh();
-
+        const type thread = tc.fresh( threads() );
+        
         // note: value is bound in sub-context (monomorphic)
+        // note: monadic binding pushes a scope
         tc = tc.scope();
         
         tc.def(self->id, tc.generalize(forward));
 
-        const inferred<type, ast::expr> value = infer(tc, self->value);        
-        tc.unify(io_ctor(forward), value.type);
+        const inferred<type, ast::expr> value = infer(tc, self->value);
+        
+        tc.unify(io_ctor(thread)(forward), value.type);
 
         tc.find(self->id);
 
         // TODO should we rewrite as a def?
         const ast::expr node = make_ref<ast::binding>(self->id, value.node);
-        return {io_ctor( unit_type ), node};
+        return {io_ctor(thread)(unit_type), node};
         
       }
       
 
       // sequences
       inferred<type, ast::expr> operator()(const ast::sequence& self, state& tc) const {
-        type res = io_ctor( unit_type );
+        const type thread = tc.fresh( threads() );
+        type res = io_ctor(thread)(unit_type);
 
+        state sub = tc.scope();
+        
         const ast::expr node = ast::sequence( map(self.items(), [&](const ast::expr& e) {
-              res = io_ctor( tc.fresh() );
+              res = io_ctor(thread)(tc.fresh()) ;
               
-              const inferred<type, ast::expr> item = infer(tc, e);
+              const inferred<type, ast::expr> item = infer(sub, e);
               tc.unify(res, item.type);
-
+              
               return item.node;
             }));
         
@@ -922,10 +942,31 @@ namespace slip {
 
       return res;
     }
-  
+
+
+
+    
+    
   
     inferred<scheme, ast::toplevel> infer(state& self, const ast::toplevel& node) {
+
+      static const type toplevel_thread = self.fresh( threads() );
+      static const int once = (self = self.scope(), 0);
+      
       const inferred<type, ast::expr> res = infer(self, node.get<ast::expr>());
+
+      const type mono = self.generalize(res.type).body;
+      
+      if(auto* app = mono.get_if<ref<application>>()) {
+        if(auto* nested = (*app)->func.get_if<ref<application>>() ) {
+          if( (*nested)->func == io_ctor ) {
+            // toplevel io
+            auto a = self.fresh();
+            self.unify(mono, io_ctor(toplevel_thread)(a));
+          }
+        }
+      }
+      
       return {self.generalize(res.type), node};
     }
 

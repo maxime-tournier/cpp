@@ -155,8 +155,9 @@ static const auto compiler = [](bool dump_bytecode) {
   
   using namespace types;
   {
+    type thread = tc->fresh(threads());
     type a = tc->fresh();
-    tc->def(kw::pure, tc->generalize( a >>= io_ctor(a) ));
+    tc->def(kw::pure, tc->generalize( a >>= io_ctor(thread)(a) ));
     
     jit->def(kw::pure, +[](vm::stack* args) {
         return pop(args);
@@ -168,7 +169,8 @@ static const auto compiler = [](bool dump_bytecode) {
   const type unit_type = traits< vm::unit >::type();
   
   {
-    tc->def("print", tc->generalize( string_type >>= io_ctor( unit_type )  ));
+    type thread = tc->fresh(threads());    
+    tc->def("print", tc->generalize( string_type >>= io_ctor(thread)(unit_type)  ));
     jit->def("print", +[](vm::stack* args) -> vm::value {
         std::cout << *pop(args).get< ref<vm::string> >() << std::endl;
         return vm::unit();

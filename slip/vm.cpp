@@ -55,7 +55,8 @@ namespace slip {
 
         {opcode::PUSHB, 1},
         {opcode::PUSHI, 1},
-        {opcode::PUSHR, 1},                    
+        {opcode::PUSHR, 1},
+        {opcode::PUSHS, 1},                            
         
         {opcode::POP, 0},
 
@@ -150,8 +151,7 @@ namespace slip {
       void operator()(const value::list& self, std::ostream& out) const {
         out << '(' << self << ')';
       }
-
-
+      
       
       void operator()(const symbol& self, std::ostream& out) const {
         out << self.name();
@@ -213,7 +213,12 @@ namespace slip {
       case opcode::PUSHR:
         out << "pushr" << "\t" << (++self)->as_real;
         break;
-          
+
+      case opcode::PUSHS:
+        out << "pushs" << "\t" << '"' << (++self)->as_string << '"';
+        break;
+
+        
       case opcode::POP:
         out << "pop"; 
         break;
@@ -387,10 +392,15 @@ namespace slip {
           case opcode::PUSHI:
             data_stack.emplace_back( code[++ip].as_integer );
             break;
+            
           case opcode::PUSHR:
             data_stack.emplace_back( code[++ip].as_real );
             break;
 
+          case opcode::PUSHS:
+            data_stack.emplace_back( make_ref<string>(code[++ip].as_string) );
+            break;
+            
             
             
             // pop

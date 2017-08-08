@@ -22,6 +22,7 @@ namespace slip {
     struct sequence;
     struct condition;
     struct binding;
+    struct escape;
     
     struct selection {
       selection(symbol label) : label(label) { }
@@ -40,6 +41,7 @@ namespace slip {
 
       const list<expr>& items() const { return *this; }
     };
+
 
 
     struct branch;
@@ -69,7 +71,7 @@ namespace slip {
                            ref<lambda>,
                            ref<application>,
                            ref<definition>,
-                           ref<binding>,                           
+                           ref<binding>,
                            sequence,
                            condition,
                            selection,

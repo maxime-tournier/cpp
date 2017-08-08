@@ -116,7 +116,10 @@ namespace slip {
         res.push_back( vm::instruction(self.value) );
       }
       
-      
+      void operator()(const ast::literal< ref<string> >& self, vm::bytecode& res, ref<variables>& ctx) const {
+        res.push_back(opcode::PUSHS);
+        res.push_back( vm::instruction(self.value->c_str() ));        
+      };
       
       // template<class T>
       // void operator()(const ast::literal<T>& self, vm::bytecode& res, ref<variables>& ctx) const {
@@ -164,7 +167,6 @@ namespace slip {
       }
 
 
-      // TODO rewrite program upstream with def instead?
       void operator()(const ref<ast::binding>& self, vm::bytecode& res, ref<variables>& ctx) const {
         operator()(make_ref<ast::definition>(self->id, self->value), res, ctx);
       }

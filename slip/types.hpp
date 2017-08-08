@@ -54,10 +54,15 @@ namespace slip {
       bool operator==(const rows& other) const { return true; }
       bool operator<(const rows& other) const { return false; }
     };
-                
+
+
+    struct threads {
+      bool operator==(const threads& other) const { return true; }
+      bool operator<(const threads& other) const { return false; }
+    };
     
     
-    struct kind : variant<terms, constructor, rows > {
+    struct kind : variant<terms, constructor, rows, threads > {
       using kind::variant::variant;
       
       struct error : slip::error {
