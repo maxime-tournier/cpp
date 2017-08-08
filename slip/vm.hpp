@@ -177,7 +177,7 @@ namespace slip {
       explicit instruction(bool b) : as_boolean(b) { }
       
       opcode op;
-      std::uintptr_t value;
+      std::size_t value;
       
       symbol label;
       
@@ -188,7 +188,6 @@ namespace slip {
 
     static_assert(sizeof(instruction) == sizeof(void*), "instruction size error");
     
-
     // TODO you can only ever push to it, this should be more like a stream
     class bytecode : public std::vector<instruction> {
       std::map< symbol, std::size_t > labels;

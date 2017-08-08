@@ -346,6 +346,7 @@ namespace slip {
     machine::machine() {
       call_stack.emplace_back( frame{0, 0, 0, 0} );
       data_stack.reserve( 1 << 10 );
+      call_stack.reserve( 1 << 10 );
     }
 
     
@@ -359,6 +360,9 @@ namespace slip {
 
       // argc register
       std::size_t call_argc = 0;
+
+      // stack view for builtins
+      stack* args = static_cast<stack*>(&data_stack);
       
         while(true) {
           
@@ -413,7 +417,6 @@ namespace slip {
             // jnz @addr
           case opcode::JNZ: {
             // std::clog << ip << " " << *this << std::endl;
-            
             const std::size_t addr = code[++ip].value;
             
             // pop value
@@ -566,15 +569,14 @@ namespace slip {
             assert( call_stack.back().fp + call_argc + 1 <= data_stack.size() );
 
             // get function
-            const value& func = data_stack.back();
+            value& func = data_stack.back();
             
             switch( func.type() ) {
             case value::type_index< ref<closure> >(): {
 
               const ref<closure>& f = func.get<ref<closure>>();
-              const int cont = int(call_argc) - int(f->argc);
 
-              if( cont < 0 ) {
+              if( call_argc < f->argc ) {
                 // TODO this also works for builtins
                 // partial application: save stack slice
                 const std::size_t start = data_stack.size() - (call_argc + 1);
@@ -591,7 +593,8 @@ namespace slip {
               const std::size_t return_addr = ip + 1;
 
               // push frame
-              call_stack.emplace_back( frame{fp, return_addr, f->argc, std::size_t(cont)} );
+              const std::size_t cont = call_argc - f->argc;
+              call_stack.emplace_back( frame{fp, return_addr, f->argc, cont} );
               
               // jump to function address
               ip = f->addr;
@@ -603,15 +606,15 @@ namespace slip {
                 
               // pop self off the stack
               data_stack.pop_back();
-                
+
               // call builtin
-              const std::size_t start = data_stack.size() - call_argc;
-                
-              stack* args = static_cast<stack*>(&data_stack);
               value result = ptr(args);
+              
               assert( data_stack.size() >= start && "function popped too many args");
                 
               // pop args + push result
+              const std::size_t start = data_stack.size() - call_argc;
+              
               data_stack.resize( start + 1, unit() );
               data_stack[start] = std::move(result);
               break;
