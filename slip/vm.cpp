@@ -607,13 +607,13 @@ namespace slip {
               // pop self off the stack
               data_stack.pop_back();
 
-              // call builtin
+              // save stack offset + call builtin
+              const std::size_t start = data_stack.size() - call_argc;              
+
               value result = ptr(args);
-              
-              // pop args + push result
-              const std::size_t start = data_stack.size() - call_argc;
               assert( data_stack.size() >= start && "function popped too many args");
-              
+
+              // pop args + push result
               data_stack.resize( start + 1, unit() );
               data_stack[start] = std::move(result);
               break;
