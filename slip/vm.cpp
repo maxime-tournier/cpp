@@ -610,10 +610,9 @@ namespace slip {
               // call builtin
               value result = ptr(args);
               
-              assert( data_stack.size() >= start && "function popped too many args");
-                
               // pop args + push result
               const std::size_t start = data_stack.size() - call_argc;
+              assert( data_stack.size() >= start && "function popped too many args");
               
               data_stack.resize( start + 1, unit() );
               data_stack[start] = std::move(result);
