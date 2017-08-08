@@ -51,7 +51,22 @@ namespace impl {
   constexpr typename dispatch<variant<T...>, Self, Ret (Visitor, Args...) >::thunk_type
   dispatch<variant<T...>, Self, Ret (Visitor, Args...) >::table[];
 
-  
+
+  template<class Expected, class Actual>
+  static bool check_type() {
+    assert((std::is_same<Expected, Actual>::value) );
+    return std::is_same<Expected, Actual>::value;
+  }
+
+  template<class U, class ... T>
+  static bool check_type(std::size_t index) {
+    using type = bool (*)();
+    static const type expand[] = {
+      &check_type<U, T>...
+    };
+
+    return expand[index]();
+  }
 }
 
 
@@ -167,7 +182,7 @@ public:
   template<class U, index_type R = type_index<U>()>
   U& get() {
     U& res = reinterpret_cast<U&>(storage);
-    assert(R == index);
+    assert( (impl::check_type<U, T...>(index)) );
     return res;
   } 
 
@@ -175,7 +190,7 @@ public:
   template<class U, index_type R = type_index<U>() >
   const U& get() const {
     const U& res = reinterpret_cast<const U&>(storage);
-    assert(R == index);
+    assert( (impl::check_type<U, T...>(index)) );    
     return res;
   }
   
