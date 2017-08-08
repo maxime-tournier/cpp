@@ -301,6 +301,7 @@ namespace slip {
           branch.emplace( std::make_pair(then, b.value) );
           
           compile(res, ctx, b.test);
+
           res.push_back( opcode::JNZ );
           res.push_back( vm::instruction(then) );
 
@@ -311,8 +312,8 @@ namespace slip {
         res.push_back( opcode::JMP );
         res.push_back( vm::instruction(end) );      
 
-        // compile branches
         // TODO order branches ?
+        // compile branches
         for(const auto it : branch) {
           res.label(it.first);
           compile(res, ctx, it.second);
