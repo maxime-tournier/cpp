@@ -28,7 +28,7 @@ namespace slip {
     
     enum class opcode : slip::integer {
       NOOP,
-        STOP, 
+        HALT, 
 
         PUSH,
         POP,

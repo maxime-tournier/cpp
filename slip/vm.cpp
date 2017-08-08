@@ -176,8 +176,8 @@ namespace slip {
           break;
         
         
-        case opcode::STOP:
-          out << "stop";
+        case opcode::HALT:
+          out << "halt";
           break;        
 
         case opcode::LOAD:
@@ -275,7 +275,7 @@ namespace slip {
           switch( code[ip].get<opcode>()) {
             
           case opcode::NOOP: break;
-          case opcode::STOP: return;
+          case opcode::HALT: return;
 
           case opcode::PUSH:
             // note: cannot move, maybe needed multiple times
