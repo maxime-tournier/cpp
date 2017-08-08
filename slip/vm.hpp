@@ -25,38 +25,6 @@ namespace slip {
 
     using builtin = value (*)(stack*);
     
-    
-    enum class opcode : slip::integer {
-      NOOP,
-        HALT, 
-
-        PUSH,
-        POP,
-        SWAP,
-      
-        LOAD,
-        STORE,
-
-        LOADC,
-        STOREC,
-      
-        CALL,
-        RET,
-      
-        CLOS,
-
-        RECORD,
-        GETATTR,
-        
-        JNZ,
-        JMP,
-
-        PEEK,
-        
-        };
-
-
-
     struct closure;
 
     struct record;
@@ -73,20 +41,10 @@ namespace slip {
     
     using slip::string;
 
-    struct label : symbol {
-
-      // TODO use separate symbol table
-      using symbol::symbol;
-    
-    };
-  
-  
     struct value : variant< unit, boolean, integer, real, symbol, ref<string>, list<value>,
                             builtin,
                             ref<closure>, ref<partial>,
-                            ref<record>,
-                            opcode,
-                            label> {
+                            ref<record> > {
       using list = slip::list<value>;
       
       using value::variant::variant;
@@ -97,7 +55,16 @@ namespace slip {
       // make sure we get moves on std::vector realloc
       static_assert(std::is_nothrow_move_constructible<variant>::value, "derp");
       static_assert(std::is_nothrow_destructible<variant>::value, "derp");
+
+      
     };
+    // not sure about this though
+    static_assert(sizeof(value) == sizeof(slip::value), "value size mismatch");
+
+    
+    std::ostream& operator<<(std::ostream& out, const value& self);
+  
+    
 
 
     struct closure_head : detail::rc_base {
@@ -143,21 +110,91 @@ namespace slip {
     
     struct record_head : detail::rc_base {
       std::size_t magic;
+      record_head(std::size_t magic) : magic(magic) { }
     };
 
     struct record : record_head, dynamic_sized<value> {
       using record::dynamic_sized::dynamic_sized;
+
+      record(std::size_t magic,
+             const value* first,
+             const value* last):
+        record_head(magic),
+        record::dynamic_sized(first, last) {
+
+      }
     };
     
-    ref<record> make_record(const value* first, const value* last);
+    ref<record> make_record(std::size_t magic, const value* first, const value* last);
+    
+
+    // bytecode
+    enum class opcode {
+      NOOP,
+      HALT, 
+      
+      // PUSH,
+
+      // TODO remove these ?
+      PUSHU,                    
+      PUSHB,
+      PUSHI,
+      PUSHR,      
+      
+      POP,
+      SWAP,
+      
+      LOAD,
+      STORE,
+
+      LOADC,
+      STOREC,
+      
+      CALL,
+      RET,
+
+      JNZ,
+      JMP,
+
+      CLOS,
+
+      RECORD,
+      GETATTR,
+        
+      PEEK,
+
+      OPCODE_COUNT
+    };
 
     
-    // TODO value should be something else
-    class bytecode : public std::vector<value> {
-      std::map< vm::label, integer > labels;
+    union instruction {
+      instruction(opcode op) : op(op) { }
+      explicit instruction(std::size_t value) : value(value) { }      
+      
+      explicit instruction(symbol label) : label(label) { }
+      explicit instruction(integer i) : as_integer(i) { }
+      explicit instruction(real r) : as_real(r) { }
+      explicit instruction(bool b) : as_boolean(b) { }
+      
+      opcode op;
+      std::uintptr_t value;
+      
+      symbol label;
+      
+      integer as_integer;
+      real as_real;
+      bool as_boolean;
+    };
+
+    static_assert(sizeof(instruction) == sizeof(void*), "instruction size error");
+    
+
+    // TODO you can only ever push to it, this should be more like a stream
+    class bytecode : public std::vector<instruction> {
+      std::map< symbol, std::size_t > labels;
     public:
     
-      void label(vm::label s);
+      void label(symbol s);
       void link(std::size_t start = 0);
 
       void dump(std::ostream& out, std::size_t start = 0) const;
@@ -169,13 +206,6 @@ namespace slip {
       return out;
     }
   
-  
-    static_assert(sizeof(value) == sizeof(slip::value),
-                  "value size mismatch");
-
-  
-  
-    std::ostream& operator<<(std::ostream& out, const value& self);
   
 
   

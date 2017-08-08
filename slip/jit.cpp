@@ -32,7 +32,7 @@ namespace slip {
     const std::size_t start = code.size();
     
     codegen::compile(code, ctx, node);
-    code.push_back( vm::opcode::STOP );
+    code.push_back( vm::opcode::HALT );
     
     if( dump ) {
       std::cout << "bytecode:" << std::endl;
@@ -54,7 +54,7 @@ namespace slip {
 
     if( machine.data_stack.size() == stack_size ) {
       // code chunk was expression evaluation without binding: clear
-      code.resize(start, slip::unit());
+      code.resize(start, vm::opcode::NOOP);
     }
     
     
@@ -64,52 +64,54 @@ namespace slip {
 
 
   vm::value jit::call(const vm::value& func, const vm::value* first, const vm::value* last) {
-    const std::size_t init_stack_size = machine.data_stack.size(); (void) init_stack_size;
+    throw error("broken lol");
+    
+    // const std::size_t init_stack_size = machine.data_stack.size(); (void) init_stack_size;
 
-    // TODO switch on func type
-    switch( func.type() ) {
-    case vm::value::type_index< ref<vm::closure> >(): {
-      // call stubs
-      using stub_type = std::map<const vm::closure*, std::size_t>;
-      static stub_type stub;
+    // // TODO switch on func type
+    // switch( func.type() ) {
+    // case vm::value::type_index< ref<vm::closure> >(): {
+    //   // call stubs
+    //   using stub_type = std::map<const vm::closure*, std::size_t>;
+    //   static stub_type stub;
     
-      // push callable on the stack
-      machine.data_stack.emplace_back(func);
+    //   // push callable on the stack
+    //   machine.data_stack.emplace_back(func);
     
-      // push args on the stack
-      for(const vm::value* it = first; it != last; ++it) {
-        machine.data_stack.emplace_back( std::move(*it) );
-      }
+    //   // push args on the stack
+    //   for(const vm::value* it = first; it != last; ++it) {
+    //     machine.data_stack.emplace_back( std::move(*it) );
+    //   }
 
-      const std::size_t argc = last - first;
+    //   const std::size_t argc = last - first;
 
-      // note: we don't want key to prevent gc here
-      const vm::closure* key = func.get<ref<vm::closure>>().get();
-      const std::size_t start = code.size();
+    //   // note: we don't want key to prevent gc here
+    //   const vm::closure* key = func.get<ref<vm::closure>>().get();
+    //   const std::size_t start = code.size();
     
-      auto err = stub.insert( std::make_pair(key, start) );
-      if(err.second) {
-        // create call stub
-        code.emplace_back( vm::opcode::CALL );
-        code.emplace_back( vm::integer(argc) );      
-        code.emplace_back( vm::opcode::STOP );            
-      }
+    //   auto err = stub.insert( std::make_pair(key, start) );
+    //   if(err.second) {
+    //     // create call stub
+    //     code.emplace_back( vm::opcode::CALL );
+    //     code.emplace_back( vm::integer(argc) );      
+    //     code.emplace_back( vm::opcode::HALT );            
+    //   }
     
-      machine.run(code, err.first->second);
-      vm::value result = machine.data_stack.back();
-      machine.data_stack.pop_back();
-      assert(machine.data_stack.size() == init_stack_size);
-      return result;
-    }
+    //   machine.run(code, err.first->second);
+    //   vm::value result = machine.data_stack.back();
+    //   machine.data_stack.pop_back();
+    //   assert(machine.data_stack.size() == init_stack_size);
+    //   return result;
+    // }
       
-    case vm::value::type_index< vm::builtin >(): {
-      throw error("unimplemented");
-      // return func.get<vm::builtin>()( first, last );
-    }
+    // case vm::value::type_index< vm::builtin >(): {
+    //   throw error("unimplemented");
+    //   // return func.get<vm::builtin>()( first, last );
+    // }
 
-    default:
-      throw type_error("callable expected");
-    }
+    // default:
+    //   throw type_error("callable expected");
+    // }
     
   }
    

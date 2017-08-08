@@ -16,7 +16,6 @@ namespace slip {
   namespace codegen {
 
     using vm::bytecode;
-    using vm::label;
     using vm::opcode;
 
 
@@ -78,10 +77,10 @@ namespace slip {
         // compile(res, ctx, value);
         
         res.push_back( opcode::STORE );
-        res.push_back( integer(*index) );
+        res.push_back( vm::instruction(*index) );
 
-        res.push_back(opcode::PUSH );
-        res.push_back( unit() );        
+        res.push_back(opcode::PUSHU );
+        // res.push_back( unit() );        
 
         return;
       } 
@@ -98,12 +97,32 @@ namespace slip {
 
     struct compile_expr {
 
-      template<class T>
-      void operator()(const ast::literal<T>& self, vm::bytecode& res, 
-                      ref<variables>& ctx) const {
-        res.push_back( opcode::PUSH );
-        res.push_back( self.value );
+      void operator()(const ast::literal<unit>& self, vm::bytecode& res, ref<variables>& ctx) const {
+        res.push_back(opcode::PUSHU);
       }
+
+      void operator()(const ast::literal<boolean>& self, vm::bytecode& res, ref<variables>& ctx) const {
+        res.push_back(opcode::PUSHB);
+        res.push_back( vm::instruction(self.value) );
+      }
+
+      void operator()(const ast::literal<integer>& self, vm::bytecode& res, ref<variables>& ctx) const {
+        res.push_back(opcode::PUSHI);
+        res.push_back( vm::instruction(self.value) );
+      }
+
+      void operator()(const ast::literal<real>& self, vm::bytecode& res, ref<variables>& ctx) const {
+        res.push_back(opcode::PUSHR);
+        res.push_back( vm::instruction(self.value) );
+      }
+      
+      
+      
+      // template<class T>
+      // void operator()(const ast::literal<T>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      //   res.push_back( opcode::PUSH );
+      //   res.push_back( self.value );
+      // }
 
 
 
@@ -113,7 +132,7 @@ namespace slip {
           auto it = ctx->locals.find(self);
           if(it != ctx->locals.end()) {
             res.push_back( opcode::LOAD );
-            res.push_back( integer(it->second) );
+            res.push_back( vm::instruction(it->second) );
             return;
           }
         }
@@ -121,7 +140,7 @@ namespace slip {
         // captures
         {
           res.push_back( opcode::LOADC );
-          res.push_back( ctx->capture(self) );
+          res.push_back( vm::instruction(ctx->capture(self)) );
           return;
         }
       }
@@ -133,9 +152,8 @@ namespace slip {
         ctx->add_var(self->id);
       
         // save some space on the stack by pushing a dummy var
-        res.push_back( opcode::PUSH );
-        res.push_back( unit() );
-      
+        res.push_back( opcode::PUSHU );
+        
         // TODO better ?
         ctx->defining = &self->id;
         compile(res, ctx, self->value);
@@ -175,12 +193,12 @@ namespace slip {
         // label for function code
         const integer id = unique();
         
-        const label start = "lambda-" + std::to_string(id);
-        const label end = "after-" + start.name();
+        const symbol start = "lambda-" + std::to_string(id);
+        const symbol end = "after-" + start.name();
 
         // skip function body
         res.push_back( opcode::JMP ); 
-        res.push_back( end );      
+        res.push_back( vm::instruction(end) );      
 
         // compile function body with sub variables      
         res.label(start);
@@ -210,12 +228,12 @@ namespace slip {
           compile(res, ctx, s);
         }
 
-        const integer m = ordered.size(), n = size(self->args);
+        const std::size_t m = ordered.size(), n = size(self->args);
         
         res.push_back( opcode::CLOS );
-        res.push_back( m ); 
-        res.push_back( n );    
-        res.push_back( start );      
+        res.push_back( vm::instruction(m) ); 
+        res.push_back( vm::instruction(n) );    
+        res.push_back( vm::instruction(start) );      
 
       }
 
@@ -224,7 +242,7 @@ namespace slip {
         const std::size_t hash = prime_hash(self.label);
 
         res.push_back( opcode::GETATTR );
-        res.push_back( integer(hash) );        
+        res.push_back( vm::instruction(hash) );        
       }
 
       
@@ -243,7 +261,7 @@ namespace slip {
           // extra args
           if(n > 1) {
             res.push_back( opcode::CALL );
-            res.push_back( integer(n - 1) );
+            res.push_back( vm::instruction(n - 1) );
           }
 
           return;
@@ -257,7 +275,7 @@ namespace slip {
         
         // call
         res.push_back( opcode::CALL );
-        res.push_back( integer(n) );
+        res.push_back( vm::instruction(n) );
       }
 
 
@@ -266,32 +284,32 @@ namespace slip {
 
         const integer id = unique();
 
-        const label start = "cond-" + std::to_string(id) + "-start";
+        const symbol start = "cond-" + std::to_string(id) + "-start";
       
         res.label(start);
-        const label end = "cond-" + std::to_string(id) + "-end";
+        const symbol end = "cond-" + std::to_string(id) + "-end";
       
-        std::map<label, ast::expr> branch;
+        std::map<symbol, ast::expr> branch;
 
         // compile tests
         integer i = 0;
         for(const ast::branch& b : self.branches()) {
           
-          const label then = "cond-" + std::to_string(id) +
+          const symbol then = "cond-" + std::to_string(id) +
             "-then-" + std::to_string(i);
           
           branch.emplace( std::make_pair(then, b.value) );
           
           compile(res, ctx, b.test);
           res.push_back( opcode::JNZ );
-          res.push_back( then );
+          res.push_back( vm::instruction(then) );
 
           ++i;
         }
 
         // don't forget to jump to end if nothing matched
         res.push_back( opcode::JMP );
-        res.push_back( end );      
+        res.push_back( vm::instruction(end) );      
 
         // compile branches
         // TODO order branches ?
@@ -299,7 +317,7 @@ namespace slip {
           res.label(it.first);
           compile(res, ctx, it.second);
           res.push_back( opcode::JMP );
-          res.push_back( end );      
+          res.push_back( vm::instruction(end) );      
         }
 
         res.label(end);
@@ -382,8 +400,8 @@ namespace slip {
 
         
         res.push_back( opcode::RECORD );
-        res.push_back( integer( size ) );
-        res.push_back( integer( it->second ) );
+        res.push_back( vm::instruction(size) ) ;
+        res.push_back( vm::instruction(it->second) );
       }
 
 

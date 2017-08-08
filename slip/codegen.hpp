@@ -23,8 +23,9 @@ namespace slip {
       std::size_t size = 0, args = 1;
       
       using context::context;
-      
-      locals_type captured;
+
+      using captured_type = std::map<symbol, std::size_t>;
+      captured_type captured;
       
       const symbol* defining = nullptr;
 
@@ -52,7 +53,7 @@ namespace slip {
       
       
 
-      integer capture(symbol s) {
+      std::size_t capture(symbol s) {
         if(!parent) throw slip::unbound_variable(s);
       
         auto res = captured.insert( std::make_pair(s, captured.size()));
