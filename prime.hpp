@@ -10,25 +10,42 @@ class prime_enumerator {
   value_type current = 1;
   std::vector<value_type> previous;
 public:
+
+
+  static value_type is_prime(value_type x) {
+    if (x < 2) return false;
+    
+    for (value_type i = 2; true; ++i) {
+      const std::size_t q = x / i;
+      if (q < i) return true;
+      if (x % i == 0) return false;
+    }
+    return true;
+  }
   
   value_type operator()() {
     
     while(true) {
       ++current;
-      const value_type sqrt = std::sqrt(current);
       
       bool has_div = false;
+      
       for(value_type p : previous) {
-        if(current % p == 0) {
+        const value_type q = current / p;
+
+        // simpler sqrt check
+        if( q < p ) break;
+
+        // dont use modulo
+        if(current == q * p) {
           has_div = true;
           break;
         }
         
-        if( p > sqrt ) break;
       }
       
       if(!has_div) {
-        previous.push_back(current);
+        previous.emplace_back(current);
         return current;
       }
     }
