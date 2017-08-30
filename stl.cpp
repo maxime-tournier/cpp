@@ -93,6 +93,7 @@ namespace stl {
   }
 
 
+  // note: `in` is seeked
   static bool is_binary(std::istream& in) {
     
     in.seekg(0, std::ios::end);
