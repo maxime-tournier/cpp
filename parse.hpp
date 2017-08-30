@@ -24,7 +24,7 @@ namespace parse {
   // maybe monad
   template<class T> class maybe;
   
-  
+
   template<class T>
   class maybe {
     using storage_type = typename std::aligned_union<0, T>::type;
@@ -308,7 +308,6 @@ namespace parse {
     const Pred pred;
   
     maybe<char> operator()(std::istream& in) const {
-
       const int c = in.get();
 
       if(c == std::istream::traits_type::eof()) {
@@ -360,9 +359,12 @@ namespace parse {
       stream_pos pos(in);
 
       for(const char c : value) {
-        if(!chr( [c](char x) { return x == c; } )(in)) {
+
+        if(!chr( [c](char x) { return x == c; })(in)) {
           pos.reset();
           return {};
+        } else {
+
         }
       }
 
@@ -371,7 +373,8 @@ namespace parse {
       if(in.eof() || pred(next) ) {
         return {value.c_str()};
       } else {
-        pos.reset();        
+        pos.reset();
+        return {};
       }
     }
     
@@ -414,7 +417,7 @@ namespace parse {
   };
 
   template<class Parser>
-  static debug_type<Parser> debug(Parser parser, const char* name, std::ostream& out = std::clog) {
+  static debug_type<Parser> debug(const char* name, Parser parser, std::ostream& out = std::clog) {
     return {parser, name, out};
   }
 
@@ -444,6 +447,30 @@ namespace parse {
   template<class T>
   using any = std::function< maybe<T> (std::istream& ) >;
 
+
+  // non-empty sequences
+  template<class Parser>
+  struct plus_type {
+    const Parser parser;
+    
+    using T = parse::value_type<Parser>;
+    using U = std::vector<T>;
+    
+    maybe<U> operator()(std::istream& in) const {
+
+      return (*parser)(in) >> [](U&& ts) -> maybe<U> {
+        if(ts.empty()) return {};
+        return std::move(ts);
+      };
+      
+    }
+    
+  };
+
+  template<class Parser>
+  static inline plus_type<Parser> operator+(Parser parser) { return {parser}; }
+
+
   
   // sequence parser
   template<class Parser, class Separator>
@@ -455,10 +482,7 @@ namespace parse {
     static const auto empty = pure( vec() );
     
     const auto non_empty =
-      *(parser >> [separator](value_type&& x) {
-        return separator >> then( pure( std::move(x) ) );
-      })
-      >> [parser](vec&& xs) {
+      *(parser >> drop(separator)) >> [parser](vec&& xs) {
       return parser >> [&xs](value_type&& last) {
         xs.emplace_back(last);
         return pure( std::move(xs) );
@@ -480,8 +504,7 @@ namespace parse {
     if(size == 0) {
       throw std::runtime_error("cannot parse fixed-length empty sequences");
     }
-
-
+    
     return (parser >> drop(separator)) * (size - 1) >> [parser](vec&& xs) {
       return parser >> [&xs](value_type&& x) {
         xs.emplace_back(x);
