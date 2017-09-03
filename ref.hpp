@@ -71,7 +71,7 @@ public:
     if(ptr) incref(ptr);
   }
 
-  template<class Derived, decltype( std::declval<T*>() = std::declval<Derived*>() )* = 0>
+  template<class Derived, typename std::enable_if<std::is_base_of<T, Derived>::value, int>::type = 0>
   ref(const ref<Derived>& other) noexcept : ptr( other.template cast<T>().ptr) { }
   
 
@@ -95,7 +95,7 @@ public:
     other.ptr = nullptr;
   }
 
-  template<class Derived, decltype( std::declval<T*>() = std::declval<Derived*>() )* = 0>
+  template<class Derived, typename std::enable_if<std::is_base_of<T, Derived>::value, int>::type = 0>
   ref(ref<Derived>&& other) noexcept : ptr( other.template cast<T>().ptr) {
     other.template cast<T>().ptr = nullptr;
   }
