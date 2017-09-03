@@ -36,29 +36,23 @@ namespace slip {
     };
 
 
-    struct sequence : list<expr> {
-      using list<expr>::list;
-
-      const list<expr>& items() const { return *this; }
+    struct sequence {
+      list<expr> items;
     };
 
 
 
     struct branch;
 
-    struct condition : list<branch> {
-      using list<branch>::list;
-
-      const list<branch>& branches() const { return *this; }      
+    struct condition{
+      list<branch> branches;
     };
 
 
     struct row;
 
-    struct record : list<row> {
-      using list<row>::list;
-
-      const list<row>& rows() const { return *this; }
+    struct record {
+      list<row> rows;
     };
     
 

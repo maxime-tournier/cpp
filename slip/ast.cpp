@@ -46,13 +46,13 @@ namespace slip {
 
 
       sexpr operator()(const sequence& self) const {
-        return kw::seq >>= map(self, [](const expr& e) {
+        return kw::seq >>= map(self.items, [](const expr& e) {
             return repr(e);
           });
       }
 
       sexpr operator()(const condition& self) const {
-        return kw::cond >>= map(self.branches(), [](const branch& b) -> sexpr {
+        return kw::cond >>= map(self.branches, [](const branch& b) -> sexpr {
             return repr(b.test) >>= repr(b.value) >>= sexpr::list();
           });
       }
@@ -69,7 +69,7 @@ namespace slip {
       }
 
       sexpr operator()(const record& self) const {
-        return symbol(kw::record) >>= map(self, [](const row& r) -> sexpr {
+        return symbol(kw::record) >>= map(self.rows, [](const row& r) -> sexpr {
             return r.label >>= repr(r.value) >>= sexpr::list();
           });
       }
@@ -177,10 +177,10 @@ namespace slip {
 
     
     static expr check_sequence(const sexpr::list& items) {
-      const ast::sequence res = map(items, [](const sexpr& e) {
-          return check_expr(e);
-        });
-
+      const ast::sequence res = {map(items, [](const sexpr& e) {
+            return check_expr(e);
+          })};
+      
       return res;
     }
 
@@ -189,14 +189,14 @@ namespace slip {
       
       try{
 
-        const condition res = map(items, [](const sexpr& e) {
+        const condition res = { map(items, [](const sexpr& e) {
               if(!e.is<sexpr::list>()) throw fail();
               const sexpr::list& lst = e.get<sexpr::list>();
               
               if(size(lst) != 2) throw fail();
 
               return branch(check_expr(lst->head), check_expr(lst->tail->head));
-          });
+            }) };
 
         return res;
         
@@ -211,9 +211,7 @@ namespace slip {
     static expr check_record(const sexpr::list& items) {
       struct fail { };
       try{ 
-        const record result = map(items, [](const sexpr& e) -> row {
-            
-
+        const record result = { map(items, [](const sexpr& e) -> row {
             
             if(!e.is<sexpr::list>() ) throw fail();
             const sexpr::list& lst = e.get<sexpr::list>();
@@ -222,7 +220,8 @@ namespace slip {
             if(!lst->head.is<symbol>()) throw fail();
             
             return row(lst->head.get<symbol>(), check_expr(lst->tail->head));
-          });
+          })
+        };
         
         return result;
       } catch (fail ) {

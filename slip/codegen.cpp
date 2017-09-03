@@ -295,7 +295,7 @@ namespace slip {
 
         // compile tests
         integer i = 0;
-        for(const ast::branch& b : self.branches()) {
+        for(const ast::branch& b : self.branches) {
           
           const symbol then = "cond-" + std::to_string(id) +
             "-then-" + std::to_string(i);
@@ -330,7 +330,7 @@ namespace slip {
 
       void operator()(const ast::sequence& self, vm::bytecode& res, ref<variables>& ctx) {
         
-        if(!self) {
+        if(!self.items) {
           compile(res, ctx, ast::literal<unit>());
           return;
         }
@@ -339,7 +339,7 @@ namespace slip {
       
         bool first = true;
 
-        for(const ast::expr& arg : self.items()) {
+        for(const ast::expr& arg : self.items) {
           if(first) first = false;
           else {
             res.push_back( opcode::POP );
@@ -372,7 +372,7 @@ namespace slip {
 
        // compile row values + build signature
         std::vector< symbol > sig;
-        for(const ast::row& r : self.rows() ) {
+        for(const ast::row& r : self.rows ) {
           compile(res, ctx, r.value);
           sig.emplace_back(r.label);
         }
@@ -390,7 +390,7 @@ namespace slip {
           std::size_t n[ size ];
 
           std::size_t i = 0;
-          for(const ast::row& r : self.rows() ) {
+          for(const ast::row& r : self.rows ) {
             a[i] = i;
             n[i] = prime_hash(r.label);
             ++i;

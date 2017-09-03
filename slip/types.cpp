@@ -650,7 +650,7 @@ namespace slip {
       inferred<type, ast::expr> operator()(const ast::condition& self, state& tc) const {
         const type result = tc.fresh();
 
-        const ast::expr node = ast::condition( map(self.branches(), [&](const ast::branch& b) {
+        const ast::expr node = ast::condition{ map(self.branches, [&](const ast::branch& b) {
             const inferred<type, ast::expr> test = infer(tc, b.test);
             tc.unify(boolean_type, test.type);
             
@@ -658,7 +658,7 @@ namespace slip {
             tc.unify(value.type, result);
 
             return ast::branch(test.node, value.node);
-            }));
+            })} ;
         
         return {result, node};
       }
@@ -718,14 +718,14 @@ namespace slip {
 
         state sub = tc.scope();
         
-        const ast::expr node = ast::sequence( map(self.items(), [&](const ast::expr& e) {
+        const ast::expr node = ast::sequence{ map(self.items, [&](const ast::expr& e) {
               res = io_ctor(thread)(tc.fresh()) ;
               
               const inferred<type, ast::expr> item = infer(sub, e);
               tc.unify(res, item.type);
               
               return item.node;
-            }));
+            })};
         
         return {res, node};
       }
@@ -747,7 +747,7 @@ namespace slip {
 
         using chunk = inferred< type, list<ast::row> >;
         chunk init = {empty_row_type, {}},
-          result = foldr(init, self.rows(), [&](const ast::row& lhs, const chunk& rhs) -> chunk {
+          result = foldr(init, self.rows, [&](const ast::row& lhs, const chunk& rhs) -> chunk {
 
               // infer current row
               const inferred<type, ast::expr> value = infer(tc, lhs.value);
@@ -757,7 +757,7 @@ namespace slip {
                   ast::row(lhs.label, value.node) >>= rhs.node};
             });
 
-        return { record_ctor(result.type), ast::record( std::move(result.node) ) };
+        return { record_ctor(result.type), ast::record{ std::move(result.node) } };
       }
 
 
