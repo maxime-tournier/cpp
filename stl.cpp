@@ -89,10 +89,11 @@ namespace stl {
     return in.read(self.bytes, sizeof(self.bytes));
   }
   
-  // TODO facet
+  
   struct triangle {
     normal n;
     outer_loop loop;
+    std::uint16_t attr;    
   };
   
   static std::ostream& operator<<(std::ostream& out, const triangle& self) {
@@ -102,8 +103,13 @@ namespace stl {
   }
   
 
+
+  
   std::istream& operator>>(std::istream& in, triangle& self) {
-    return in >> self.n >> self.loop;
+    attribute_count attr;
+    in >> self.n >> self.loop >> attr;
+    self.attr = attr.value;
+    return in;
   }
 
   
