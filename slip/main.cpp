@@ -53,16 +53,17 @@ static void read_loop(const F& f) {
 template<class Action>
 static int process(std::istream& in, Action action) {
   
-  const auto parse = parse::start( slip::skipper() ) >>=
-    *( slip::parser() >> action | parse::error<slip::sexpr>() );
+  const auto parse = // parse::start( slip::skipper() ) >>=
+    *( slip::parser() >> action // | parse::error<slip::sexpr>()
+       );
   
   try{
     parse(in);
     return 0;
   }
-  catch(parse::error<slip::sexpr>& e) {
-    std::cerr << "parse error: " << e.what() << std::endl;
-  }
+  // catch(parse::error<slip::sexpr>& e) {
+  //   std::cerr << "parse error: " << e.what() << std::endl;
+  // }
   catch( slip::syntax_error& e ) {
     std::cerr << "syntax error: " << e.what() << std::endl;
   }

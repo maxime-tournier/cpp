@@ -208,6 +208,14 @@ namespace parse {
     return {parser};
   }
 
+
+  // convenience
+  template<class LHS, class RHS>
+  static bind_type<LHS, then_type<RHS> > operator,(LHS lhs, RHS rhs) {
+    return lhs >> then(rhs);
+  }
+  
+
   // use parser then ignore result and return previously bound value
   template<class Parser>
   struct drop_type {
@@ -343,7 +351,22 @@ namespace parse {
   template<char c>
   static inline chr_type< bool (*)(char) > chr() { return chr(equals<c>); }
 
+  struct in_set {
+    const char* source;
+    
+    bool operator()(const char& x) const {
+      for(const char* ptr = source; *ptr; ++ptr) {
+        if(x == *ptr) return true;
+      }
+      return false;
+    }
+  };
+  
 
+  inline chr_type<in_set> chr(const char* set) {
+    return {{set}};
+  }
+  
   // string literals. pred tells separators.
   template<class Pred>
   struct str_type {
@@ -523,6 +546,42 @@ namespace parse {
     }
     
   };
+
+
+  // recursive rules (need unique tag, assign only once)
+
+  template<class Type, class Tag>
+  struct rec {
+    using impl_type = maybe<Type> (*)(std::istream&);
+    static impl_type impl;
+
+    // TODO use stateful friend injection magic to detect at compile-time?
+    maybe<Type> operator()(std::istream& in) const {
+      if(!impl) throw std::runtime_error("parser not defined!");
+      return impl(in);
+    }
+
+
+    template<class Parser>
+    rec& operator=(Parser parser) {
+      static const Parser copy = parser;
+      
+      static_assert( std::is_same< value_type<Parser>, Type >::value,
+                     "parser type error" );
+      
+      impl = [](std::istream& in) -> maybe<Type> {
+        return copy(in);
+      };
+
+      return *this;
+    }
+
+  };
+
+
+  template<class Type, class Tag>
+  typename rec<Type, Tag>::impl_type rec<Type, Tag>::impl;
+  
 }
 
 
