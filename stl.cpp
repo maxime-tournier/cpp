@@ -37,6 +37,7 @@ namespace stl {
 
   struct normal : vec3 {
     using vec3::vec3;
+    normal(const vec3& v) : vec3(v) { }
   };
 
   static std::ostream& operator<<(std::ostream& out, const normal& self) {
@@ -46,6 +47,8 @@ namespace stl {
   
   struct vertex : vec3 {
     using vec3::vec3;
+
+    vertex(const vec3& v) : vec3(v) { }    
   };
 
   static std::ostream& operator<<(std::ostream& out, const vertex& self) {
@@ -241,16 +244,21 @@ namespace stl {
     };
 
     // normal/vertex
-    auto normal_def = normal >> then(space) >> then(vec3) >> drop(eol);
-    auto vertex_def = vertex >> then(space) >> then(vec3) >> drop(eol);    
+    auto normal_def = normal >> then(space) >> then(vec3) >> [](stl::vec3&& v) {
+      return pure( stl::normal(v) );
+    } >> drop(eol);
+    
+    auto vertex_def = vertex >> then(space) >> then(vec3) >> [](stl::vec3&& v) {
+      return pure( stl::vertex(v) );
+    } >> drop(eol);    
 
     // loops
     auto outer_loop = outer >> then(space) >> then(loop);
 
     auto loop_def = outer_loop >> drop(eol) >>  
-      then(vertex_def) >> [&](stl::vec3&& v0) {
-      return vertex_def >> [&](stl::vec3&& v1) {
-        return vertex_def >> [&](stl::vec3&& v2) {
+      then(vertex_def) >> [&](stl::vertex&& v0) {
+      return vertex_def >> [&](stl::vertex&& v1) {
+        return vertex_def >> [&](stl::vertex&& v2) {
           stl::outer_loop res = {v0, v1, v2};
           return pure(std::move(res));
         };
