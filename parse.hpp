@@ -366,6 +366,12 @@ namespace parse {
   inline chr_type<in_set> chr(const char* set) {
     return {{set}};
   }
+
+  // convenience for std::isspace and friends
+  static inline chr_type<int (*)(int)> chr( int(*pred)(int) ) {
+    return {pred};
+  }
+  
   
   // string literals. pred tells separators.
   template<class Pred>
@@ -433,17 +439,39 @@ namespace parse {
     maybe<T> operator()(std::istream& in) const {
       indent(out, debug_indent++) << ">> " << name << std::endl;
       const maybe<T> res = parser(in);
-      indent(out, --debug_indent) << "<< " << name << " " << (res ? "o" : "x") << std::endl;;
+      indent(out, --debug_indent) << "<< " << name << ": " << (res ? "success" : "failed") << std::endl;;
       return res;
     }
     
   };
 
-  template<class Parser>
-  static debug_type<Parser> debug(const char* name, Parser parser, std::ostream& out = std::clog) {
-    return {parser, name, out};
-  }
+  struct debug {
 
+    // TODO #ifdef
+    static const bool enabled = false;
+    
+    const char* name;
+    std::ostream& out;
+
+    debug(const char* name, std::ostream& out = std::clog)
+      : name(name),
+        out(out) {
+
+    }
+
+    
+    template<class Parser>
+    typename std::enable_if<debug::enabled, debug_type<Parser>>::type operator<<=(Parser parser) const {
+      return {parser, name, out};
+    }
+
+    template<class Parser>
+    typename std::enable_if<!debug::enabled, Parser>::type operator<<=(Parser parser) const {
+      return parser;
+    }
+    
+  };
+  
 
   template<class Parser, class Skip>
   struct token_type {
@@ -459,6 +487,8 @@ namespace parse {
     }
     
   };
+
+  
 
   template<class Parser, class Skip = chr_type<int(*)(int)> >
   static token_type<Parser, Skip> token(Parser parser, Skip skip = {std::isspace} ) {

@@ -53,12 +53,8 @@ static void read_loop(const F& f) {
 template<class Action>
 static int process(std::istream& in, Action action) {
   
-  const auto parse = // parse::start( slip::skipper() ) >>=
-    *( slip::parser() >> action // | parse::error<slip::sexpr>()
-       );
-  
   try{
-    parse(in);
+    (slip::parser() >> action)(in);
     return 0;
   }
   // catch(parse::error<slip::sexpr>& e) {
