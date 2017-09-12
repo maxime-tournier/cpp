@@ -15,3 +15,5 @@ build
 *.dSYM
 /gc
 /dynamic_sized
+/obj
+/stl

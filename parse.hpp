@@ -430,7 +430,7 @@ namespace parse {
     std::ostream& out;
     
     static std::ostream& indent(std::ostream& out, std::size_t depth) {
-      for(auto i = 0; i < depth; ++i) out << "  ";
+      for(std::size_t i = 0; i < depth; ++i) out << "  ";
       return out;
     }
     
@@ -448,7 +448,7 @@ namespace parse {
   struct debug {
 
     // TODO #ifdef
-    static const bool enabled = false;
+    static const bool enabled = true;
     
     const char* name;
     std::ostream& out;
@@ -489,13 +489,26 @@ namespace parse {
   };
 
   
-
   template<class Parser, class Skip = chr_type<int(*)(int)> >
   static token_type<Parser, Skip> token(Parser parser, Skip skip = {std::isspace} ) {
     return {parser, skip};
   }
 
+  template<class Skip>
+  struct tokenize_type {
+    const Skip skip;
 
+    template<class Parser>
+    token_type<Parser, Skip> operator<<(Parser parser) const {
+      return {parser, skip};
+    }
+  };
+
+  template<class Skip>
+  static tokenize_type<Skip> tokenize(Skip skip) {
+    return {skip};
+  }
+  
   // type erasure
   template<class T>
   using any = std::function< maybe<T> (std::istream& ) >;
