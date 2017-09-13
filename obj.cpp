@@ -1,7 +1,10 @@
+// #define PARSE_ENABLE_DEBUG
 #include "parse.hpp"
 
 #include <iostream>
 #include <fstream>
+
+
 
 namespace obj {
 
@@ -24,6 +27,7 @@ namespace obj {
   };
 
   struct face {
+    
     struct element {
       int vertex;
       int texcoord;
@@ -67,6 +71,8 @@ namespace obj {
     std::vector<normal> normals;
     std::vector<face> faces;
 
+    // TODO materials
+    
     friend std::ostream& operator<<(std::ostream& out, const geometry& self) {
       for(const vertex& v : self.vertices) {
         out << v << '\n';
@@ -153,7 +159,8 @@ namespace obj {
       static const auto o = tokenize(skip) << str("o");      
       static const auto v = tokenize(skip) << str("v");
       static const auto vn = tokenize(skip) << str("vn");
-      static const auto f = tokenize(skip) << str("f");            
+      static const auto f = tokenize(skip) << str("f");
+      static const auto mtllib = tokenize(skip) << str("mtllib");      
       
       static const auto name = tokenize(skip) << +chr(std::isgraph);
 
@@ -162,8 +169,8 @@ namespace obj {
 
       static const auto group_def = g >> then(name) >> drop(newline);
       static const auto object_def = o >> then(name) >> drop(newline);      
+      static const auto mtllib_def = mtllib >> then(name) >> drop(newline);
       
-
       static const auto num = tokenize(skip) << lit<real>();
 
       static const auto vec3 = num >> [](real&& x) {
@@ -233,6 +240,8 @@ namespace obj {
         } | face_def >> [&](obj::face&& f) {
           self.faces.emplace_back(std::move(f));
           return pure(true);
+        } | mtllib_def >> [&](std::vector<char>&& name) {
+          return pure(true);
         } | newline >> then(pure(true)) );
         
         // TODO don't build std::vector of bools here
@@ -291,7 +300,7 @@ namespace obj {
       if( auto result = parser(in) ) {
         std::clog << "success" << std::endl;
         // std::cout << self << std::endl;
-        std::cout << result.get() << std::endl;
+        // std::cout << result.get() << std::endl;
       } else {
         throw std::logic_error("parse error");
       }

@@ -1,3 +1,4 @@
+#define PARSE_ENABLE_DEBUG
 #include "parse.hpp"
 
 #include "sexpr.hpp"
@@ -27,11 +28,12 @@ namespace slip {
     
     const auto special = chr("!$%&*/:<=>?~_^@#-+");
     
-    const auto initial = alpha | special;
+    const auto initial = token(alpha | special, skip);
     const auto subsequent = alnum | special;    
-    
+
     const auto number = debug("number") <<= 
-      lit<slip::real>() >> [](slip::real&& x) {
+      token(lit<slip::real>(), skip) >> [](slip::real&& x) {
+
       integer n = x;
       if(n == x) return pure<sexpr>(n);
       return pure<sexpr>(x);

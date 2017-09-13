@@ -52,6 +52,7 @@ static void read_loop(const F& f) {
 
 template<class Action>
 static int process(std::istream& in, Action action) {
+  in >> std::noskipws;
   
   try{
     (slip::parser() >> action)(in);

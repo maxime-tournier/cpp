@@ -84,24 +84,37 @@ namespace parse {
   };
 
 
-  // save/restore stream position
-  struct stream_pos {
-    std::istream& in;
-    const std::istream::pos_type pos;
-    stream_pos(std::istream& in) : in(in), pos(in.tellg()) { }
-
-    void reset() {
-      in.clear();
-      in.seekg(pos);
-    }
-    
-  };
-
-  
   // parser value type
   template<class Parser>
   using value_type = typename monad_bind_type<maybe, Parser, std::istream& >::value_type;
 
+
+  // rollback stream on parse error. you need these everytime you recover from a
+  // parse error: the stream must be rolled back to the last good state (at
+  // which point the parsed value was obtained). see coproduct, kleene star.
+  template<class Parser>
+  struct backtrack_type {
+    const Parser parser;
+
+    using U = parse::value_type<Parser>;
+    maybe<U> operator()(std::istream& in) const {
+      const std::istream::pos_type pos = in.tellg();
+      const maybe<U> res = parser(in);
+      if(!res) {
+        in.clear();
+        in.seekg(pos);
+      }
+      return res;
+    }
+    
+  };
+
+  template<class Parser>
+  static backtrack_type<Parser> backtrack(Parser parser) {
+    return {parser};
+  }
+  
+  
   
   template<class LHS, class RHS>
   struct coproduct_type {
@@ -115,11 +128,11 @@ namespace parse {
     using T = parse::value_type<LHS>;
   
     maybe<T> operator()(std::istream& in) const {
-
-      if(const maybe<T> tmp = lhs(in)) {
+      
+      if(const maybe<T> tmp = backtrack(lhs)(in)) {
         return tmp;
       }
-
+      
       return rhs(in);
     }
   
@@ -170,16 +183,11 @@ namespace parse {
     using U = parse::value_type<result_type>;
     
     maybe<U> operator()(std::istream& in) const {
-      // backup stream position
-      stream_pos pos(in);
-      
+      // backup stream position TODO why is this needed?
       const maybe<U> res = parser(in) >> [&](T&& source) {
         return f( std::move(source) )(in);
       };
 
-      // rollback stream if needed
-      if(!res) pos.reset();
-      
       return res;
     }
   
@@ -245,8 +253,10 @@ namespace parse {
 
     maybe<U> operator()(std::istream& in) const {
 
+      const auto impl = backtrack(parser);
+      
       U res;
-      while( maybe<T> item = parser(in) ) {
+      while(const maybe<T> item = impl(in) ) {
         res.emplace_back( std::move(item.get()) );
       }
       
@@ -268,9 +278,6 @@ namespace parse {
     using U = std::vector<T>;
     
     maybe<U> operator()(std::istream& in) const {
-      // backup stream position
-      stream_pos pos(in);
-
       U res; res.reserve(n);
       
       for(std::size_t i = 0; i < n; ++i) {
@@ -279,7 +286,6 @@ namespace parse {
         if(value) {
           res.emplace_back( std::move(value.get()) );
         } else {
-          pos.reset();
           return {};
         }
       }
@@ -385,15 +391,10 @@ namespace parse {
     
     maybe<const char*> operator()(std::istream& in) const {
       // backup stream position
-      stream_pos pos(in);
-
       for(const char c : value) {
 
         if(!chr( [c](char x) { return x == c; })(in)) {
-          pos.reset();
           return {};
-        } else {
-
         }
       }
 
@@ -402,7 +403,6 @@ namespace parse {
       if(in.eof() || pred(next) ) {
         return {value.c_str()};
       } else {
-        pos.reset();
         return {};
       }
     }
@@ -439,7 +439,11 @@ namespace parse {
     maybe<T> operator()(std::istream& in) const {
       indent(out, debug_indent++) << ">> " << name << std::endl;
       const maybe<T> res = parser(in);
-      indent(out, --debug_indent) << "<< " << name << ": " << (res ? "success" : "failed") << std::endl;;
+      char next = in.peek();
+      if(in.eof()) in.clear();
+      
+      indent(out, --debug_indent) << "<< " << name << ": " << (res ? "success" : "failed") 
+                                  << ", next: " << next << std::endl;;
       return res;
     }
     
@@ -447,8 +451,11 @@ namespace parse {
 
   struct debug {
 
-    // TODO #ifdef
+#ifdef PARSE_ENABLE_DEBUG
     static const bool enabled = true;
+#else
+    static const bool enabled = false;
+#endif
     
     const char* name;
     std::ostream& out;
