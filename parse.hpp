@@ -206,17 +206,9 @@ namespace parse {
     }
   };
 
-
-  template<class Parser>
-  static then_type<Parser> then(Parser parser) {
-    return {parser};
-  }
-
-
-  // convenience
   template<class LHS, class RHS>
   static bind_type<LHS, then_type<RHS> > operator,(LHS lhs, RHS rhs) {
-    return lhs >> then(rhs);
+    return {lhs, {rhs}};
   }
   
 

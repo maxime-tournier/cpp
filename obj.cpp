@@ -151,7 +151,7 @@ namespace obj {
       static const auto space = chr(std::isblank);
       static const auto endl = chr<'\n'>();      
 
-      static const auto comment = chr<'#'>() >> then(token(endl, !endl));
+      static const auto comment = (chr<'#'>(), token(endl, !endl));
       
       static const auto skip = space | comment;
 
@@ -167,9 +167,9 @@ namespace obj {
       static const auto newline = tokenize(skip) << endl;
 
 
-      static const auto group_def = g >> then(name) >> drop(newline);
-      static const auto object_def = o >> then(name) >> drop(newline);      
-      static const auto mtllib_def = mtllib >> then(name) >> drop(newline);
+      static const auto group_def = (g, name) >> drop(newline);
+      static const auto object_def = (o, name) >> drop(newline);      
+      static const auto mtllib_def = (mtllib, name) >> drop(newline);
       
       static const auto num = tokenize(skip) << lit<real>();
 
@@ -181,11 +181,11 @@ namespace obj {
         };
       };
     
-      static const auto vertex_def = debug("vertex") <<= v >> then(vec3) >> [](obj::vec3&& v) {
+      static const auto vertex_def = debug("vertex") <<= (v, vec3) >> [](obj::vec3&& v) {
         return pure( static_cast<obj::vertex&&>(v) );
       } >> drop(newline);
 
-      static const auto normal_def = debug("normal") <<= vn >> then(vec3) >> [](obj::vec3&& v) {
+      static const auto normal_def = debug("normal") <<= (vn, vec3) >> [](obj::vec3&& v) {
         return pure( static_cast<obj::normal&&>(v) );
       } >> drop(newline);
 
@@ -199,7 +199,7 @@ namespace obj {
         return slash >> [&](const char*) {
           return integer >> [&](int&& texcoord) {
             // vertex/texcoord...
-            return slash >> then(integer) >> [&](int&& normal) {
+            return (slash, integer) >> [&](int&& normal) {
               // vertex/texcoord/normal
               return pure( face::element{vertex, texcoord, normal} );
             } | pure( face::element{vertex, texcoord, -1} );
@@ -216,7 +216,7 @@ namespace obj {
 
 
       static const auto face_def = debug("face") <<=
-        f >> then(face_element) >> [](face::element&& e1) {
+        (f, face_element) >> [](face::element&& e1) {
         return face_element >> [&](face::element&& e2) {
           return face_element >> [&](face::element&& e3) {
             
@@ -231,7 +231,7 @@ namespace obj {
         pure( obj::geometry() ) >> [](obj::geometry&& self) {
         
         const auto line = debug("line") <<=
-        ( vertex_def >> [&](obj::vertex&& v) {
+        vertex_def >> [&](obj::vertex&& v) {
           self.vertices.emplace_back(std::move(v));
           return pure(true);
         } | normal_def >> [&](obj::normal&& n) {
@@ -242,7 +242,7 @@ namespace obj {
           return pure(true);
         } | mtllib_def >> [&](std::vector<char>&& name) {
           return pure(true);
-        } | newline >> then(pure(true)) );
+        } | (newline, pure(true));
         
         // TODO don't build std::vector of bools here
         return *line >> [&](std::vector<bool>&& ) {

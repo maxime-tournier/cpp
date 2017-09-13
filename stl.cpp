@@ -244,19 +244,18 @@ namespace stl {
     };
 
     // normal/vertex
-    auto normal_def = normal >> then(space) >> then(vec3) >> [](stl::vec3&& v) {
+    auto normal_def = (normal, space, vec3) >> [](stl::vec3&& v) {
       return pure( stl::normal(v) );
     } >> drop(eol);
     
-    auto vertex_def = vertex >> then(space) >> then(vec3) >> [](stl::vec3&& v) {
+    auto vertex_def = (vertex, space, vec3) >> [](stl::vec3&& v) {
       return pure( stl::vertex(v) );
     } >> drop(eol);    
 
     // loops
-    auto outer_loop = outer >> then(space) >> then(loop);
+    auto outer_loop = (outer, space, loop);
 
-    auto loop_def = outer_loop >> drop(eol) >>  
-      then(vertex_def) >> [&](stl::vertex&& v0) {
+    auto loop_def = (outer_loop, eol, vertex_def) >> [&](stl::vertex&& v0) {
       return vertex_def >> [&](stl::vertex&& v1) {
         return vertex_def >> [&](stl::vertex&& v2) {
           stl::outer_loop res = {v0, v1, v2};
@@ -266,7 +265,7 @@ namespace stl {
     } >> drop(endloop) >> drop(eol);
 
     // facets
-    auto facet_def = facet >> then(space) >> then(normal_def) >> [&](stl::vec3&& n) {
+    auto facet_def = (facet, space, normal_def) >> [&](stl::vec3&& n) {
       return loop_def >> [&](stl::outer_loop&& loop) {
 
         stl::triangle res;
@@ -281,9 +280,9 @@ namespace stl {
     // solids
     auto name = +!newline;
     
-    auto solid_name = solid >> then(space) >> then(name) >> drop(eol);
-    auto endsolid_name = endsolid >> then(space) >> then(name) >> drop(eol);    
-
+    auto solid_name = (solid, space, name) >> drop(eol);
+    auto endsolid_name = (endsolid, space, name) >> drop(eol);    
+    
     auto solid_def = solid_name >> [&](std::vector<char>&& sname) {
       
       return +facet_def >> [&](std::vector<triangle>&& triangles) {
