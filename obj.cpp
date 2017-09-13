@@ -298,11 +298,9 @@ namespace obj {
       static const auto parser = file;
 
       if( auto result = parser(in) ) {
-        std::clog << "success" << std::endl;
-        // std::cout << self << std::endl;
-        // std::cout << result.get() << std::endl;
+        self = std::move(result.get());
       } else {
-        throw std::logic_error("parse error");
+        throw std::runtime_error("parse error");
       }
       
       return in;
@@ -324,13 +322,21 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  std::ifstream in(argv[1]);
+  std::ifstream in(argv[1]); 
   if(!in.good()) {
-    std::cerr << "file error" << std::endl;
+    std::cerr << "file open error" << std::endl;
     return 1;
   }
 
-  in >> f;
+  std::stringstream ss;
+  ss << in.rdbuf();
   
+  try {
+    ss >> f;
+  } catch(std::runtime_error& e) {
+    std::cerr << e.what() << std::endl;
+    return 1;
+  }
+
   return 0;
 }

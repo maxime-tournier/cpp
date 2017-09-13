@@ -119,7 +119,7 @@ namespace parse {
   template<class LHS, class RHS>
   struct coproduct_type {
     
-    const LHS lhs;
+    const backtrack_type<LHS> lhs;
     const RHS rhs;
 
     static_assert( std::is_same< value_type<LHS>, value_type<RHS> >::value, 
@@ -128,11 +128,7 @@ namespace parse {
     using T = parse::value_type<LHS>;
   
     maybe<T> operator()(std::istream& in) const {
-      
-      if(const maybe<T> tmp = backtrack(lhs)(in)) {
-        return tmp;
-      }
-      
+      if(const maybe<T> tmp = lhs(in)) { return tmp; }
       return rhs(in);
     }
   
@@ -141,7 +137,7 @@ namespace parse {
 
   template<class LHS, class RHS>
   static inline coproduct_type<LHS, RHS> operator | (LHS lhs, RHS rhs) {
-    return {lhs, rhs};
+    return {{lhs}, rhs};
   }
 
 
@@ -246,17 +242,15 @@ namespace parse {
   // kleene star
   template<class Parser>
   struct kleene_type {
-    const Parser parser;
+    const backtrack_type<Parser> parser;
 
     using T = parse::value_type<Parser>;
     using U = std::vector<T>;
 
     maybe<U> operator()(std::istream& in) const {
 
-      const auto impl = backtrack(parser);
-      
       U res;
-      while(const maybe<T> item = impl(in) ) {
+      while(maybe<T> item = parser(in)) {
         res.emplace_back( std::move(item.get()) );
       }
       
@@ -266,7 +260,7 @@ namespace parse {
   
 
   template<class Parser>
-  static inline kleene_type<Parser> operator*(Parser parser) { return {parser}; }
+  static inline kleene_type<Parser> operator*(Parser parser) { return {{parser}}; }
 
 
   template<class Parser>
@@ -281,9 +275,7 @@ namespace parse {
       U res; res.reserve(n);
       
       for(std::size_t i = 0; i < n; ++i) {
-        const maybe<T> value = parser(in);
-        
-        if(value) {
+        if(maybe<T> value = parser(in)) {
           res.emplace_back( std::move(value.get()) );
         } else {
           return {};
