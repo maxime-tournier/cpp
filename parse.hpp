@@ -204,7 +204,7 @@ namespace parse {
     return {parser, f};
   }
 
-  // sequence without binding: a >> then(b) 
+  // sequence without binding: a >> then(b)
   template<class Parser>
   struct then_type {
     const Parser parser;
@@ -228,7 +228,7 @@ namespace parse {
     
     template<class T>
     bind_type<Parser, then_type<pure_type< typename std::decay<T>::type > >> operator()(T&& value) const {
-      return parser >> then( pure( std::forward<T>(value) ) );
+      return (parser, pure( std::forward<T>(value) ) );
     };
     
   };
