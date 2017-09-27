@@ -1,4 +1,4 @@
-#define PARSE_ENABLE_DEBUG
+// #define PARSE_ENABLE_DEBUG
 #include "parse.hpp"
 
 #include "sexpr.hpp"
@@ -17,8 +17,6 @@ namespace slip {
   static const auto lparen = debug("(") <<= token(chr<'('>(), skip);
   static const auto rparen = debug(")") <<= token(chr<')'>(), skip);    
   
-
-
   static const auto dquote = chr<'"'>();  
   
   static const auto alpha = chr(std::isalpha);
@@ -52,10 +50,10 @@ namespace slip {
 
     // TODO escaped strings
     const auto string = debug("string") <<=
-      ((dquote, *!dquote) >> [](std::vector<char>&& chars) {
+      (token(dquote, skip), *!dquote) >> [](std::vector<char>&& chars) {
       ref<slip::string> str = make_ref<slip::string>(chars.begin(), chars.end());
       return dquote, pure<sexpr>(str);
-      });
+    };
     
     const auto atom = debug("atom") <<= (string | symbol | number);
     
@@ -66,26 +64,13 @@ namespace slip {
       return rparen, pure<sexpr>(slip::make_list<sexpr>(terms.begin(), terms.end()));
     };
     
-    
     const auto quote = chr<'\''>();
     const auto backquote = chr<'`'>();
     const auto comma = chr<','>();        
     
-    // const auto quoted_expr = quote >> then(expr) >> [](sexpr&& e) {
-    //   return pure<sexpr>( slip::symbol(kw::quote) >>= e >>= sexpr::list() );
-    // };
+    expr = debug("expr") <<= list | atom; 
     
-    // const auto quasiquoted_expr = backquote >> then(expr) >> [](sexpr&& e) {
-    //     return pure<sexpr>( slip::symbol(kw::quasiquote) >>= e >>= sexpr::list() );
-    //   };
-
-    // const auto unquote_expr = comma >> then(expr) >> [](sexpr&& e) {
-    //   return pure<sexpr>( slip::symbol(kw::unquote) >>= e >>= sexpr::list() );
-    // };
-
-    expr = debug("expr") <<= list | atom; // atom; //  | list; //| quoted_expr | quasiquoted_expr | unquote_expr;
-    
-    return expr;
+    return expr | parse::error<sexpr, parse_error>();
   }
 
 }

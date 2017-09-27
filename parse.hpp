@@ -158,14 +158,23 @@ namespace parse {
   
   // monadic zero
   template<class T>
-  struct fail_type {
+  struct fail {
+    maybe<T> operator()(std::istream& in) const { return {}; }
+  };
+
+
+  // parse error
+  template<class T, class Error = std::runtime_error>
+  struct error {
+    const char* what;
+    
+    error(const char* what = "parse error") : what(what) { } 
 
     maybe<T> operator()(std::istream& in) const {
-      return {};
+      throw Error(what);
     }
     
   };
-
 
   // monadic bind
   template<class Parser, class F>
@@ -287,7 +296,7 @@ namespace parse {
 
   // literal parser
   template<class T>
-  struct literal_type {
+  struct lit {
 
     maybe<T> operator()(std::istream& in) const {
       T res;
@@ -400,9 +409,6 @@ namespace parse {
   }
   
   
-  template<class T> using lit = literal_type<T>;
-  template<class T> using fail = fail_type<T>;  
-
 
   // convenience
   static std::size_t debug_indent = 0;

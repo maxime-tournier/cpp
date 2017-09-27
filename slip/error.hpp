@@ -10,6 +10,11 @@ namespace slip {
     using std::runtime_error::runtime_error;
   };
 
+
+  struct parse_error : error {
+    using error::error;
+  };
+
   struct type_error : error {
     using error::error;
   };

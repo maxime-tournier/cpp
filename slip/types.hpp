@@ -49,20 +49,8 @@ namespace slip {
     constructor operator>>=(const kind& lhs, const kind& rhs);
 
 
-    // the kind of rows
-    struct rows {
-      bool operator==(const rows& other) const { return true; }
-      bool operator<(const rows& other) const { return false; }
-    };
-
-
-    struct threads {
-      bool operator==(const threads& other) const { return true; }
-      bool operator<(const threads& other) const { return false; }
-    };
     
-    
-    struct kind : variant<terms, constructor, rows, threads > {
+    struct kind : variant<terms, constructor > {
       using kind::variant::variant;
       
       struct error : slip::error {
@@ -168,7 +156,7 @@ namespace slip {
     
 
     // some type constructors
-    extern const type func_ctor, io_ctor, list_ctor, ref_ctor;
+    extern const type func_ctor, io_ctor, list_ctor;
     
     // easily construct function types
     type operator>>=(const type& lhs, const type& rhs);

@@ -39,9 +39,11 @@ template<class F>
 static void read_loop(const F& f) {
 
   while( const char* line = readline("> ") ) {
-    add_history(line);
+    if(!*line) continue;
     
+    add_history(line);
 	std::stringstream ss(line);
+    
 	f(ss);
   }
   
@@ -58,9 +60,9 @@ static int process(std::istream& in, Action action) {
     (slip::parser() >> action)(in);
     return 0;
   }
-  // catch(parse::error<slip::sexpr>& e) {
-  //   std::cerr << "parse error: " << e.what() << std::endl;
-  // }
+  catch( slip::parse_error& e) {
+    std::cerr << "parse error" << std::endl;
+  }
   catch( slip::syntax_error& e ) {
     std::cerr << "syntax error: " << e.what() << std::endl;
   }
@@ -153,9 +155,8 @@ static const auto compiler = [](bool dump_bytecode) {
   
   using namespace types;
   {
-    type thread = tc->fresh(threads());
     type a = tc->fresh();
-    tc->def(kw::pure, tc->generalize( a >>= io_ctor(thread)(a) ));
+    tc->def(kw::pure, tc->generalize( a >>= io_ctor(a) ));
     
     jit->def(kw::pure, +[](vm::stack* args) {
         return pop(args);
@@ -167,8 +168,8 @@ static const auto compiler = [](bool dump_bytecode) {
   const type unit_type = traits< vm::unit >::type();
   
   {
-    type thread = tc->fresh(threads());    
-    tc->def("print", tc->generalize( string_type >>= io_ctor(thread)(unit_type)  ));
+    // print
+    tc->def("print", tc->generalize( string_type >>= io_ctor(unit_type)  ));
     jit->def("print", +[](vm::stack* args) -> vm::value {
         std::cout << *pop(args).get< ref<vm::string> >() << std::endl;
         return vm::unit();
@@ -176,24 +177,25 @@ static const auto compiler = [](bool dump_bytecode) {
   }
 
 
-  // lists
   {
-    type a = tc->fresh();
-    tc->def("nil", tc->generalize( list_ctor(a)));
-    jit->def("nil", vm::value::list());
-  } 
+    // lists
+    {
+      type a = tc->fresh();
+      tc->def("nil", tc->generalize( list_ctor(a)));
+      jit->def("nil", vm::value::list());
+    } 
 
-
-  {
-    type a = tc->fresh();
-    tc->def("cons", tc->generalize(a >>= list_ctor(a) >>= list_ctor(a) ));
-    jit->def("cons", +[](vm::stack* args) -> vm::value {
-        const vm::value head = pop(args);
-        const vm::value tail = pop(args);
-        // TODO move
-        return head >>= tail.get< vm::value::list >();
-      });
-  } 
+    {
+      type a = tc->fresh();
+      tc->def("cons", tc->generalize(a >>= list_ctor(a) >>= list_ctor(a) ));
+      jit->def("cons", +[](vm::stack* args) -> vm::value {
+          const vm::value head = pop(args);
+          const vm::value tail = pop(args);
+          // TODO move
+          return head >>= tail.get< vm::value::list >();
+        });
+    }
+  }
 
   
   return [tc, jit, dump_bytecode](sexpr&& s) mutable {

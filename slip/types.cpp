@@ -159,13 +159,9 @@ namespace slip {
     
     const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
 
-    const type io_ctor = constant("io", threads() >>= terms() >>= terms() );
+    const type list_ctor = constant("list", terms() >>= terms() );
+    const type io_ctor = constant("io", terms() >>= terms() );        
     
-    const type list_ctor = constant("list", terms() >>= terms() );        
-
-    const type record_ctor = constant("record", rows() >>= terms());    
-    // TODO variant ctor
-
 
     
     type type::operator()(const type& arg) const {
@@ -212,15 +208,6 @@ namespace slip {
       }
 
       
-      void operator()(const rows&, std::ostream& out) const {
-        out << "row";
-      }
-      
-      void operator()(const threads&, std::ostream& out) const {
-        out << "thread";
-      }
-      
-      
       void operator()(const constructor& self, std::ostream& out) const {
         // TODO parentheses
         out << *self.from << " -> " << *self.to;
@@ -243,15 +230,6 @@ namespace slip {
                             string_type("string"),
                             symbol_type("symbol");
     
-
-    // row types
-    const type empty_row_type = constant("{}", rows());
-
-
-    // row extension type constructor
-    static inline type row_extension_ctor(symbol label) {
-      return constant(label.name(), terms() >>= rows() >>= rows());
-    }
 
 
 
@@ -389,140 +367,13 @@ namespace slip {
 
 
 
-
-      struct row_helper {
-
-        // TODO multimap for duplicate labels
-        using rows_type = std::map<symbol, type>;
-        rows_type rows;
-        
-        type last;
-
-        static type fill(rows_type& rows, const type& row) {
-          if(row.is< ref<application> >() ) {
-
-            const auto& app = row.get< ref<application> >();
-
-            assert(app->func.is< ref<application> >());
-
-            const auto& head = app->func.get< ref<application> >();
-            assert( head->arg.kind() == terms() );
-
-            assert( head->func.is<constant>() );
-            assert( head->func.kind() == (terms() >>= types::rows() >>= types::rows()) );
-
-            rows.emplace( std::make_pair(head->func.get<constant>().name, head->arg) );
-            return fill(rows, app->arg);
-            
-          } else {
-            return row;
-          }
-          
-        }
-        
-        row_helper(const type& row) : last( fill(rows, row) ) {
-          assert( last == empty_row_type || last.is< ref<variable> >() );
-          assert( last.kind() == types::rows() );
-        }
-
-
-
-        struct compare {
-
-          template<class Pair>
-          bool operator()(const Pair& lhs, const Pair& rhs) const {
-            return lhs.first < rhs.first;
-          }
-
-        };
-      
-
-        bool unify_difference(const row_helper& other, pretty_printer& pp, UF& uf)  const {
-          std::map<symbol, type> tmp;
-          
-          std::set_difference(rows.begin(), rows.end(),
-                              other.rows.begin(), other.rows.end(),
-                              std::inserter(tmp, tmp.end()), compare() );
-
-          if( other.last == empty_row_type && tmp.size() > 0) {
-
-            for(auto& s : rows) {
-              std::clog << s.first << std::endl;
-            }
-
-            for(auto& s : other.rows) {
-              std::clog << s.first << std::endl;
-            }
-            
-            
-            for(auto& s : tmp) {
-              std::clog << s.first << std::endl;
-            }
-            
-            pp << tmp.size() << std::endl;
-            throw error("unification error");
-            return false;
-          }
-          
-          if( other.last.template is<ref<variable>>() ) {
-            // build a row from difference labels
-            type row = make_ref<variable>(types::rows(), other.last.template get<ref<variable>>()->depth );
-            
-            for(auto& s : tmp) {
-              row = row_extension_ctor(s.first)( rows.find(s.first)->second )(row);
-            }
-
-
-            // pp << "unifying row difference: " << row << " ~ " << other.last << std::endl;
-            
-            // and link it
-            uf.link( uf.find(other.last), row);
-            return true;
-          }
-
-          return false;
-        }
-      
-        
-        void unify(const row_helper& other, pretty_printer& pp, UF& uf) const {
-
-          std::map<symbol, type> tmp;
-          std::set_intersection(rows.begin(), rows.end(),
-                                other.rows.begin(), other.rows.end(),
-                                std::inserter(tmp, tmp.end()), compare() );
-
-          // unify types in intersection
-          for(auto& s : tmp) {
-            // pp << "unifying row intersection: " << s.first << std::endl;
-            uf.find( rows.find(s.first)->second ).apply( unify_visitor(pp),
-                                                         uf.find(other.rows.find(s.first)->second), uf);
-          }
-
-
-          // 
-          this->unify_difference(other, pp, uf);
-          other.unify_difference(*this, pp, uf);
-        
-        }
-
-        
-      };
-
-      
-      
-
       
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
         // pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
         const auto indent = pp.indent();        
 
-        if(type(lhs).kind() == rows() && type(rhs).kind() == rows() ) {
-          row_helper(lhs).unify(row_helper(rhs), pp, uf);
-        } else {
-          uf.find(lhs->func).apply( unify_visitor(pp), uf.find(rhs->func), uf);
-          uf.find(lhs->arg).apply( unify_visitor(pp), uf.find(rhs->arg), uf);
-        }
-        
+        uf.find(lhs->func).apply( unify_visitor(pp), uf.find(rhs->func), uf);
+        uf.find(lhs->arg).apply( unify_visitor(pp), uf.find(rhs->arg), uf);
       }
 
       
@@ -668,7 +519,6 @@ namespace slip {
       inferred<type, ast::expr> operator()(const ref<ast::definition>& self, state& tc) const {
 
         const type forward = tc.fresh();
-        const type thread = tc.fresh( threads() );        
         
         state sub = tc.scope();
 
@@ -682,7 +532,7 @@ namespace slip {
 
         const ast::expr node = make_ref<ast::definition>(self->id, value.node);
 
-        return {io_ctor(thread)(unit_type), node};
+        return {io_ctor(unit_type), node};
       }
 
 
@@ -690,7 +540,6 @@ namespace slip {
       inferred<type, ast::expr> operator()(const ref<ast::binding>& self, state& tc) const {
 
         const type forward = tc.fresh();
-        const type thread = tc.fresh( threads() );
         
         // note: value is bound in sub-context (monomorphic)
         // note: monadic binding pushes a scope
@@ -700,26 +549,24 @@ namespace slip {
 
         const inferred<type, ast::expr> value = infer(tc, self->value);
         
-        tc.unify(io_ctor(thread)(forward), value.type);
+        tc.unify(io_ctor(forward), value.type);
 
         tc.find(self->id);
 
         // TODO should we rewrite as a def?
         const ast::expr node = make_ref<ast::binding>(self->id, value.node);
-        return {io_ctor(thread)(unit_type), node};
+        return {io_ctor(unit_type), node};
         
       }
       
 
       // sequences
       inferred<type, ast::expr> operator()(const ast::sequence& self, state& tc) const {
-        const type thread = tc.fresh( threads() );
-        type res = io_ctor(thread)(unit_type);
-
+        type res = io_ctor(unit_type);
         state sub = tc.scope();
         
         const ast::expr node = ast::sequence{ map(self.items, [&](const ast::expr& e) {
-              res = io_ctor(thread)(tc.fresh()) ;
+              res = io_ctor(tc.fresh()) ;
               
               const inferred<type, ast::expr> item = infer(sub, e);
               tc.unify(res, item.type);
@@ -730,35 +577,6 @@ namespace slip {
         return {res, node};
       }
 
-
-      // record attribute selection
-      inferred<type, ast::expr> operator()(const ast::selection& self, state& tc) const {
-
-        const type a = tc.fresh(), r = tc.fresh(rows());
-        
-        const type res = record_ctor( row_extension_ctor(self.label)(a)(r) ) >>= a;
-        return {res, self};
-      }
-      
-
-      // record literals
-      // TODO this could be done better by typechecking rows individually?
-      inferred<type, ast::expr> operator()(const ast::record& self, state& tc) const {
-
-        using chunk = inferred< type, list<ast::row> >;
-        chunk init = {empty_row_type, {}},
-          result = foldr(init, self.rows, [&](const ast::row& lhs, const chunk& rhs) -> chunk {
-
-              // infer current row
-              const inferred<type, ast::expr> value = infer(tc, lhs.value);
-
-              // extend rhs with it
-              return {row_extension_ctor(lhs.label)(value.type)(rhs.type), 
-                  ast::row(lhs.label, value.node) >>= rhs.node};
-            });
-
-        return { record_ctor(result.type), ast::record{ std::move(result.node) } };
-      }
 
 
       // fallback case
@@ -778,7 +596,7 @@ namespace slip {
         std::stringstream ss;
 
         pretty_printer pp(ss);
-        pp << "unification error: " << e.lhs << " !~ " << e.rhs;
+        pp << "when unifying \"" << e.lhs << "\" and \"" << e.rhs << "\"";
         
         throw type_error(ss.str());
       }
@@ -863,7 +681,7 @@ namespace slip {
 
     // env lookup/def
     struct unbound_variable : type_error {
-      unbound_variable(symbol id) : type_error("unbound variable " + id.name()) { }
+      unbound_variable(symbol id) : type_error("unbound variable \"" + id.name() + "\"") { }
     };
 
     
@@ -927,7 +745,6 @@ namespace slip {
 
     // generalization
     scheme state::generalize(const type& mono) const {
-      // debug(std::clog << "gen: ", mono) << std::endl;
       scheme res(mono.map<type>(nice(), uf));
 
       const auto all = vars(res.body);
@@ -945,27 +762,14 @@ namespace slip {
 
 
 
-    
-    
   
     inferred<scheme, ast::toplevel> infer(state& self, const ast::toplevel& node) {
 
-      static const type toplevel_thread = self.fresh( threads() );
       static const int once = (self = self.scope(), 0);
       
       const inferred<type, ast::expr> res = infer(self, node.get<ast::expr>());
 
       const type mono = self.generalize(res.type).body;
-      
-      if(auto* app = mono.get_if<ref<application>>()) {
-        if(auto* nested = (*app)->func.get_if<ref<application>>() ) {
-          if( (*nested)->func == io_ctor ) {
-            // toplevel io
-            auto a = self.fresh();
-            self.unify(mono, io_ctor(toplevel_thread)(a));
-          }
-        }
-      }
       
       return {self.generalize(res.type), node};
     }
