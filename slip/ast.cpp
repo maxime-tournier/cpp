@@ -21,10 +21,22 @@ namespace slip {
       sexpr operator()(const symbol& self) const {
         return self;
       }
+
+
+      sexpr operator()(ast::type self) const {
+        return self.map<sexpr>(*this);
+      }
+      
+      sexpr operator()(lambda::typed self) const {
+        return self.name >>= self.type.map<sexpr>(*this)
+          >>= sexpr::list();
+      }
       
       sexpr operator()(const ref<lambda>& self) const {
         return kw::lambda
-          >>= map(self->args, [](symbol s) -> sexpr { return s; })
+          >>= map(self->args, [&](lambda::arg s) -> sexpr {
+              return s.map<sexpr>(*this);
+            })
           >>= repr(self->body)
           >>= sexpr::list();
       }
@@ -117,26 +129,62 @@ namespace slip {
     };
     
 
-    
-    static expr check_lambda(const sexpr::list& args) {
-      struct fail { };
+    static type check_type(const sexpr& e) {
+      struct error {};
 
       try {
-        if(size(args) != 2 || !args->head.is<sexpr::list>() ) throw fail();
+        if(e.is<symbol>()) return e.get<symbol>();
+        if(!e.is<sexpr::list>()) throw error();
+
+        // type constructor
+        const sexpr::list& arg = e.get<sexpr::list>();      
+        if(size(arg) < 2) throw error(); // or is it not?
+
+        return map(arg, &check_type);
+      } catch( error& ) {
+        throw syntax_error("type: `symbol` | (`type` `type`...)");
+      }
+    }
+
+    static lambda::arg check_lambda_arg(const sexpr& e) {
+      struct error { };
+
+      try {
+        if(e.is<symbol>()) return e.get<symbol>();
         
-        list<symbol> vars =
+        if(!e.is<sexpr::list>()) throw error();
+
+        const sexpr::list& arg = e.get<sexpr::list>();
+        if( size(arg) != 2) throw error();
+
+        if( !arg->head.is<symbol>() ) throw error();
+
+        return lambda::typed{ arg->head.get<symbol>(), check_type(arg->tail->head) };            
+        
+      } catch(error& ) {
+        throw syntax_error("typed arg: `symbol` | (`symbol` `type`)");
+      }
+    }
+    
+    static expr check_lambda(const sexpr::list& args) {
+      struct error { };
+
+      try {
+        if(size(args) != 2 || !args->head.is<sexpr::list>() ) throw error();
+        
+        list<lambda::arg> vars =
           map(args->head.get<sexpr::list>(), [&](const sexpr& e) {
-              if(!e.is<symbol>()) throw fail();
-              return e.get<symbol>();
+              return check_lambda_arg(e);
             });
 
         // fix nullary functions
+        // TODO make them unit here?
         if(!vars) vars = kw::wildcard >>= vars;
         
         return make_ref<lambda>(vars, check_expr(args->tail->head));
         
-      } catch( fail& ) {
-        throw syntax_error("(lambda (`symbol`...) `expr`)");
+      } catch( error& ) {
+        throw syntax_error("(lambda (`arg`...) `expr`)");
       }
       
     }

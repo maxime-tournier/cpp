@@ -77,16 +77,42 @@ namespace slip {
 
     };
 
+
+    struct type;
+    
+    struct type : variant< symbol, slip::list<type> > {
+      using type::variant::variant;
+
+      using list = slip::list<type>;
+    };
+
+    
     sexpr repr(const expr& self);
     std::ostream& operator<<(std::ostream& out, const expr& self);
     
     
     struct lambda {
-      lambda(const list<symbol>& args, const expr& body)
+
+      struct typed {
+        symbol name;
+        struct ast::type type;
+      };
+
+      struct arg : variant<symbol, typed> {
+        using arg::variant::variant;
+
+        symbol name() const {
+          if( is<symbol>() ) return get<symbol>();
+          else return get<typed>().name;
+        }
+      };
+      
+      lambda(const list<arg>& args, const expr& body)
         : args(args), body(body) { }
       
-      const list<symbol> args;
+      const list<arg> args;
       const expr body;
+
     };
 
     

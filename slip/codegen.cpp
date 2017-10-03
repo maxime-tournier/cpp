@@ -183,7 +183,9 @@ namespace slip {
         }
 
         // populate sub with args
-        for(const symbol& s : self->args) {
+        for(const ast::lambda::arg& arg : self->args) {
+          const symbol s = arg.name();
+            
           if(s == kw::wildcard) {
             sub->add_arg();
           } else {

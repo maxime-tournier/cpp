@@ -425,12 +425,14 @@ namespace slip {
         state sub = tc.scope();
 
         // create/define arg types
-        const list< type > args = map(self->args, [&](const symbol& s) {
+        const list< type > args = map(self->args, [&](const ast::lambda::arg& x) {
+
+            // TODO typed variables
             const type a = tc.fresh();
 
             // note: var stays monomorphic after generalization
-            if(!(s == kw::wildcard) ) {
-              sub.def(s, sub.generalize(a) );
+            if(!(x.name() == kw::wildcard) ) {
+              sub.def(x.name(), sub.generalize(a) );
             }
             
             return a;
@@ -439,7 +441,7 @@ namespace slip {
 
         // TODO FIXME this is to fix nullary applications until typed function
         // args are available
-        if(size(self->args) == 1 && self->args->head == kw::wildcard) {
+        if(size(self->args) == 1 && self->args->head.name() == kw::wildcard) {
           args->head = unit_type;
         }
         
