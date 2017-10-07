@@ -79,6 +79,16 @@ namespace slip {
 
 
     struct type;
+
+    // TODO type variables, constructors, etc
+    
+    // struct constructor {
+    //   symbol name;
+    // };
+
+    // struct variable {
+    //   symbol name;
+    // };
     
     struct type : variant< symbol, slip::list<type> > {
       using type::variant::variant;

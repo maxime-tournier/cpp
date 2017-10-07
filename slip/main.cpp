@@ -161,6 +161,8 @@ static const auto compiler = [](bool dump_bytecode) {
     jit->def(kw::pure, +[](vm::stack* args) {
         return pop(args);
       });
+
+    tc->ctor->emplace("int", traits< integer >::type());
   }
 
 

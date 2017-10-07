@@ -160,7 +160,6 @@ namespace slip {
     
     // easily construct function types
     type operator>>=(const type& lhs, const type& rhs);
-    
 
     
     // typing environment
@@ -184,11 +183,20 @@ namespace slip {
 
       using uf_type = union_find<type>;
       ref< uf_type > uf;
-    
+
+    public:
+      // type constructors
+      using ctor_type = std::map<symbol, type>;
+      ref<ctor_type> ctor;
+
+      
+      // TODO nested type environments for type variables
+
     public:
       state(ref<env_type> env = make_ref<env_type>(),
-            ref<uf_type> uf = make_ref<uf_type>());
-    
+            ref<uf_type> uf = make_ref<uf_type>(),
+            ref<ctor_type> ctor = make_ref<ctor_type>());
+      
       scheme generalize(const type& t) const;
       type instantiate(const scheme& p) const;
 
@@ -201,6 +209,8 @@ namespace slip {
       const scheme& find(symbol id) const;
 
       ref<variable> fresh(kind k = terms()) const;
+
+      
     };
 
 

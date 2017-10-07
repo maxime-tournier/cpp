@@ -12,6 +12,12 @@ namespace slip {
 
   namespace types {
 
+    // env lookup/def
+    struct unbound_variable : type_error {
+      unbound_variable(symbol id) : type_error("unbound variable \"" + id.name() + "\"") { }
+    };
+
+    
     // pretty-printing types
     struct pretty_printer {
 
@@ -245,9 +251,10 @@ namespace slip {
     template<> constant traits< ref<slip::string> >::type() { return string_type; }
     
 
-    state::state(ref<env_type> env, ref<uf_type> uf) 
+    state::state(ref<env_type> env, ref<uf_type> uf, ref<ctor_type> ctor) 
       : env( env ),
-        uf( uf ) {
+        uf( uf ),
+        ctor(ctor) {
       
     }
 
@@ -400,6 +407,52 @@ namespace slip {
     // type inference for expressions
     static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
 
+    static type infer(state& self, const ast::type& node);    
+
+    struct type_visitor {
+
+      using variables_type = std::map<symbol, ref<variable> >;
+      
+      type operator()(const symbol& self, state& tc) const {
+
+        // TODO check this crap upstream in ast
+        // TODO prevent value variables from starting with '
+        
+        if(self.name()[0] == '\'') {
+          // type variable
+          try {
+            const scheme& p = tc.find(self);
+            assert(p.body.is<ref<variable>>());
+            return p.body;
+          } catch( unbound_variable& ) {
+            const ref<variable> a = tc.fresh();
+            tc.def(self, tc.generalize(a));
+            return a;
+          }
+          
+        } else {
+          auto it = tc.ctor->find(self);
+          if(it == tc.ctor->end()) throw unbound_variable(self);
+          return it->second;
+        }
+      }
+      
+      type operator()(const ast::type::list& self, state& tc) const {
+        const type init = infer(tc, self->head);
+        return foldl(init, self->tail, [&tc](const type& lhs, const ast::type& rhs) {
+            return lhs >>= infer(tc, rhs);
+          });
+      }
+      
+      
+    };
+
+  
+    
+    static type infer(state& self, const ast::type& node) {
+      return node.map<type>(type_visitor(), self);
+    }
+    
 
     // expression switch
     struct expr_visitor {
@@ -430,6 +483,12 @@ namespace slip {
             // TODO typed variables
             const type a = tc.fresh();
 
+            if(x.is<ast::lambda::typed>()) {
+              const type b = infer(tc, x.get<ast::lambda::typed>().type);
+              tc.unify(a, b);
+            }
+
+            
             // note: var stays monomorphic after generalization
             if(!(x.name() == kw::wildcard) ) {
               sub.def(x.name(), sub.generalize(a) );
@@ -681,11 +740,6 @@ namespace slip {
 
 
 
-    // env lookup/def
-    struct unbound_variable : type_error {
-      unbound_variable(symbol id) : type_error("unbound variable \"" + id.name() + "\"") { }
-    };
-
     
     const scheme& state::find(symbol id) const {
 
@@ -710,10 +764,11 @@ namespace slip {
 
 
     state state::scope() const {
+
       // TODO should we use nested union-find too?
       ref<env_type> sub = make_ref<env_type>(env);
 
-      return state( sub, uf);
+      return state( sub, uf, ctor);
     }
     
 
