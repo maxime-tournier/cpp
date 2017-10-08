@@ -117,18 +117,7 @@ namespace slip {
       type func;
       type arg;
 
-      application(type func, type arg)
-        : func(func),
-          arg(arg) {
-
-        if(!func.kind().is< constructor>()) {
-          throw error("applied type constructor must have constructor kind");
-        }
-      
-        if(*func.kind().get< constructor >().from != arg.kind() ) {
-          throw error("kind error");
-        }
-      }
+      application(type func, type arg);
 
 
       // used to remember "true" argcount in lambdas when currying

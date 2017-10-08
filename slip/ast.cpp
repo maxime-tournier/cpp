@@ -23,18 +23,19 @@ namespace slip {
       }
 
 
-      sexpr operator()(ast::type self) const {
-        return self.map<sexpr>(*this);
+      sexpr operator()(const type::list& self) const {
+        return map(self, [](const type& e) { return repr(e); });
       }
+
       
-      sexpr operator()(lambda::typed self) const {
-        return self.name >>= self.type.map<sexpr>(*this)
-          >>= sexpr::list();
+      sexpr operator()(const lambda::typed& self) const {
+        return self.name >>= repr(self.type) >>= sexpr::list();
       }
-      
+
+
       sexpr operator()(const ref<lambda>& self) const {
         return kw::lambda
-          >>= map(self->args, [&](lambda::arg s) -> sexpr {
+          >>= map(self->args, [&](const lambda::arg& s) -> sexpr {
               return s.map<sexpr>(*this);
             })
           >>= repr(self->body)
@@ -88,7 +89,7 @@ namespace slip {
       
       template<class T>
       sexpr operator()(const T& self) const {
-        throw error("repr unimplemented");
+        throw error(std::string("repr unimplemented for: ") + typeid(T).name() );
       }
       
     };
@@ -97,6 +98,11 @@ namespace slip {
     sexpr repr(const expr& self) {
       return self.map<sexpr>( repr_visitor() );
     }
+
+    sexpr repr(const type& self) {
+      return self.map<sexpr>( repr_visitor() );
+    }
+
     
     std::ostream& operator<<(std::ostream& out, const expr& self) {
       return out << repr(self);

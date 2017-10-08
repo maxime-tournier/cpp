@@ -228,6 +228,22 @@ namespace slip {
     }
 
 
+    application::application(type func, type arg)
+      : func(func),
+        arg(arg) {
+      
+      if(!func.kind().is< constructor>()) {
+        throw error("applied type constructor must have constructor kind");
+      }
+      
+      if(*func.kind().get< constructor >().from != arg.kind() ) {
+        std::stringstream ss;
+        ss << "expected: " << *func.kind().get< constructor >().from << ", got: " << arg.kind();
+           
+        throw kind_error(ss.str());
+      }
+    }
+    
     // term types
     const constant unit_type("unit"),
                             boolean_type("boolean"),
@@ -418,7 +434,7 @@ namespace slip {
         // TODO check this crap upstream in ast
         // TODO prevent value variables from starting with '
         
-        if(self.name()[0] == '\'') {
+        if(self.name()[0] == '~') {
           // type variable
           try {
             const scheme& p = tc.find(self);
@@ -438,9 +454,8 @@ namespace slip {
       }
       
       type operator()(const ast::type::list& self, state& tc) const {
-        const type init = infer(tc, self->head);
-        return foldl(init, self->tail, [&tc](const type& lhs, const ast::type& rhs) {
-            return lhs >>= infer(tc, rhs);
+        return foldl(infer(tc, self->head), self->tail, [&tc](const type& lhs, const ast::type& rhs) {
+            return lhs(infer(tc, rhs));
           });
       }
       
@@ -450,7 +465,12 @@ namespace slip {
   
     
     static type infer(state& self, const ast::type& node) {
-      return node.map<type>(type_visitor(), self);
+      try {
+        return node.map<type>(type_visitor(), self);
+      } catch( ... ) {
+        std::cerr << "when inferring type for: " << repr(node) << std::endl;
+        throw;
+      }
     }
     
 

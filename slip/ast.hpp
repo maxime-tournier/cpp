@@ -77,6 +77,9 @@ namespace slip {
 
     };
 
+    sexpr repr(const expr& self);
+    std::ostream& operator<<(std::ostream& out, const expr& self);
+    
 
     struct type;
 
@@ -96,9 +99,7 @@ namespace slip {
       using list = slip::list<type>;
     };
 
-    
-    sexpr repr(const expr& self);
-    std::ostream& operator<<(std::ostream& out, const expr& self);
+    sexpr repr(const type& self);    
     
     
     struct lambda {

@@ -163,6 +163,7 @@ static const auto compiler = [](bool dump_bytecode) {
       });
 
     tc->ctor->emplace("int", traits< integer >::type());
+    tc->ctor->emplace("list", list_ctor);    
   }
 
 
