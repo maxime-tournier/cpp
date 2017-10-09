@@ -83,8 +83,8 @@ public:
     }
   }
 
-private:
-  
+protected:
+  // TODO private?
   dynamic_sized() {
     for(T* it = data, *last = data + count; it != last; ++it) {
       new (it) T;

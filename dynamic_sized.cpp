@@ -30,6 +30,7 @@ struct base {
 struct derived : base, dynamic_sized<foo> {
   const char* name;
   derived(const char* name) : name(name) { }
+  derived() = delete;
 };
 
    
