@@ -22,11 +22,16 @@ namespace slip {
   static const auto alpha = chr(std::isalpha);
   static const auto alnum = chr(std::isalnum);
 
+  static const auto quote = chr<'\''>();
+  static const auto backquote = chr<'`'>();
+  static const auto comma = chr<','>();        
+
+  
   parse::any<sexpr> parser() {
     
     const auto special = chr("!$%&*/:<=>?~_^@#-+");
     
-    const auto initial = token(alpha | special, skip);
+    const auto initial = token(alpha | special | chr("'"), skip);
     const auto subsequent = alnum | special;    
 
     const auto number = debug("number") <<= 
@@ -64,9 +69,6 @@ namespace slip {
       return rparen, pure<sexpr>(slip::make_list<sexpr>(terms.begin(), terms.end()));
     };
     
-    const auto quote = chr<'\''>();
-    const auto backquote = chr<'`'>();
-    const auto comma = chr<','>();        
     
     expr = debug("expr") <<= list | atom; 
     

@@ -96,7 +96,7 @@ namespace slip {
     
     void bytecode::label(symbol s) {
       auto it = labels.insert( std::make_pair(s, size()) );
-      if( !it.second ) throw slip::error("duplicate label: " + s.name());
+      if( !it.second ) throw slip::error("duplicate label: " + s.str());
     }
 
 
@@ -107,7 +107,7 @@ namespace slip {
         auto it = labels.find( instr.label );
 
         if(it == labels.end()) {
-          throw slip::error("unknown label: " + instr.label.name());
+          throw slip::error("unknown label: " + instr.label.str());
         } else {
           // std::cout << "link: " << it->first.name() << " resolved to: " << it->second << std::endl;;
           instr.value = it->second;
@@ -154,7 +154,7 @@ namespace slip {
       
       
       void operator()(const symbol& self, std::ostream& out) const {
-        out << self.name();
+        out << self.str();
       }
 
 
@@ -300,7 +300,7 @@ namespace slip {
     
       std::map<integer, std::string> reverse;
       for(const auto& it : labels) {
-        reverse[it.second] += it.first.name() + ":\n";
+        reverse[it.second] += it.first.str() + ":\n";
       }
 
       for(const instruction* i = data() + start; i < data() + size(); ++i) {

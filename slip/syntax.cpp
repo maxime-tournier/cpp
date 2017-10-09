@@ -6,26 +6,9 @@
 #include <iostream>
 #include <sstream>
 
+#include "ast.hpp"
+
 namespace slip {
-
-  namespace kw {
-    const symbol def = "def",
-      lambda = "lambda",
-      seq = "do",
-      cond = "cond",
-      wildcard = "_",
-
-      quote = "quote",
-      quasiquote = "quasiquote",
-      unquote = "unquote";
-
-    const symbol record = "record";
-    
-    const symbol type = "type";
-    
-    const symbol var = "var", pure = "pure", run = "run";
-    const symbol ref = "ref", get = "get", set = "set";
-  }
 
   
   namespace special {
@@ -254,7 +237,7 @@ namespace slip {
     sexpr operator()(const symbol& self, const ref<environment>& ctx) const {
       if(special::reserved.find(self) != special::reserved.end()) {
         std::stringstream ss;
-        ss << '`' << self.name() << "` not allowed in this context";
+        ss << '`' << self.str() << "` not allowed in this context";
         throw syntax_error(ss.str());
       }
 

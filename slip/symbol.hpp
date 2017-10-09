@@ -24,7 +24,7 @@ namespace slip {
       return iterator == other.iterator;
     }
     
-    inline const std::string& name() const { return *iterator; }
+    inline const std::string& str() const { return *iterator; }
 
     inline bool operator<(const symbol& other) const {
       return &(*iterator) < &(*other.iterator);

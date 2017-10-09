@@ -22,7 +22,7 @@ namespace slip {
   
 
   std::ostream& operator<<(std::ostream& out, const symbol& s) {
-    return out << s.name();
+    return out << s.str();
   }
   
 }

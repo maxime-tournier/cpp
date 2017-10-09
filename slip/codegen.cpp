@@ -1,7 +1,6 @@
 #include "codegen.hpp"
 #include "vm.hpp"
 
-#include "syntax.hpp"
 #include "ast.hpp"
 
 #include <sstream>
@@ -129,10 +128,10 @@ namespace slip {
 
 
 
-      void operator()(const symbol& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::variable& self, vm::bytecode& res, ref<variables>& ctx) const {
         // locals
         {
-          auto it = ctx->locals.find(self);
+          auto it = ctx->locals.find(self.name);
           if(it != ctx->locals.end()) {
             res.push_back( opcode::LOAD );
             res.push_back( vm::instruction(it->second) );
@@ -143,7 +142,7 @@ namespace slip {
         // captures
         {
           res.push_back( opcode::LOADC );
-          res.push_back( vm::instruction(ctx->capture(self)) );
+          res.push_back( vm::instruction(ctx->capture(self.name)) );
           return;
         }
       }
@@ -198,7 +197,7 @@ namespace slip {
         const integer id = unique();
         
         const symbol start = "lambda-" + std::to_string(id);
-        const symbol end = "after-" + start.name();
+        const symbol end = "after-" + start.str();
 
         // skip function body
         res.push_back( opcode::JMP ); 
@@ -229,7 +228,7 @@ namespace slip {
 
         // load sub captures in order
         for(const symbol& s : ordered) {
-          compile(res, ctx, s);
+          compile(res, ctx, ast::variable{s});
         }
 
         const std::size_t m = ordered.size(), n = size(self->args);

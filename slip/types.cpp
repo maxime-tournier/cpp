@@ -3,8 +3,6 @@
 #include "sexpr.hpp"
 #include "ast.hpp"
 
-#include "syntax.hpp"
-
 #include <algorithm>
 #include <sstream>
 
@@ -14,7 +12,7 @@ namespace slip {
 
     // env lookup/def
     struct unbound_variable : type_error {
-      unbound_variable(symbol id) : type_error("unbound variable \"" + id.name() + "\"") { }
+      unbound_variable(symbol id) : type_error("unbound variable \"" + id.str() + "\"") { }
     };
 
     
@@ -434,7 +432,7 @@ namespace slip {
         // TODO check this crap upstream in ast
         // TODO prevent value variables from starting with '
         
-        if(self.name()[0] == '~') {
+        if(self.str()[0] == '~') {
           // type variable
           try {
             const scheme& p = tc.find(self);
@@ -484,9 +482,10 @@ namespace slip {
         return {traits<T>::type(), self};
       }
 
+      
       // variables
-      inferred<type, ast::expr> operator()(const symbol& self, state& tc) const {
-        const scheme& p = tc.find(self);
+      inferred<type, ast::expr> operator()(const ast::variable& self, state& tc) const {
+        const scheme& p = tc.find(self.name);
         const type res = tc.instantiate(p);
         return {res, self};
       }
@@ -773,7 +772,7 @@ namespace slip {
 
     state& state::def(symbol id, const scheme& p) {
       auto res = env->locals.emplace( std::make_pair(id, p) );
-      if(!res.second) throw error("redefinition of " + id.name());
+      if(!res.second) throw error("redefinition of " + id.str());
       return *this;
     }
     

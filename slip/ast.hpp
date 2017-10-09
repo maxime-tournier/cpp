@@ -10,6 +10,23 @@
 
 namespace slip {
 
+  
+  namespace kw {
+    const extern symbol def, lambda, cond, wildcard;
+    const extern symbol seq, var, pure, run;
+    
+    const extern symbol record;
+    
+    const extern symbol quote, unquote, quasiquote;
+    
+    const extern symbol type;
+
+    const extern symbol ref, get, set;
+    
+    // const extern symbol ref, getref, setref;
+  }
+
+  
   namespace ast {
     
     struct expr;
@@ -35,7 +52,10 @@ namespace slip {
       const T value;
     };
 
-
+    struct variable {
+      symbol name;
+    };
+    
     struct sequence {
       list<expr> items;
     };
@@ -61,7 +81,7 @@ namespace slip {
                            literal<integer>,
                            literal<real>,
                            literal< ref<string> >,
-                           symbol,
+                           variable,
                            ref<lambda>,
                            ref<application>,
                            ref<definition>,

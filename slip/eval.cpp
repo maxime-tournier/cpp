@@ -1,12 +1,12 @@
 #include "eval.hpp"
 
-#include "syntax.hpp"
+#include "ast.hpp"
 #include <sstream>
 
 namespace slip {
 
   unbound_variable::unbound_variable(const symbol& s) 
-    : error("unbound variable: " + s.name()) { }
+    : error("unbound variable: " + s.str()) { }
   
 
   lambda::lambda(const ref<environment>& ctx,
@@ -25,7 +25,7 @@ namespace slip {
     }
     
     void operator()(const symbol& self, std::ostream& out) const {
-      out << self.name();
+      out << self.str();
     }
     
     void operator()(const unit& self, std::ostream& out) const {
@@ -90,7 +90,7 @@ namespace slip {
 
       // TODO semantic: do we allow duplicate symbols ?
       auto res = ctx->locals.emplace( std::make_pair(name, val) );
-      if(!res.second) throw error(name.name() + " already defined");
+      if(!res.second) throw error(name.str() + " already defined");
       
       return unit();
     }
@@ -147,7 +147,7 @@ namespace slip {
     
     value operator()(const symbol& self, const ref<environment>& ctx) const {
       if(special::table.find(self) != special::table.end()) {
-        throw error(self.name() + " not allowed in this context");
+        throw error(self.str() + " not allowed in this context");
       }
       
       if(value* res = ctx->find(self)) {

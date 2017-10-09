@@ -4,6 +4,27 @@
 
 namespace slip {
 
+
+  namespace kw {
+    const symbol def = "def",
+      lambda = "lambda",
+      seq = "do",
+      cond = "cond",
+      wildcard = "_",
+
+      quote = "quote",
+      quasiquote = "quasiquote",
+      unquote = "unquote";
+
+    const symbol record = "record";
+    
+    const symbol type = "type";
+    
+    const symbol var = "var", pure = "pure", run = "run";
+    const symbol ref = "ref", get = "get", set = "set";
+  }
+
+  
   namespace ast {
 
 
@@ -18,8 +39,8 @@ namespace slip {
         return make_ref<string>(self.value);
       }
 
-      sexpr operator()(const symbol& self) const {
-        return self;
+      sexpr operator()(const variable& self) const {
+        return self.name;
       }
 
 
@@ -78,7 +99,7 @@ namespace slip {
       }
 
       sexpr operator()(const selection& self) const {
-        return symbol("@" + self.label.name());
+        return symbol("@" + self.label.str());
       }
 
       sexpr operator()(const record& self) const {
@@ -300,7 +321,7 @@ namespace slip {
           return literal<boolean>{false};
         }
 
-        const std::string& id = self.name();
+        const std::string& id = self.str();
         
         if(id[0] == '@') {
           const std::string label(id.data() + 1, id.data() + id.size());
@@ -308,7 +329,7 @@ namespace slip {
         }
         
         
-        return self;
+        return ast::variable{self};
       }
 
 

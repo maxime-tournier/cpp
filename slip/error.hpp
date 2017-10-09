@@ -15,6 +15,10 @@ namespace slip {
     using error::error;
   };
 
+  struct syntax_error : error {
+    using error::error;
+  };
+  
   struct type_error : error {
     using error::error;
   };
@@ -23,7 +27,8 @@ namespace slip {
     using error::error;
   };
 
-  
+
+  // wat
   struct argument_error : error {
     argument_error(std::size_t got, std::size_t expected)
       : error("bad argument count: " + std::to_string(got) + ", expected: " + std::to_string(expected)) {

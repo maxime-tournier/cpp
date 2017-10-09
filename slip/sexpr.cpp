@@ -13,7 +13,7 @@ namespace slip {
     }
 
     void operator()(const symbol& self, std::ostream& out) const {
-      out << self.name();
+      out << self.str();
     }
 
     void operator()(const ref<string>& self, std::ostream& out) const {

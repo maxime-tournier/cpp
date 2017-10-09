@@ -10,7 +10,6 @@
 
 namespace slip {
 
-
   struct sexpr;
 
   using string = std::string;
