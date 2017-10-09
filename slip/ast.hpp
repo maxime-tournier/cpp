@@ -103,17 +103,20 @@ namespace slip {
 
     struct type;
 
-    // TODO type variables, constructors, etc
-    
-    // struct constructor {
-    //   symbol name;
-    // };
+    struct type_constructor {
+      symbol name;
+    };
 
-    // struct variable {
-    //   symbol name;
-    // };
+    struct type_variable {
+      symbol name;
+    };
+
+    struct type_application {
+      type_constructor type;
+      list<ast::type> args;
+    };
     
-    struct type : variant< symbol, slip::list<type> > {
+    struct type : variant< type_constructor, type_variable, type_application > {
       using type::variant::variant;
 
       using list = slip::list<type>;

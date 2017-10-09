@@ -107,11 +107,18 @@ namespace slip {
             return r.label >>= repr(r.value) >>= sexpr::list();
           });
       }
-      
-      template<class T>
-      sexpr operator()(const T& self) const {
-        throw error(std::string("repr unimplemented for: ") + typeid(T).name() );
+
+      sexpr operator()(const type_variable& self) const { return self.name; }
+      sexpr operator()(const type_constructor& self) const { return self.name; }      
+
+      sexpr operator()(const type_application& self) const {
+        return repr(self.type) >>= map(self.args, [](const type& t) { return repr(t); } );
       }
+      
+      // template<class T>
+      // sexpr operator()(const T& self) const {
+      //   throw error(std::string("repr unimplemented for: ") + typeid(T).name() );
+      // }
       
     };
 
@@ -156,20 +163,48 @@ namespace slip {
     };
     
 
+    static expr check_variable(const symbol& s) {
+      if(s.str()[0] == '\'') throw syntax_error("`symbol`");
+      return ast::variable{s};
+    }
+    
+    static type_constructor check_type_constructor(const sexpr& e) {
+      if(!e.is<symbol>()) throw syntax_error("`symbol`");
+      const symbol s = e.get<symbol>();
+      
+      if(s.str()[0] == '\'') throw syntax_error("`symbol`");
+      
+      return {s};
+    }
+
+    static type_variable check_type_variable(const symbol& s) {
+      if(s.str()[0] != '\'' || s.str().size() < 2) throw syntax_error("`'symbol`");
+
+      return {s};
+    }
+
+    
     static type check_type(const sexpr& e) {
       struct error {};
 
       try {
-        if(e.is<symbol>()) return e.get<symbol>();
+        if(e.is<symbol>())  {
+          const symbol s = e.get<symbol>();
+          
+          if(s.str()[0] == '\'') return check_type_variable(s);
+          else return check_type_constructor(s);
+        }
+
         if(!e.is<sexpr::list>()) throw error();
 
         // type constructor
         const sexpr::list& arg = e.get<sexpr::list>();      
         if(size(arg) < 2) throw error(); // or is it not?
 
-        return map(arg, &check_type);
+        return ast::type_application{ check_type_constructor(arg->head), map(arg->tail, &check_type) };
+        
       } catch( error& ) {
-        throw syntax_error("type: `symbol` | (`type` `type`...)");
+        throw syntax_error("type: `symbol` | `'symbol` | (`symbol` `type`...)");
       }
     }
 
@@ -329,7 +364,7 @@ namespace slip {
         }
         
         
-        return ast::variable{self};
+        return check_variable(self);
       }
 
 

@@ -114,7 +114,6 @@ namespace slip {
 
         // i have no idea what i'm doing lol
 
-        
         if(self->func == func_ctor) {
           self->arg.apply(ostream_visitor(true), out, osm);
           out << ' ';
@@ -231,7 +230,7 @@ namespace slip {
         arg(arg) {
       
       if(!func.kind().is< constructor>()) {
-        throw error("applied type constructor must have constructor kind");
+        throw kind_error("type constructor expected");
       }
       
       if(*func.kind().get< constructor >().from != arg.kind() ) {
@@ -427,32 +426,27 @@ namespace slip {
 
       using variables_type = std::map<symbol, ref<variable> >;
       
-      type operator()(const symbol& self, state& tc) const {
-
-        // TODO check this crap upstream in ast
-        // TODO prevent value variables from starting with '
-        
-        if(self.str()[0] == '~') {
-          // type variable
-          try {
-            const scheme& p = tc.find(self);
-            assert(p.body.is<ref<variable>>());
-            return p.body;
-          } catch( unbound_variable& ) {
-            const ref<variable> a = tc.fresh();
-            tc.def(self, tc.generalize(a));
-            return a;
-          }
-          
-        } else {
-          auto it = tc.ctor->find(self);
-          if(it == tc.ctor->end()) throw unbound_variable(self);
-          return it->second;
+      type operator()(const ast::type_variable& self, state& tc) const {
+        try {
+          const scheme& p = tc.find(self.name);
+          assert(p.body.is<ref<variable>>());
+          return p.body;
+        } catch( unbound_variable& ) {
+          const ref<variable> a = tc.fresh();
+          tc.def(self.name, tc.generalize(a));
+          return a;
         }
       }
+
+      type operator()(const ast::type_constructor& self, state& tc) const {
+        auto it = tc.ctor->find(self.name);
+        if(it == tc.ctor->end()) throw unbound_variable(self.name);
+        return it->second;
+      }
+
       
-      type operator()(const ast::type::list& self, state& tc) const {
-        return foldl(infer(tc, self->head), self->tail, [&tc](const type& lhs, const ast::type& rhs) {
+      type operator()(const ast::type_application& self, state& tc) const {
+        return foldl(infer(tc, self.type), self.args, [&tc](const type& lhs, const ast::type& rhs) {
             return lhs(infer(tc, rhs));
           });
       }
