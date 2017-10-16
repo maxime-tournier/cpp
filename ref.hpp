@@ -149,6 +149,11 @@ public:
     return get() == other.get();
   }
 
+  bool operator!=(const ref& other) const {
+    return get() != other.get();
+  }
+
+  
   bool operator<(const ref& other) const {
     return get() < other.get();
   }

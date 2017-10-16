@@ -98,11 +98,11 @@ namespace slip {
 
       }
       
-      void operator()(const constant& self, std::ostream& out, 
+      void operator()(const ref<constant>& self, std::ostream& out, 
                       ostream_map& osm) const {
-        out << self.name;
+        out << self->name();
       }
-
+      
       void operator()(const ref<variable>& self, std::ostream& out, 
                       ostream_map& osm) const {
         auto err = osm.emplace( std::make_pair(self, var{osm.size(), false} ));
@@ -158,14 +158,23 @@ namespace slip {
       return *from < *other.from || (*from == *other.from && *to < *other.to);
     }
 
-    
-    
-    const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
 
-    const type list_ctor = constant("list", terms() >>= terms() );
-    const type io_ctor = constant("io", terms() >>= terms() );        
+    class named_constant : public constant {
+      symbol s;
+    public:
+      named_constant(symbol name, struct kind k = terms()) : constant(k), s(name) { }
+      symbol name() const { return s; }
+    };
     
-
+    
+    constant::~constant() { }
+    symbol constant::name() const { return "unnamed-type"; }
+    
+    const type func_ctor = make_ref<named_constant>("->", terms() >>= terms() >>= terms() ).cast<constant>();
+    const type list_ctor = make_ref<named_constant>("list", terms() >>= terms() ).cast<constant>();
+    const type io_ctor = make_ref<named_constant>("io", terms() >>= terms() ).cast<constant>();        
+    
+    
     
     type type::operator()(const type& arg) const {
       return make_ref<application>(*this, arg);
@@ -177,20 +186,9 @@ namespace slip {
     }
     
 
-    bool constant::operator==(const constant& other) const {
-      // std::clog << kind << " vs. " << other.kind << std::endl;
-      return name == other.name && kind == other.kind;
-    }
-
-    bool constant::operator<(const constant& other) const {
-      return name < other.name || (name == other.name && kind < other.kind);
-    }
-
-
-    
     struct type_kind_visitor {
       
-      kind operator()(const constant& self) const { return self.kind; }
+      kind operator()(const ref<constant>& self) const { return self->kind; }
       kind operator()(const ref<variable>& self) const { return self->kind; }    
       kind operator()(const ref<application>& self) const  {
         return *self->func.kind().get<constructor >().to;
@@ -235,33 +233,35 @@ namespace slip {
       
       if(*func.kind().get< constructor >().from != arg.kind() ) {
         std::stringstream ss;
-        ss << "expected: " << *func.kind().get< constructor >().from << ", got: " << arg.kind();
+        ss << "expected: " << *func.kind().get< constructor >().from
+           << ", got: " << arg.kind();
            
         throw kind_error(ss.str());
       }
     }
     
     // term types
-    const constant unit_type("unit"),
-                            boolean_type("boolean"),
-                            integer_type("integer"),
-                            real_type("real"),
-                            string_type("string"),
-                            symbol_type("symbol");
+    
+    const type unit_type = make_ref<named_constant>("unit").cast<constant>(),
+              boolean_type = make_ref<named_constant>("boolean").cast<constant>(),
+              integer_type = make_ref<named_constant>("integer").cast<constant>(),
+              real_type = make_ref<named_constant>("real").cast<constant>(),
+              string_type = make_ref<named_constant>("string").cast<constant>(),
+              symbol_type = make_ref<named_constant>("symbol").cast<constant>();
     
 
-
+    
 
     
   
-    template<> constant traits< slip::unit >::type() { return unit_type; }
-    template<> constant traits< slip::boolean >::type() { return boolean_type; }      
-    template<> constant traits< slip::integer >::type() { return integer_type; }
-    template<> constant traits< slip::real >::type() { return real_type; }
-    template<> constant traits< slip::symbol >::type() { return symbol_type; }
+    template<> type traits< slip::unit >::type() { return unit_type; }
+    template<> type traits< slip::boolean >::type() { return boolean_type; }      
+    template<> type traits< slip::integer >::type() { return integer_type; }
+    template<> type traits< slip::real >::type() { return real_type; }
+    template<> type traits< slip::symbol >::type() { return symbol_type; }
 
     // mew
-    template<> constant traits< ref<slip::string> >::type() { return string_type; }
+    template<> type traits< ref<slip::string> >::type() { return string_type; }
     
 
     state::state(ref<env_type> env, ref<uf_type> uf, ref<ctor_type> ctor) 
@@ -296,7 +296,7 @@ namespace slip {
     template<class UF>
     struct occurs_check {
 
-      bool operator()(const constant& self, const ref<variable>& var, UF& uf) const {
+      bool operator()(const ref<constant>& self, const ref<variable>& var, UF& uf) const {
         return false;
       }
 
@@ -373,10 +373,10 @@ namespace slip {
       }
 
 
-      void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
+      void operator()(const ref<constant>& lhs, const ref<constant>& rhs, UF& uf) const {
         // pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;
-        
-        if( !(lhs == rhs) ) {
+
+        if( lhs != rhs ) {
           throw unification_error(lhs, rhs);
         }
       }
@@ -679,11 +679,12 @@ namespace slip {
 
 
     
-    // finding nice representants
+    // finding nice representants (apply substitution)
+    // TODO rename substitute
     struct nice {
 
       template<class UF>
-      type operator()(const constant& self, UF& uf) const {
+      type operator()(const ref<constant>& self, UF& uf) const {
         return self;
       }
 
@@ -718,7 +719,7 @@ namespace slip {
     struct instantiate_visitor {
       using map_type = std::map< ref<variable>, ref<variable> >;
       
-      type operator()(const constant& self, const map_type& m) const {
+      type operator()(const ref<constant>& self, const map_type& m) const {
         return self;
       }
 
@@ -791,7 +792,7 @@ namespace slip {
 
       using result_type = std::set< ref<variable> >;
     
-      void operator()(const constant&, result_type& res) const { }
+      void operator()(const ref<constant>&, result_type& res) const { }
       
       void operator()(const ref<variable>& self, result_type& res) const {
         res.insert(self);

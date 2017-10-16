@@ -49,6 +49,12 @@ namespace slip {
     constructor operator>>=(const kind& lhs, const kind& rhs);
 
 
+    // // boxed polytypes
+    // struct boxed {
+    //   bool operator==(const boxed& other) const { return true; }
+    //   bool operator<(const boxed& other) const { return false; }
+    // };
+    
     
     struct kind : variant<terms, constructor > {
       using kind::variant::variant;
@@ -69,24 +75,21 @@ namespace slip {
     struct type;
 
     struct constant {
-      symbol name;
-      struct kind kind;
+      virtual ~constant();
 
-      constant(symbol name, struct kind kind = terms())
-        : name(name),
-          kind(kind) { }
-
-      bool operator==(const constant& other) const;
+      const struct kind kind;
+      virtual symbol name() const;
       
-      bool operator<(const constant& other) const;
+      constant(struct kind kind = terms())
+        : kind(kind) { }
       
     };
 
 
     
     struct variable {
-      struct kind kind;
-      std::size_t depth;
+      const struct kind kind;
+      std::size_t depth;        // TODO const?
 
       variable(struct kind kind, std::size_t depth)
         : kind(kind), depth(depth) {
@@ -99,7 +102,7 @@ namespace slip {
     struct application;
 
 
-    struct type : variant< constant, ref<variable>, ref<application> > {
+    struct type : variant< ref<constant>, ref<variable>, ref<application> > {
 
       using type::variant::variant;
     
@@ -216,7 +219,7 @@ namespace slip {
     // some traits
     template<class T>
     struct traits {
-      static constant type();
+      static struct type type();
     };
     
   }
