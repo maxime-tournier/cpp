@@ -154,11 +154,6 @@ namespace slip {
       return *from == *other.from && *to == *other.to;
     }
 
-    bool constructor::operator<(const constructor& other) const {
-      return *from < *other.from || (*from == *other.from && *to < *other.to);
-    }
-
-
     class named_constant : public constant {
       symbol s;
     public:

@@ -29,7 +29,6 @@ namespace slip {
     // the kind of terms
     struct terms {
       bool operator==(const terms& other) const { return true; }
-      bool operator<(const terms& other) const { return false; }
     };
 
 
@@ -42,7 +41,6 @@ namespace slip {
           to( make_ref<kind>(to)) { }
       
       bool operator==(const constructor& other) const;
-      bool operator<(const constructor& other) const;      
       
     };
 
