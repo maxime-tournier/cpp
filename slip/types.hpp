@@ -26,10 +26,13 @@ namespace slip {
     // kinds
     struct kind;
 
-    // the kind of terms
-    struct terms {
-      bool operator==(const terms& other) const { return true; }
+    template<class Derived>
+    struct simple_kind {
+      bool operator==(const simple_kind<Derived>& other) const { return true; }
     };
+
+    // the kind of terms
+    struct terms : simple_kind<terms> { };
 
 
     // kind of type constructors
