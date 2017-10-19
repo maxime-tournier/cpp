@@ -224,11 +224,9 @@ public:
 
 
 
-// object
+// an object may have data
 struct object {
   virtual ~object() { }
-  object(const node& ) { }
-
 
   template<class T>
   T& data(const std::string& name) {
@@ -352,12 +350,16 @@ struct traits<std::size_t> {
 };
 
 
+// a component is an object in the scene graph
+struct component : object {
+  component(const node& ) { }
+};
 
 
-// a component class
+// some component class
 template<class T>
-struct state : object {
-  using object::object;
+struct state : component {
+  using component::component;
 
   T pos;
   std::size_t foo;
@@ -396,16 +398,19 @@ struct data_node {
   
 };
 
-struct engine_node {
-  std::shared_ptr<engine_base> engine;
-  std::function< void() > push;
-};
 
 struct engine_base {
   virtual ~engine_base() { }
 
   virtual std::function< void() > update(data_node out, data_node* first, data_node* last) const = 0;
 };
+
+
+struct engine_node {
+  std::shared_ptr<engine_base> engine;
+  std::function< void() > push;
+};
+
 
 template<class T> struct engine;
 
@@ -423,13 +428,13 @@ struct sum : engine< T(T, T) > {
   }
 
   std::function< void() > update(data_node out, data_node* first, data_node* last) const {
-    const T& lhs_buf = first[0].get<T>();
-    const T& rhs_buf = first[1].get<T>();
+    const T* lhs_buf = &first[0].get<T>();
+    const T* rhs_buf = &first[1].get<T>();
     
-    T& out_buf = out.get<T>();
+    T* out_buf = &out.get<T>();
     
-    return [lhs_buf, rhs_buf, this] {
-      return this->apply(lhs_buf, rhs_buf, out_buf);
+    return [lhs_buf, rhs_buf, out_buf, this] {
+      this->apply(*out_buf, *lhs_buf, *rhs_buf);
     };
     
   }
@@ -461,6 +466,8 @@ int main(int, char**) {
 
   auto& data = obj->data<vec3>("derp");
   std::clog << "data: " << data << std::endl;
+
+  sptr<engine_base> f = std::make_shared< sum<real> >();
   
   return 0;
 }
