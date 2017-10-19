@@ -74,7 +74,7 @@ static void dfs_postfix(Iterator first, Iterator last, const F& f) {
 
 template<class Iterator, class Out>
 static void topological_sort(Iterator first, Iterator last, Out out) {
-  dfs(first, last, [&](Iterator v) {
+  dfs_postfix(first, last, [&](Iterator v) {
       // every successor of v gets processed before v (prefix dfs), so every
       // node on which v depends will come *before* v in the ordering
       *out++ = v;
