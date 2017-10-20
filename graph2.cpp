@@ -1,8 +1,89 @@
-// -*- compile-command: "c++ -std=c++11 -Wall -g graph2.cpp -o graph2" -*-
+// -*- compile-command: "c++ -std=c++11 -Wall -g graph2.cpp -o graph2 -lstdc++" -*-
 
 #include <memory>
 #include <stdexcept>
 #include <vector>
+
+
+namespace graph {
+
+  template<class G>
+  struct traits;
+
+  // a reference to an abstract vertex type: it must allow the storing and
+  // retrieval of informations given a graph and a reference.
+  template<class G>
+  using ref_type = typename traits<G>::ref_type;
+
+  template<class G>
+  static void connect(G& g, ref_type<G> source, ref_type<G> target) {
+    // find target's last sibling
+    ref_type<G>& next = traits<G>::next(g, target);
+    
+    ref_type<G>* sib = &next;
+    while(*sib) sib = &traits<G>::next(g, *sib);
+    
+    // connect our first child as target's last sibling
+    ref_type<G>& first = traits<G>::first(g, source);
+    *sib = first;
+    
+    // update our first child
+    first = target;
+  }
+
+
+  template<class G>
+  static void disconnect(G& g, ref_type<G> source, ref_type<G> target) {
+    // find target in source children
+    ref_type<G>& first = traits<G>::first(g, source);
+    ref_type<G>* sib = &first;
+    
+    while(*sib != target ) {
+      if(!*sib) throw std::runtime_error("invalid target vertex");      
+      sib = &traits<G>::next(g, *sib);
+    }
+
+    // plug hole
+    ref_type<G>& next = traits<G>::next(g, target);    
+    *sib = next;
+
+    // update target
+    traits<G>::reset(g, next);
+  }
+
+  namespace detail {
+    // postfix depth-first traversal starting from v, calling f on each
+    // vertex. WARNING: assumes all the traversed vertices have been cleared.
+    template<class G, class V, class F>
+    static void dfs_postfix(G& g, V& v, const F& f) {
+      traits<G>::mark(g, v);
+      
+      for(V u = traits<G>::first(g, v); u; u = traits<G>::next(g, u)) {
+        if(!traits<G>::marked(g, u)) dfs_postfix(g, u, f);
+      }
+      
+      f(g, v);
+    }
+  }
+  
+  // postfix depth-first traversal for a graph given as a range of vertices
+  template<class G, class F>
+  static void dfs_postfix(const G& g, const F& f) {
+
+    // clear marks
+    for(ref_type<G>& v : g) { traits<G>::clear(g, v); }
+    
+    // dfs
+    for(ref_type<G>& v : g) {
+      if(traits<G>::marked(g, v)) continue;
+      dfs_postfix(g, v, f);
+    }
+  
+  }
+  
+  
+}
+
 
 template<class T>
 struct vertex;
@@ -83,6 +164,9 @@ static void topological_sort(Iterator first, Iterator last, Out out) {
 
 
 #include <iostream>
+
+
+
 
 int main(int, char**) {
 
