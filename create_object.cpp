@@ -484,11 +484,15 @@ namespace graph {
 
 struct data_graph {
   using graph_type = std::map<void*, vertex>;
-  graph_type g;
+  graph_type graph;
 
+  // insert engine in dependency graph, given input and output data
   void add(engine_base* engine, data_node out, data_node* first, data_node* last) {
+    using namespace graph;
+    
+    auto insert = graph.emplace(engine, vertex(engine, vertex::engine));
 
-    auto insert = g.emplace(engine, vertex(engine, vertex::engine));
+    // TODO setup vertex
     
     if(!insert.second) {
       throw std::runtime_error("engine already added");
@@ -500,17 +504,17 @@ struct data_graph {
     for(data_node* it = first; it != last; ++it) {
       void* ptr = it->get<void>();
       
-      vertex* v = &g.emplace(ptr, vertex(ptr, vertex::data)).first->second;
+      vertex* v = &graph.emplace(ptr, vertex(ptr, vertex::data)).first->second;
       
-      graph::connect(g, e, v);
+      graph::connect(graph, e, v);
     }
 
     {
       // output edge
       void* ptr = out.get<void>();
-      vertex* u = &g.emplace(ptr, vertex(ptr, vertex::data)).first->second;
+      vertex* u = &graph.emplace(ptr, vertex(ptr, vertex::data)).first->second;
       
-      graph::connect(g, u, e);
+      graph::connect(graph, u, e);
     }
   }
   
@@ -518,9 +522,6 @@ struct data_graph {
 
 
 
-
-
-// TODO comment gerer le graphe de dependances explicites ?
 
 // instantiations
 template struct state<vec3>;
@@ -547,21 +548,20 @@ int main(int, char**) {
 
 
   // engine test
-  
   auto p1 = root.create("state", attributes("template", "vec3"));
   auto p2 = root.create("state", attributes("template", "vec3"));
   auto p3 = root.create("state", attributes("template", "vec3"));  
   
   engine_base* f = new sum<real>();
 
-  data_graph g;
+  data_graph deps;
 
   data_node out = {p1, "pos"};
   data_node in[2] = {{p2, "pos"}, {p3, "pos"}};
 
-  g.add(f, out, in, in + 2);
+  deps.add(f, out, in, in + 2);
 
-  graph::dfs(g.g, [&](vertex* v) {
+  graph::dfs(deps.graph, [&](vertex* v) {
       std::clog << *v << std::endl;
     });
 
