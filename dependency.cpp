@@ -53,7 +53,7 @@ namespace graph {
     }
 
     // concurrency traits
-    static void lock(graph_type& g, const ref_type& v) {
+    static void start(graph_type& g, const ref_type& v) {
       std::unique_lock<std::mutex> lock(v->mutex);
       v->ready = false;
     }
@@ -110,7 +110,7 @@ static void exec(G& g, Pool& pool, const F& f) {
     const ref_type<G>& v = j.second;
     
     // start task
-    traits<G>::lock(g, v);
+    traits<G>::start(g, v);
       
     pool.push( [&g, v, &f] {
         // wait for dependencies to finish
