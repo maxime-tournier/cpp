@@ -125,6 +125,14 @@ namespace graph {
     
   }
 
+
+  // convenience
+  template<class G, class F>
+  static void dfs(G& g, const F& f) {
+    dfs_postfix(g, f);
+  }
+  
+
   template<class G, class Out>
   static void topological_sort(G& g, Out out) {
     dfs_postfix(g, [&](const ref_type<G>& v) {

@@ -5,7 +5,14 @@
 
 #include <set>
 #include <map>
-#include <algorithm>
+
+#include <bitset>
+
+enum flag {
+  dirty,
+  needed,
+  size
+};
 
 template<class T>
 struct vertex {
@@ -27,6 +34,9 @@ struct vertex {
   // scheduling
   mutable float time;                   // completion time
   float duration = 1;                   // duration estimate
+
+  // dirty/needed
+  std::bitset<flag::size> flags;
 };
 
 
@@ -37,6 +47,7 @@ namespace graph {
 
     using graph_type = std::vector< vertex<T> >;
 
+    // graph traits
     using ref_type = typename vertex<T>::ref;
     
     static ref_type& next(graph_type& g, const ref_type& v) { return v->next; }
@@ -135,7 +146,7 @@ static void exec(G& g, Pool& pool, const F& f) {
             traits<G>::wait(g, u);
           });
           
-        // perform computation
+        // compute stuff
         f(v);
         
         // signal task
@@ -157,6 +168,8 @@ static int fib(int n) {
   if(n < 2) return n;
   return fib(n-1) + fib(n-2);
 }
+
+
 
 
 int main(int, char**) {

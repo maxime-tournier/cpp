@@ -30,9 +30,9 @@ class attributes {
   };
   
 public:
-
+  
   template<class T>
-  attributes& operator()(std::string name, T value) {
+  attributes& operator()(const std::string& name, T value) {
     items[name] = [value] {
       // std::clog << "throwing as " << traits<T>::name() << std::endl;
       throw boxed<T>{value};
@@ -55,7 +55,13 @@ public:
     }
     throw std::logic_error("should throw");
   }
-  
+
+
+  // convenience
+  template<class T>
+  attributes(const std::string& name, T value) { operator()(name, value); }
+
+  attributes() { }
 };
 
 struct node;
@@ -229,14 +235,14 @@ struct object {
   virtual ~object() { }
 
   template<class T>
-  T& data(const std::string& name) {
+  T* data(const std::string& name) {
     try{ 
       const info_type& info = info_type::table.at(typeid(*this));
 
       try {
         info.data.at(name)->get(this);
       } catch(T* ptr) {
-        return *ptr;
+        return ptr;
       } catch( std::out_of_range ) {
         throw std::runtime_error("unknown data: " + name);
       } catch( ... ) {
@@ -381,21 +387,19 @@ struct derived_state : state<T> {
   static const info_type info;
 };
 
+
 template<class T>
 const info_type derived_state<T>::info = declare< derived_state, state<T> >("derived_state")
   (&derived_state::bar, "bar", "some other data");
 
 // TODO data dependency graph?
 
-
 struct data_node {
   std::shared_ptr<object> obj;
   std::string name;
-  bool dirty;
   
   template<class T>
-  T& get() { return obj->data<T>(name); }
-  
+  T* get() { return obj->data<T>(name); }
 };
 
 
@@ -428,10 +432,10 @@ struct sum : engine< T(T, T) > {
   }
 
   std::function< void() > update(data_node out, data_node* first, data_node* last) const {
-    const T* lhs_buf = &first[0].get<T>();
-    const T* rhs_buf = &first[1].get<T>();
+    const T* lhs_buf = first[0].get<T>();
+    const T* rhs_buf = first[1].get<T>();
     
-    T* out_buf = &out.get<T>();
+    T* out_buf = out.get<T>();
     
     return [lhs_buf, rhs_buf, out_buf, this] {
       this->apply(*out_buf, *lhs_buf, *rhs_buf);
@@ -440,6 +444,80 @@ struct sum : engine< T(T, T) > {
   }
   
 };
+
+
+#include "graph.hpp"
+
+struct vertex {
+  void* key;
+  enum kind_type { data, engine } kind;
+
+  vertex(void* key, kind_type kind) : key(key), kind(kind) { }
+  
+  vertex* first = nullptr;
+  vertex* next = nullptr;
+  bool marked;
+  
+  friend std::ostream& operator<<(std::ostream& out, const vertex& self) {
+    return out << (self.kind == data ? "data" : "engine") << ": " << self.key;
+  }
+};
+
+
+namespace graph {
+  template<class Key>
+  struct traits< std::map<Key, vertex> > {
+    using graph_type = std::map<Key, vertex>;
+    using ref_type = vertex*;
+
+    static ref_type& first(const graph_type& g, const ref_type& v) { return v->first; }
+    static ref_type& next(const graph_type& g, const ref_type& v) { return v->next; }
+
+    static bool marked(const graph_type& g, const ref_type& v) { return v->marked; }
+    static void marked(const graph_type& g, const ref_type& v, bool marked) { v->marked = marked; }
+
+    template<class F>
+    static void iter(graph_type& g, const F& f) { for(auto& it : g) { f(&it.second); } }
+  };
+}
+
+
+struct data_graph {
+  using graph_type = std::map<void*, vertex>;
+  graph_type g;
+
+  void add(engine_base* engine, data_node out, data_node* first, data_node* last) {
+
+    auto insert = g.emplace(engine, vertex(engine, vertex::engine));
+    
+    if(!insert.second) {
+      throw std::runtime_error("engine already added");
+    }
+
+    vertex* e = &insert.first->second;
+
+    // input edges
+    for(data_node* it = first; it != last; ++it) {
+      void* ptr = it->get<void>();
+      
+      vertex* v = &g.emplace(ptr, vertex(ptr, vertex::data)).first->second;
+      
+      graph::connect(g, e, v);
+    }
+
+    {
+      // output edge
+      void* ptr = out.get<void>();
+      vertex* u = &g.emplace(ptr, vertex(ptr, vertex::data)).first->second;
+      
+      graph::connect(g, u, e);
+    }
+  }
+  
+};
+
+
+
 
 
 // TODO comment gerer le graphe de dependances explicites ?
@@ -452,7 +530,7 @@ template struct derived_state<vec3>;
 
 int main(int, char**) {
 
-  attributes attrs = attributes()
+  attributes attrs = attributes
     ("template", "vec3")
     ("pos", vec3{1, 2, 3} )
     ("foo", "14");
@@ -464,10 +542,29 @@ int main(int, char**) {
     std::clog << ptr->pos << std::endl;
   }
 
-  auto& data = obj->data<vec3>("derp");
-  std::clog << "data: " << data << std::endl;
+  auto* data = obj->data<vec3>("pos");
+  std::clog << "pos: " << *data << std::endl;
 
-  sptr<engine_base> f = std::make_shared< sum<real> >();
+
+  // engine test
+  
+  auto p1 = root.create("state", attributes("template", "vec3"));
+  auto p2 = root.create("state", attributes("template", "vec3"));
+  auto p3 = root.create("state", attributes("template", "vec3"));  
+  
+  engine_base* f = new sum<real>();
+
+  data_graph g;
+
+  data_node out = {p1, "pos"};
+  data_node in[2] = {{p2, "pos"}, {p3, "pos"}};
+
+  g.add(f, out, in, in + 2);
+
+  graph::dfs(g.g, [&](vertex* v) {
+      std::clog << *v << std::endl;
+    });
+
   
   return 0;
 }
