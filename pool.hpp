@@ -44,7 +44,7 @@ public:
   static void debug(Args&& ... args) {
     std::unique_lock<std::mutex> lock(debug_mutex());
     std::ostream& out = std::clog;
-    out << std::hex << "[" << std::this_thread::get_id() << "]";
+    out << std::hex << "[" << std::this_thread::get_id() << "][" << sched_getcpu() <<  "]"<< std::dec;
     (void) std::initializer_list<int> { (out << " " << args, 0)... };
     out << std::endl;
   };
@@ -86,17 +86,6 @@ public:
     }
 
     cv.notify_one();
-  }
-
-  // wait for work to complete
-  void join() {
-    std::mutex mut;
-    std::unique_lock<std::mutex> lock(mut);
-    
-    std::condition_variable cv;
-    push([&] { cv.notify_one(); } );
-
-    cv.wait(lock);    
   }
 
 

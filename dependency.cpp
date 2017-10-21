@@ -3,14 +3,18 @@
 #include "graph.hpp"
 #include "pool.hpp"
 
+#include <set>
+#include <map>
+#include <algorithm>
 
 template<class T>
 struct vertex {
-  T value;
+  using value_type = T;
+  value_type value;
   
   // graph topology
   using ref = vertex*;
-  ref first = nullptr, next = nullptr;
+  ref first = 0, next = 0;
 
   // dfs
   mutable bool marked;
@@ -19,15 +23,19 @@ struct vertex {
   std::mutex mutex;
   std::condition_variable cv;
   bool ready;
+
+  // scheduling
+  mutable float time;                   // completion time
+  float duration = 1;                   // duration estimate
 };
 
 
 namespace graph {
   
-  template<class T, std::size_t N>
-  struct traits< std::array< vertex<T>, N > > {
+  template<class T>
+  struct traits< std::vector< vertex<T> > > {
 
-    using graph_type = std::array< vertex<T>, N >;
+    using graph_type = std::vector< vertex<T> >;
 
     using ref_type = typename vertex<T>::ref;
     
@@ -48,14 +56,12 @@ namespace graph {
     static void lock(graph_type& g, const ref_type& v) {
       std::unique_lock<std::mutex> lock(v->mutex);
       v->ready = false;
-      const std::size_t index = v - g.data();
     }
 
     static void notify(graph_type& g, const ref_type& v) {
       {
         std::unique_lock<std::mutex> lock(v->mutex);
         v->ready = true;
-        const std::size_t index = v - g.data();
       }
        
       v->cv.notify_all();
@@ -63,7 +69,6 @@ namespace graph {
     
     static void wait(graph_type& g, const ref_type& v) {
       std::unique_lock<std::mutex> lock(v->mutex);
-      const std::size_t index = v - g.data();
       v->cv.wait(lock, [&] { return v->ready; });
     }
 
@@ -76,35 +81,73 @@ namespace graph {
 template<class G, class Pool, class F>
 static void exec(G& g, Pool& pool, const F& f) {
   using namespace graph;
+
+  // final tasks
+  std::set< ref_type<G> > roots;
+
+  // ordered jobs by start time
+  std::multimap<float, ref_type<G> > jobs;
   
+  // compute roots/groups
   dfs_postfix(g, [&](const ref_type<G>& v) {
-      traits<G>::lock(g, v);
+      roots.emplace(v);
+
+      float start_time = 0;
       
-      pool.push( [&g, v, &f] {
-          // wait for dependencies to finish
-          for(ref_type<G> u = traits<G>::first(g, v); u; u = traits<G>::next(g, u)) {
-            traits<G>::wait(g, u);
-          }
-          
-          // perform computation
-          f(v);
-        
-          // signal our future
-          traits<G>::notify(g, v);
+      graph::iter(g, v, [&](const ref_type<G>& u) {
+          roots.erase(u);
+          start_time = std::max(start_time, u->time);
         });
-      
+
+      jobs.emplace(start_time, v);
+      v->time = start_time + v->duration;
     });
 
-  pool.join();
+
+  // schedule tasks by increasing start time
+  for(const auto& j : jobs) {
+    
+    const ref_type<G>& v = j.second;
+    
+    // start task
+    traits<G>::lock(g, v);
+      
+    pool.push( [&g, v, &f] {
+        // wait for dependencies to finish
+        graph::iter(g, v, [&](const ref_type<G>& u) {
+            traits<G>::wait(g, u);
+          });
+          
+        // perform computation
+        f(v);
+        
+        // signal task
+        traits<G>::notify(g, v);
+      });
+      
+  }
+
+  // wait for roots to complete
+  for(const ref_type<G>& v : roots) {
+    traits<G>::wait(g, v);
+  }
+  
 }
 
 #include <iostream>
 
+static int fib(int n) {
+  if(n < 2) return n;
+  return fib(n-1) + fib(n-2);
+}
+
+
 int main(int, char**) {
 
   using vert = vertex<int>;
-  
-  std::array<vert, 10> g;
+
+  using graph_type = std::vector<vert>;
+  graph_type g(10);
   
   graph::connect(g, &g[0], &g[1]);
   graph::connect(g, &g[0], &g[2]);
@@ -134,28 +177,12 @@ int main(int, char**) {
     visitor(v);
   }
 
-  // compilation groups (TODO useful to remove mutexes in graph vertices?)
-  std::vector<std::size_t> time(g.size(), 0);
-
-  for(std::size_t i = 0, n = g.size(); i < n; ++i) {
-    std::size_t t = 0;
-    for(auto out = top_down[i]->first; out; out = out->next ) {
-      std::size_t index = out - g.data();
-      t = std::max(t, time[index]);
-    }
-
-    std::size_t index = top_down[i] - g.data();
-    time[ index ] = t + 1;
-
-    std::clog << "time[" << index << "] = " << time[index] << std::endl;
-  }
-
-
-  pool p(8);
+  pool p;
 
   exec(g, p, [&](vert::ref v) {
       const std::size_t index = v - g.data();      
-      for(int i = 0; i < 10; ++i) pool::debug("task:", index, i);
+      pool::debug("task:", index);
+      return fib(42);
     });
 
   exec(g, p, [&](vert::ref v) {

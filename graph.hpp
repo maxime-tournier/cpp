@@ -29,9 +29,8 @@ namespace graph {
       f(u);
     }
   }
-  
-  
 
+  
   // add edge (source, target) to graph g with duplicate edge check.
   // O(out_degree(source))
   template<class G>
