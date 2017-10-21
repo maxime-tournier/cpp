@@ -75,7 +75,7 @@ namespace graph {
     // vertex. WARNING: assumes all the traversed vertices have been cleared.
     template<class G, class V, class F>
     static void dfs_postfix(G& g, const V& v, const F& f) {
-      traits<G>::mark(g, v, true);
+      traits<G>::marked(g, v, true);
       
       iter(g, v, [&](const V& u) {
           if(!traits<G>::marked(g, u)) {
@@ -114,7 +114,7 @@ namespace graph {
 
     // clear marks
     iter(g, [&](const ref_type<G>& v) {
-        traits<G>::mark(g, v, false);
+        traits<G>::marked(g, v, false);
       });
     
     // dfs

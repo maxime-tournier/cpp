@@ -41,8 +41,8 @@ namespace graph {
     
     static ref_type& next(graph_type& g, const ref_type& v) { return v->next; }
     static ref_type& first(graph_type& g, const ref_type& v) { return v->first; }    
-
-    static void mark(graph_type& g, const ref_type& v, bool value) { v->marked = value; }
+    
+    static void marked(graph_type& g, const ref_type& v, bool value) { v->marked = value; }
     static bool marked(graph_type& g, const ref_type& v) { return v->marked; }    
     
     template<class F>
@@ -72,12 +72,28 @@ namespace graph {
       v->cv.wait(lock, [&] { return v->ready; });
     }
 
+
+    // scheduling traits
+    using time_type = float;
+    
+    static void time(graph_type& g, const ref_type& v, time_type t) {
+      v->time = t;
+    }
+
+    static time_type time(graph_type& g, const ref_type& v) {
+      return v->time;
+    }
+
+    static time_type duration(graph_type& g, const ref_type& v) {
+      return v->duration;
+    }
+    
   };
   
 }
 
 
-// execute f on data dependency graph g through thread pool
+// compute function f on dependency graph g by thread pool
 template<class G, class Pool, class F>
 static void exec(G& g, Pool& pool, const F& f) {
   using namespace graph;
@@ -86,21 +102,22 @@ static void exec(G& g, Pool& pool, const F& f) {
   std::set< ref_type<G> > roots;
 
   // ordered jobs by start time
-  std::multimap<float, ref_type<G> > jobs;
+  using time_type = typename traits<G>::time_type;
+  std::multimap<time_type, ref_type<G> > jobs;
   
   // compute roots/groups
   dfs_postfix(g, [&](const ref_type<G>& v) {
       roots.emplace(v);
 
-      float start_time = 0;
+      time_type start_time = 0;
       
       graph::iter(g, v, [&](const ref_type<G>& u) {
           roots.erase(u);
-          start_time = std::max(start_time, u->time);
+          start_time = std::max(start_time, traits<G>::time(g, u));
         });
 
       jobs.emplace(start_time, v);
-      v->time = start_time + v->duration;
+      traits<G>::time(g, v, start_time + traits<G>::duration(g, v));
     });
 
 
@@ -183,11 +200,6 @@ int main(int, char**) {
       const std::size_t index = v - g.data();      
       pool::debug("task:", index);
       return fib(42);
-    });
-
-  exec(g, p, [&](vert::ref v) {
-      const std::size_t index = v - g.data();      
-      pool::debug("hi", index);
     });
 
   
