@@ -252,7 +252,8 @@ namespace parse {
 
       U res;
       while(maybe<T> item = parser(in)) {
-        res.emplace_back( std::move(item.get()) );
+        // TODO emplace_back is not available for bool
+        res.push_back( std::move(item.get()) );
       }
       
       return res;

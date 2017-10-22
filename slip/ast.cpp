@@ -56,7 +56,7 @@ namespace slip {
 
       sexpr operator()(const ref<lambda>& self) const {
         return kw::lambda
-          >>= map(self->args, [&](const lambda::arg& s) -> sexpr {
+          >>= map(self->args, [this](const lambda::arg& s) -> sexpr {
               return s.map<sexpr>(*this);
             })
           >>= repr(self->body)
@@ -235,7 +235,7 @@ namespace slip {
         if(size(args) != 2 || !args->head.is<sexpr::list>() ) throw error();
         
         list<lambda::arg> vars =
-          map(args->head.get<sexpr::list>(), [&](const sexpr& e) {
+          map(args->head.get<sexpr::list>(), [](const sexpr& e) {
               return check_lambda_arg(e);
             });
 
