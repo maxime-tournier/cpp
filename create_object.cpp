@@ -18,7 +18,7 @@ using sptr = std::shared_ptr<T>;
 
 
 // type-safe attribute map
-class attributes {
+class attribs {
   using items_type = std::map<std::string, std::function< void() > >;
   items_type items;
 
@@ -30,7 +30,7 @@ class attributes {
 public:
   
   template<class T>
-  attributes& operator()(const std::string& name, T value) {
+  attribs& operator()(const std::string& name, T value) {
     items[name] = [value] {
       // std::clog << "throwing as " << traits<T>::name() << std::endl;
       throw boxed<T>{value};
@@ -56,9 +56,9 @@ public:
   
   // convenience
   template<class T>
-  attributes(const std::string& name, T value) { operator()(name, value); }
+  attribs(const std::string& name, T value) { operator()(name, value); }
 
-  attributes() { }
+  attribs() { }
 };
 
 struct node;
@@ -114,7 +114,7 @@ struct info_type {
       : name(name), doc(doc) { }
 
     // set data value from attributes
-    virtual void setup(object* obj, const attributes& attrs) const = 0;
+    virtual void setup(object* obj, const attribs& attrs) const = 0;
 
     // throw a pointer to value
     virtual void get(object* obj) const = 0;
@@ -190,7 +190,7 @@ public:
         throw data;             // TODO do we need rtti?
       }
 
-      void setup(object* obj, const attributes& attrs) const {
+      void setup(object* obj, const attribs& attrs) const {
         U& data = (static_cast<T*>(obj)->*member);
         
         try {
@@ -269,12 +269,12 @@ struct node {
   std::vector< std::shared_ptr<object> > objects;
   virtual ~node() { }
 
-  std::shared_ptr<object> create(const std::string& class_name, const attributes& attrs);  
+  std::shared_ptr<object> create(const std::string& class_name, const attribs& attrs);  
 };
 
 
 // create object
-std::shared_ptr<object> node::create(const std::string& class_name, const attributes& attrs) {
+std::shared_ptr<object> node::create(const std::string& class_name, const attribs& attrs) {
   
   std::string template_name;
 
@@ -536,7 +536,7 @@ template struct derived_state<vec3>;
 
 int main(int, char**) {
 
-  attributes attrs = attributes
+  attribs attrs = attribs
     ("template", "vec3")
     ("pos", vec3{1, 2, 3} )
     ("foo", "14");
@@ -553,9 +553,9 @@ int main(int, char**) {
 
 
   // engine test
-  auto p1 = root.create("state", attributes("template", "vec3"));
-  auto p2 = root.create("state", attributes("template", "vec3"));
-  auto p3 = root.create("state", attributes("template", "vec3"));  
+  auto p1 = root.create("state", attribs("template", "vec3"));
+  auto p2 = root.create("state", attribs("template", "vec3"));
+  auto p3 = root.create("state", attribs("template", "vec3"));  
   
   engine_base* f = new sum<real>();
 
