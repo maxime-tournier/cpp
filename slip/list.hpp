@@ -5,7 +5,7 @@
 #include "error.hpp"
 
 #include <ostream>
-
+#include <iterator>
 
 namespace slip {
 
@@ -152,12 +152,8 @@ namespace slip {
 
   template<class H>
   std::ostream& operator<<(std::ostream& out, const list<H>& self) {
-    bool first = true;
-    for(const H& x : self) {
-      if(first) first = false;
-      else out << ' ';
-      out << x;
-    }
+    std::ostream_iterator<H> it(out, " ");
+    for(const H& e : self) *it++ = e;
     return out;
   }
 

@@ -340,6 +340,7 @@ namespace slip {
       
         bool first = true;
 
+        // TODO with a fold instead?
         for(const ast::expr& arg : self.items) {
           if(first) first = false;
           else {
