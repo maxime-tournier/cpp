@@ -170,6 +170,38 @@ static int fib(int n) {
 }
 
 
+// TODO roots
+template<class G, class F>
+static void pull(G& g, const graph::ref_type<G>& root, const F& f) {
+  using namespace graph;
+  
+  // clear marks TODO optimize
+  iter(g, [&](const ref_type<G>& v) {
+      traits<G>::marked(g, v, false);
+    });
+  
+  std::vector< ref_type<G> > dirty;
+  
+  graph::detail::dfs(g, root, [](const ref_type<G>&) {}, [&](const ref_type<G>& v) {
+      iter(g, v, [&](const ref_type<G>& u) {
+          if(u->flags[ flag::dirty ]) {
+            v->flags[ flag::dirty ] = true;
+            // TODO abort loop
+          }
+        });
+      
+      if(v->flags[ flag::dirty ]) dirty.emplace_back( v );
+    });
+  
+
+  // call function on dirty nodes then clear dirty flag;
+  for(const ref_type<G>& v : dirty) {
+    f(v);
+    v->flags[ flag::dirty ] = false;
+  };
+  
+};
+
 
 
 int main(int, char**) {
@@ -215,6 +247,13 @@ int main(int, char**) {
       return fib(42);
     });
 
+
+  vert::ref dirty = &g[9];
+  dirty->flags[ flag::dirty ] = true;
+
+  pull(g, &g[0], [&](vert::ref v) {
+      std::clog << "updating " << v - g.data() << std::endl;
+    });
   
   return 0;  
 }
