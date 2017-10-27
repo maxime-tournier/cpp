@@ -85,7 +85,8 @@ namespace detail {
 
       // build template string
       bool first = true;
-      (void) std::initializer_list<int> { ((first? (first = false, ss) : ss << ',') << traits<Args>::name(),  0)... };
+      (void) std::initializer_list<int> { ((first ? (first = false, ss) : ss << ',')
+                                           << traits<Args>::name(),  0)... };
 
       return ss.str();
     }
@@ -565,7 +566,7 @@ int main(int, char**) {
 
   deps.add(f, out, in, in + 2);
 
-  graph::dfs(deps.graph, [&](vertex* v) {
+  graph::dfs_postfix(deps.graph, [&](vertex* v) {
       std::clog << *v << std::endl;
     });
 

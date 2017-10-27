@@ -73,17 +73,19 @@ namespace graph {
   namespace detail {
     // postfix depth-first traversal starting from v, calling f on each
     // vertex. WARNING: assumes all the traversed vertices have been cleared.
-    template<class G, class V, class F>
-    static void dfs_postfix(G& g, const V& v, const F& f) {
+    template<class G, class V, class Prefix, class Postfix>
+    static void dfs(G& g, const V& v, const Prefix& prefix, const Postfix& postfix) {
       traits<G>::marked(g, v, true);
+
+      prefix(v);
       
       iter(g, v, [&](const V& u) {
           if(!traits<G>::marked(g, u)) {
-            dfs_postfix(g, u, f);
+            dfs(g, u, prefix, postfix);
           }
         });
       
-      f(v);
+      postfix(v);
     }
 
 
@@ -108,9 +110,9 @@ namespace graph {
     }
   }
 
-  // postfix depth-first traversal for a graph given as a range of vertices
-  template<class G, class F>
-  static void dfs_postfix(G& g, const F& f) {
+  // depth-first traversal for a graph given as a range of vertices
+  template<class G, class Prefix, class Postfix>
+  static void dfs(G& g, const Prefix& prefix, const Postfix& postfix) {
 
     // clear marks
     iter(g, [&](const ref_type<G>& v) {
@@ -120,17 +122,16 @@ namespace graph {
     // dfs
     iter(g, [&](const ref_type<G>& v) {
         if(traits<G>::marked(g, v)) return;
-        detail::dfs_postfix(g, v, f);
+        detail::dfs(g, v, prefix, postfix);
       });
     
   }
 
 
-  // convenience
-  template<class G, class F>
-  static void dfs(G& g, const F& f) {
-    dfs_postfix(g, f);
-  }
+  template<class G, class Postfix>
+  static void dfs_postfix(G& g, const Postfix& postfix) {
+    dfs(g, [](const ref_type<G>&) { }, postfix);
+  };
   
 
   template<class G, class Out>

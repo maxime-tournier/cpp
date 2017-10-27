@@ -142,8 +142,8 @@ static void exec(G& g, Pool& pool, const F& f) {
       
     pool.push( [&g, v, &f] {
         // wait for dependencies to finish
-        graph::iter(g, v, [&](const ref_type<G>& u) {
-            traits<G>::wait(g, u);
+        iter(g, v, [&](const ref_type<G>& u) {
+             traits<G>::wait(g, u);
           });
           
         // compute stuff
