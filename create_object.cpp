@@ -8,6 +8,7 @@
 #include <typeindex>
 #include <iostream>
 #include <typeinfo>
+#include <iterator>
 
 template<class T>
 struct traits;
@@ -15,16 +16,13 @@ struct traits;
 template<class T>
 using sptr = std::shared_ptr<T>;
 
-static std::string quote(const std::string& value, char q = '"') {
-  return q + value + q;
-}
-
 
 // type-safe attribute map
 class attributes {
   using items_type = std::map<std::string, std::function< void() > >;
   items_type items;
 
+  // TODO: possible to throw directly?
   template<class T> struct boxed {
     const T value;
   };
@@ -55,8 +53,7 @@ public:
     }
     throw std::logic_error("should throw");
   }
-
-
+  
   // convenience
   template<class T>
   attributes(const std::string& name, T value) { operator()(name, value); }
@@ -68,27 +65,32 @@ struct node;
 struct object;
 
 
-template<class T>
-struct template_name {
-  static std::string get() { return {}; }
-};
+namespace detail {
 
-template<template<class ...> class T, class ... Args>
-struct template_name< T<Args...> > {
-  
-  static std::string get() {
-    std::stringstream ss;
-    
-    // build template string
-    (void) std::initializer_list<int> { (ss << traits<Args>::name() << ',', 0)... };
-    
-    // pop first comma
-    std::string res = ss.str();
-    res.pop_back();
-    return res;
+  static std::string quote(const std::string& value, char q = '"') {
+    return q + value + q;
   }
-};
 
+  
+  template<class T>
+  struct template_name {
+    static std::string get() { return {}; }
+  };
+
+  template<template<class ...> class T, class ... Args>
+  struct template_name< T<Args...> > {
+  
+    static std::string get() {
+      std::stringstream ss;
+
+      // build template string
+      bool first = true;
+      (void) std::initializer_list<int> { ((first? (first = false, ss) : ss << ',') << traits<Args>::name(),  0)... };
+
+      return ss.str();
+    }
+  };
+};
 
 
 
@@ -161,7 +163,7 @@ public:
 
   ~declare() {
     // register ourselves to the global tables
-    info_type::name[name].emplace(template_name<T>::get(), typeid(T));
+    info_type::name[name].emplace( detail::template_name<T>::get(), typeid(T));
     info_type::table.emplace(typeid(T), *this);
   }
 
@@ -203,7 +205,7 @@ public:
               ss << attrs.get<const char*>(name);
             } catch(std::bad_cast) {
               std::stringstream ss;
-              ss << "cannot init data " << quote(name)
+              ss << "cannot init data " << detail::quote(name)
                  << " from attributes (types don't match, deserialization failed)";
               // TODO output value
               throw std::runtime_error(ss.str());
@@ -321,7 +323,7 @@ std::shared_ptr<object> node::create(const std::string& class_name, const attrib
 };
 
 
-// some types + traits
+// some math types + traits
 using real = double;
 struct vec3 {
   real x, y, z;
@@ -392,8 +394,9 @@ template<class T>
 const info_type derived_state<T>::info = declare< derived_state, state<T> >("derived_state")
   (&derived_state::bar, "bar", "some other data");
 
-// TODO data dependency graph?
 
+
+// dependency graph
 struct data_node {
   std::shared_ptr<object> obj;
   std::string name;
@@ -416,6 +419,7 @@ struct engine_node {
 };
 
 
+// engines
 template<class T> struct engine;
 
 template<class Ret, class ... Args>
@@ -424,6 +428,7 @@ struct engine< Ret(Args...) > : engine_base {
 };
 
 
+// some engine class
 template<class T>
 struct sum : engine< T(T, T) > {
   
@@ -522,8 +527,7 @@ struct data_graph {
 
 
 
-
-// instantiations
+// template instantiations
 template struct state<vec3>;
 template struct derived_state<vec3>;  
 
