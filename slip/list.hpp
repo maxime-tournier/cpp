@@ -152,8 +152,10 @@ namespace slip {
 
   template<class H>
   std::ostream& operator<<(std::ostream& out, const list<H>& self) {
-    std::ostream_iterator<H> it(out, " ");
-    for(const H& e : self) *it++ = e;
+    bool first = true;
+    for(const H& e : self) {
+      (first ? ( first = false, out) : out << ' ') << e;
+    }
     return out;
   }
 

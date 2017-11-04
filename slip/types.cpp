@@ -165,11 +165,12 @@ namespace slip {
     
 
     // row extension constructor
-    static constant row_extension_ctor(symbol label) {
+    static type row_extension_ctor(symbol label) {
       return constant(label, terms() >>= rows() >>= rows());
     }
 
     const type record_ctor = make_constant("record", rows() >>= terms());
+    const type empty_row_ctor = make_constant("{}", rows());
     
 
     type type::operator()(const type& arg) const {
@@ -658,6 +659,18 @@ namespace slip {
       }
 
 
+
+      // record literals
+      inferred<type, ast::expr> operator()(const ast::record& self, state& tc) const {
+        // TODO rewrite value terms
+        const type row = foldr( empty_row_ctor, self.rows, [&tc](const ast::row& lhs, const type& rhs) {
+            return row_extension_ctor(lhs.label)( infer(tc, lhs.value).type )( rhs );
+          });
+        
+        return {record_ctor(row), self};
+      }
+      
+      
 
       // fallback case
       inferred<type, ast::expr> operator()(const ast::expr& self, state& tc) const {
