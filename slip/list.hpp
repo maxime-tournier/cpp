@@ -45,9 +45,6 @@ namespace slip {
       }
     };
 
-
-    
-    
   };
 
   struct empty_list : error {

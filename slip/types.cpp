@@ -164,9 +164,10 @@ namespace slip {
     const type io_ctor = make_constant("io", terms() >>= terms() );
     
 
-    // row extension constructor
+    // row extension
+    const kind row_extension_kind = terms() >>= rows() >>= rows();
     static type row_extension_ctor(symbol label) {
-      return constant(label, terms() >>= rows() >>= rows());
+      return constant(label, row_extension_kind);
     }
 
     const type record_ctor = make_constant("record", rows() >>= terms());
@@ -322,9 +323,12 @@ namespace slip {
     };
 
 
+
     
 
-
+    template<class UF>
+    static void unify_rows(pretty_printer& pp, UF& uf, const type& lhs, const type& rhs);
+    
 
     template<class UF>
     struct unify_visitor {
@@ -335,7 +339,8 @@ namespace slip {
       unify_visitor(pretty_printer& pp, bool try_reverse = true) 
         : pp(pp),
           try_reverse(try_reverse) { }
-      
+
+      // reverse dispatch
       template<class T>
       void operator()(const T& self, const type& rhs, UF& uf) const {
         
@@ -348,8 +353,9 @@ namespace slip {
       }
 
 
+      // variable / type
       void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
-        // pp << "unifying: " << type(self) << " ~ " << rhs << std::endl;
+        pp << "unifying: " << type(self) << " ~ " << rhs << std::endl;
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -358,6 +364,7 @@ namespace slip {
           throw occurs_error{self, rhs.get< ref<application> >()};
         }
 
+        // kind preserving unification
         if( self->kind != rhs.kind() ) {
           std::stringstream ss;
 
@@ -366,8 +373,8 @@ namespace slip {
           
           throw kind_error(ss.str());
         }
-
-
+        
+        // TODO 
         if( rhs.is<ref<variable> >() && self->depth < rhs.get< ref<variable> >()->depth) {
           // the topmost variable wins
           uf.link(rhs, self);
@@ -380,38 +387,40 @@ namespace slip {
       }
 
 
-      void operator()(const ref<constant>& lhs, const ref<constant>& rhs, UF& uf) const {
-        // pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;
+      void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
+        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;
 
-        if( lhs != rhs ) {
+        if(!(lhs == rhs )) {
           throw unification_error(lhs, rhs);
         }
       }
 
 
 
-
-
-
-
-      
+      // application / application
       void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
-        // pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
+        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
         const auto indent = pp.indent();        
-
+        
         uf.find(lhs->func).apply( unify_visitor(pp), uf.find(rhs->func), uf);
+
+        // dispatch on kind
+        if(lhs->arg.kind() == rows()) {
+          unify_rows(pp, uf, lhs->arg, rhs->arg);
+        } else 
+          // standard unification
         uf.find(lhs->arg).apply( unify_visitor(pp), uf.find(rhs->arg), uf);
+          
       }
 
-      
     };
 
 
     void state::unify(const type& lhs, const type& rhs) {
 
       pretty_printer pp(std::clog);
-      // pp << "unify: " << lhs << " ~ " << rhs << std::endl;
-      // const auto indent = pp.indent();
+      pp << "unify: " << lhs << " ~ " << rhs << std::endl;
+      const auto indent = pp.indent();
 
       const type flhs = uf->find(lhs);
       const type frhs = uf->find(rhs);
@@ -420,9 +429,91 @@ namespace slip {
      
     }
     
+
+
+
+
+
+    class row_helper {
+      std::map<symbol, type> data;
+      std::set<symbol> keys;
+      ref<variable> tail;
+    public:
+      
+      row_helper(type row) {
+        while(row.is< ref<application> >() ) {
+          auto& app = row.get< ref<application> >();
+            
+          symbol label = app->func.get< ref<application> >()->func.get<constant>().name;
+          type tau = app->func.get< ref<application> >()->arg;
+          data.emplace(label, tau);
+            
+          row = app->arg;
+        }
+
+        if(row.is< ref<variable> >() ) {
+          tail = row.get< ref<variable> >();
+        }
+
+        for(const auto& it : data) keys.insert(it.first);
+      }
+
+      template<class UF>
+      void unify_diff(UF& uf, const row_helper& other) const {
+
+        std::set<symbol> diff;
+        std::set_difference(other.keys.begin(), other.keys.end(), keys.begin(), keys.end(), 
+                            std::inserter(diff, diff.begin()));
+        
+        if(tail) {            
+          type tmp = make_ref<variable>(tail->kind, tail->depth);
+          for(symbol s : diff) {
+            tmp = row_extension_ctor(s)(other.data.at(s))(tmp);
+          }
+          
+          uf.link(tail, tmp);
+        } else if(!diff.empty()) {
+          // TODO unification error if other has no tail?
+        }
+        
+      }
+      
+      
+      template<class UF>
+      friend void unify(pretty_printer& pp, UF& uf, const row_helper& lhs, const row_helper& rhs)  {
+        std::set<symbol> both;
+        
+        // unify intersection
+        std::set_intersection(lhs.keys.begin(), lhs.keys.end(), rhs.keys.begin(), rhs.keys.end(), 
+                              std::inserter(both, both.begin()));
+        
+        for(symbol s : both) {
+          lhs.data.at(s).apply(unify_visitor<UF>(pp), rhs.data.at(s), uf);
+        }
+
+        lhs.unify_diff(uf, rhs);
+        rhs.unify_diff(uf, lhs);
+      }
+      
+      
+      friend std::ostream& operator<<(std::ostream& out, const row_helper& self) {
+        for(const auto& it : self.data) {
+          out << "row: " << it.first << std::endl;
+        }
+        return out;
+      }
+    };
+
+
     
+    template<class UF>
+    static void unify_rows(pretty_printer& pp, UF& uf, const type& lhs, const type& rhs) {
+      unify(pp, uf, row_helper(lhs), row_helper(rhs));
+    };
 
 
+
+    
     
     // type inference for expressions
     static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
@@ -668,6 +759,14 @@ namespace slip {
           });
         
         return {record_ctor(row), self};
+      }
+
+      inferred<type, ast::expr> operator()(const ast::selection& self, state& tc) const {
+        const type alpha = tc.fresh();
+        const type rho = tc.fresh( rows() );
+        const type row = row_extension_ctor(self.label)(alpha)(rho);
+        
+        return {record_ctor(row) >>= alpha, self};
       }
       
       
