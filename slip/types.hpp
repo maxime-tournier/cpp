@@ -26,14 +26,20 @@ namespace slip {
     // kinds
     struct kind;
 
-    template<class Derived>
+
     struct simple_kind {
-      bool operator==(const simple_kind<Derived>& other) const { return true; }
+      template<class Derived>
+      friend bool operator==(const Derived& self, const Derived& other) { return true; }
+
+      template<class Derived>      
+      friend bool operator<(const Derived& self, const Derived& other) { return false; }      
     };
 
     // the kind of terms
-    struct terms : simple_kind<terms> { };
+    struct terms : simple_kind { };
 
+    // the kind of rows
+    struct rows : simple_kind { };    
 
     // kind of type constructors
     struct constructor {
@@ -44,26 +50,14 @@ namespace slip {
           to( make_ref<kind>(to)) { }
       
       bool operator==(const constructor& other) const;
-      
+      bool operator<(const constructor& other) const;      
     };
 
     constructor operator>>=(const kind& lhs, const kind& rhs);
 
 
-    // // boxed polytypes
-    // struct boxed {
-    //   bool operator==(const boxed& other) const { return true; }
-    //   bool operator<(const boxed& other) const { return false; }
-    // };
-    
-    
-    struct kind : variant<terms, constructor > {
+    struct kind : variant<terms, rows, constructor> {
       using kind::variant::variant;
-      
-      struct error : slip::error {
-        using slip::error::error;
-      };
-    
     };
 
     std::ostream& operator<<(std::ostream& out, const kind& self);
@@ -76,16 +70,27 @@ namespace slip {
     struct type;
 
     struct constant {
-      virtual ~constant();
-
-      const struct kind kind;
-      virtual symbol name() const;
+      symbol name;
+      struct kind kind;
       
-      constant(struct kind kind = terms())
-        : kind(kind) { }
+      constant(symbol name, struct kind kind = terms())
+        : name(name),
+          kind(kind) { }
+
+      bool operator==(const constant& other) const {
+        return name == other.name && kind == other.kind;
+      }
+
+      bool operator<(const constant& other) const {
+        return name < other.name || (name == other.name && kind < other.kind);
+      }
       
     };
 
+    static constant make_constant(symbol name, struct kind kind = terms() ) {
+      return {name, kind};
+    }
+    
 
     
     struct variable {
@@ -103,8 +108,8 @@ namespace slip {
     struct application;
 
 
-    struct type : variant< ref<constant>, ref<variable>, ref<application> > {
-
+    struct type : variant< constant, ref<variable>, ref<application> > {
+      
       using type::variant::variant;
     
       struct kind kind() const;
