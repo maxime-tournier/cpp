@@ -699,21 +699,21 @@ namespace slip {
 
 
       // let-binding
-      inferred<type, ast::expr> operator()(const ref<ast::definition>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::definition& self, state& tc) const {
 
         const type forward = tc.fresh();
         
         state sub = tc.scope();
 
         // note: value is bound in sub-context (monomorphic)
-        sub.def(self->id, sub.generalize(forward));
+        sub.def(self.id, sub.generalize(forward));
 
-        const inferred<type, ast::expr> value = infer(sub, self->value);       
+        const inferred<type, ast::expr> value = infer(sub, self.value);       
         tc.unify(forward, value.type);
 
-        tc.def(self->id, tc.generalize(value.type));
+        tc.def(self.id, tc.generalize(value.type));
 
-        const ast::expr node = make_ref<ast::definition>(self->id, value.node);
+        const ast::expr node = ast::definition(self.id, value.node);
 
         return {io_ctor(unit_type), node};
       }

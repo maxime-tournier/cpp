@@ -65,10 +65,10 @@ namespace slip {
           >>= sexpr::list();
       }
 
-      sexpr operator()(const ref<definition>& self) const {
+      sexpr operator()(const definition& self) const {
         return kw::def
-          >>= self->id
-          >>= repr(self->value)
+          >>= self.id
+          >>= repr(self.value)
           >>= sexpr::list();
       }
 
@@ -278,8 +278,8 @@ namespace slip {
         if( size(items) != 2 ) throw fail();
         if( !items->head.is<symbol>() ) throw fail();
 
-        return make_ref<definition>(items->head.get<symbol>(),
-                                    check_expr(items->tail->head));
+        return definition(items->head.get<symbol>(),
+                          check_expr(items->tail->head));
         
       } catch( fail& ) {
         throw syntax_error("(def `symbol` `expr`)");
