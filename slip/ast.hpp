@@ -83,7 +83,7 @@ namespace slip {
                            literal< ref<string> >,
                            variable,
                            lambda,
-                           ref<application>,
+                           application,
                            ref<definition>,
                            ref<binding>,
                            sequence,

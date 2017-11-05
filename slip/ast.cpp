@@ -94,8 +94,8 @@ namespace slip {
       }
 
 
-      sexpr operator()(const ref<application>& self) const {
-        return repr(self->func) >>= map(self->args, [](const expr& e) {
+      sexpr operator()(const application& self) const {
+        return repr(self.func) >>= map(self.args, [](const expr& e) {
             return repr(e);
           });
       }
@@ -266,7 +266,7 @@ namespace slip {
       // fix nullary applications
       if(!args) args = literal<unit>() >>= args;
       
-      return make_ref<application>( check_expr(self->head), args);
+      return application( check_expr(self->head), args);
     }
     
     

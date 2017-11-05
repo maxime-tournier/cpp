@@ -645,14 +645,14 @@ namespace slip {
 
 
       // applications
-      inferred<type, ast::expr> operator()(const ref<ast::application>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::application& self, state& tc) const {
 
         // TODO currying 
         
-        const inferred<type, ast::expr> func = infer(tc, self->func);
+        const inferred<type, ast::expr> func = infer(tc, self.func);
 
         // infer arg types
-        list< inferred<type, ast::expr> > args = map(self->args, [&](const ast::expr& e) {
+        list< inferred<type, ast::expr> > args = map(self.args, [&](const ast::expr& e) {
             return infer(tc, e);
           });
 
@@ -672,7 +672,7 @@ namespace slip {
 
         // rewrite ast node
         const ast::expr node =
-          make_ref<ast::application>(func.node, map(args, [](const inferred<type, ast::expr>& e) {
+          ast::application(func.node, map(args, [](const inferred<type, ast::expr>& e) {
                 return e.node;
               }));
         
