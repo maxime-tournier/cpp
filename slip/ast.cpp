@@ -73,10 +73,10 @@ namespace slip {
       }
 
 
-      sexpr operator()(const ref<binding>& self) const {
+      sexpr operator()(const binding& self) const {
         return kw::var
-          >>= self->id
-          >>= repr(self->value)
+          >>= self.id
+          >>= repr(self.value)
           >>= sexpr::list();
       }
 
@@ -400,7 +400,7 @@ namespace slip {
         if( size(items) != 2 ) throw fail();
         if( !items->head.is<symbol>() ) throw fail();
 
-        return make_ref<binding>(items->head.get<symbol>(), check_expr(items->tail->head));
+        return binding(items->head.get<symbol>(), check_expr(items->tail->head));
       } catch( fail& ) {
         throw syntax_error("(var `symbol` `expr`)");
       }

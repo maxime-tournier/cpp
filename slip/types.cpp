@@ -737,7 +737,7 @@ namespace slip {
         tc.find(self->id);
 
         // TODO should we rewrite as a def?
-        const ast::expr node = make_ref<ast::binding>(self->id, value.node);
+        const ast::expr node = ast::binding(self->id, value.node);
         return {io_ctor(unit_type), node};
         
       }

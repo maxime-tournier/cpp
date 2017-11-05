@@ -85,7 +85,7 @@ namespace slip {
                            lambda,
                            application,
                            definition,
-                           ref<binding>,
+                           binding,
                            sequence,
                            condition,
                            selection,
