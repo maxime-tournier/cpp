@@ -25,7 +25,14 @@ namespace slip {
     ////////////////////
     // kinds
     struct kind;
+    struct terms;
+    struct rows;
+    struct constructor;
 
+    struct kind : variant<terms, rows, constructor> {
+      using kind::variant::variant;
+    };
+    
 
     struct simple_kind {
       template<class Derived>
@@ -43,22 +50,17 @@ namespace slip {
 
     // kind of type constructors
     struct constructor {
-      ref<kind> from, to;
-      
-      constructor(const kind& from, const kind& to)
-        : from( make_ref<kind>(from)),
-          to( make_ref<kind>(to)) { }
+      kind from, to;
       
       bool operator==(const constructor& other) const;
-      bool operator<(const constructor& other) const;      
+      bool operator<(const constructor& other) const;
+
+      constructor(const constructor&) = default;
     };
 
     constructor operator>>=(const kind& lhs, const kind& rhs);
 
 
-    struct kind : variant<terms, rows, constructor> {
-      using kind::variant::variant;
-    };
 
     std::ostream& operator<<(std::ostream& out, const kind& self);
     

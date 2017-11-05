@@ -146,16 +146,16 @@ namespace slip {
 
     // kinds
     constructor operator>>=(const kind& lhs, const kind& rhs) {
-      return constructor(lhs, rhs);
+      return {lhs, rhs};
     }
 
 
     bool constructor::operator==(const constructor& other) const {
-      return *from == *other.from && *to == *other.to;
+      return from == other.from && to == other.to;
     }
 
     bool constructor::operator<(const constructor& other) const {
-      return *from < *other.from || (*from == *other.from && *to < *other.to);
+      return from < other.from || (from == other.from && to < other.to);
     }
     
     
@@ -190,7 +190,7 @@ namespace slip {
       kind operator()(const constant& self) const { return self.kind; }
       kind operator()(const variable& self) const { return self.kind; }    
       kind operator()(const ref<application>& self) const  {
-        return *self->func.kind().get<constructor >().to;
+        return self->func.kind().get<constructor>().to;
       }  
     
     };
@@ -215,7 +215,7 @@ namespace slip {
       
       void operator()(const constructor& self, std::ostream& out) const {
         // TODO parentheses
-        out << *self.from << " -> " << *self.to;
+        out << self.from << " -> " << self.to;
       }
       
       
@@ -235,9 +235,9 @@ namespace slip {
         throw kind_error("type constructor expected");
       }
       
-      if(*func.kind().get< constructor >().from != arg.kind() ) {
+      if(func.kind().get<constructor>().from != arg.kind() ) {
         std::stringstream ss;
-        ss << "expected: " << *func.kind().get< constructor >().from
+        ss << "expected: " << func.kind().get< constructor >().from
            << ", got: " << arg.kind();
            
         throw kind_error(ss.str());
