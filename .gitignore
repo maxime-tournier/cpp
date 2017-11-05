@@ -17,3 +17,5 @@ build
 /dynamic_sized
 /obj
 /stl
+/create_object
+/dependency
