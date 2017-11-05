@@ -101,12 +101,12 @@ namespace slip {
         for(const sexpr& x : args) {
           const sexpr::list& term = x.get<sexpr::list>();
         
-          if( eval(ctx, term->head).cast<boolean>() ) {
+          if( eval(ctx, term->head).get<boolean>() ) {
             return eval(ctx, term->tail->head);
           }
         
         }
-      } catch( sexpr::bad_cast& e ) {
+      } catch( std::bad_cast e ) {
         throw type_error("boolean expected");
       }
       
@@ -142,7 +142,8 @@ namespace slip {
   }
   
   struct eval_visitor {
-
+    using value_type = value;
+    
     static std::vector< value > stack;
     
     value operator()(const symbol& self, const ref<environment>& ctx) const {
@@ -200,12 +201,13 @@ namespace slip {
   std::vector<value> eval_visitor::stack;
   
   value eval(const ref<environment>& ctx, const sexpr& expr) {
-    return expr.map<value>( eval_visitor(), ctx );
+    return expr.apply( eval_visitor(), ctx );
   }
 
 
   struct apply_visitor {
-
+    using value_type = value;
+    
     value operator()(const ref<lambda>& self, const value* first, const value* last) {
 
       struct argc_error : error {
@@ -264,7 +266,7 @@ namespace slip {
 
   
   value apply(const value& app, const value* first, const value* last) {
-    return app.map<value>(apply_visitor(), first, last);
+    return app.apply(apply_visitor(), first, last);
   }
   
 

@@ -1,7 +1,7 @@
 #ifndef SLIP_KINDS_HPP
 #define SLIP_KINDS_HPP
 
-#include "../variant.hpp"
+#include "variant.hpp"
 #include "../ref.hpp"
 #include "../union_find.hpp"
 

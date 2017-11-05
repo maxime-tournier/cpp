@@ -1,6 +1,12 @@
 #ifndef SLIP_VARIANT_HPP
 #define SLIP_VARIANT_HPP
 
+#include <type_traits>
+#include <utility>
+#include <memory>
+
+
+
 namespace detail {
 
   // pick the right index/constructor from a value
@@ -36,10 +42,16 @@ namespace detail {
   template<class> using require = void;
   
   template<class Visitor>
-  struct visitor< Visitor, require< typename Visitor::type > > {
-    using type = typename Visitor::type;
+  struct visitor< Visitor, require< typename Visitor::value_type > > {
+    using type = typename Visitor::value_type;
   };
+
+  template<bool ... values> struct any;
+
+  template<> struct any<> : std::false_type { };
   
+  template<bool head, bool ... tail>
+  struct any<head, tail...> : std::integral_constant<bool,  head || any<tail...>::value > { };
 }
 
 template<class ... T>
@@ -66,6 +78,7 @@ class variant {
   
 
   template<class U> void construct() { new (&storage) std::unique_ptr<U>(); }
+  
   template<class U> void destruct() { ptr<U>().reset(); }
 
   template<class U> void copy(const variant& other) { ptr<U>().reset( new U(other.get<U>())); }
@@ -75,50 +88,67 @@ class variant {
   template<class U> void move_construct(variant&& other) {construct<U>(); move<U>(std::move(other)); }
   
   template<class U>
-  using require_unrelated =
-    typename std::enable_if< !std::is_same<variant, typename std::decay<U>::type>::value>::type;
+  using require_type =
+    typename std::enable_if< detail::any< std::is_same< typename std::decay<U>::type,
+                                                        T>::value... >::value >::type;
+  
+  // visitors
+  template< template<class> class Pred>
+  struct compare_visitor {
+    using value_type = bool;
+    
+    template<class U>
+    bool operator()(const U& self, const variant& other) const {
+      static const Pred<U> pred;
+      return pred(self, other.get<U>());
+    }
+  };
 
-
-  template<class U>
-  static constexpr std::size_t index_of() {
-    return decltype( selector_type::index( std::declval<U>() ) )::value;
-  }
   
 public:
 
-  template<class U, class = require_unrelated<U> >
-  variant(U&& value) : index( index_of<U>() ) {
+  template<class U,
+           index_type index = decltype( selector_type::index( std::declval<U>() ) )::value,
+           class = require_type<U> >
+  static constexpr index_type type_index() {
+    return index;
+  }
+
+  index_type type() const { return index; }
+  
+  template<class U, index_type index = type_index<U>() >
+  variant(U&& value) : index( index ) {
     selector_type::construct( (void*)&storage, value, std::forward<U>(value));
   }
 
   // get value, throw if type is wrong
-  template<class U, index_type expected = index_of<U>(), class = require_unrelated<U> >
+  template<class U, index_type expected = type_index<U>() >
   const U& get() const {
     if(index != expected) throw std::bad_cast();
     return *ptr<U>();
   }
   
-  template<class U, index_type expected = index_of<U>(), class = require_unrelated<U> >
+  template<class U, index_type expected = type_index<U>() >
   U& get() {
     if(index != expected) throw std::bad_cast();
     return *ptr<U>();
   }
 
   // get value, nullptr if type is wrong
-  template<class U, index_type expected = index_of<U>(), class = require_unrelated<U> >
+  template<class U, index_type expected = type_index<U>() >
   const U* get_if() const {
     if(index != expected) return nullptr;
     return ptr<U>().get();
   }
   
-  template<class U, index_type expected = index_of<U>(), class = require_unrelated<U> >
+  template<class U, index_type expected = type_index<U>() >
   U* get_if() {
     if(index != expected) return nullptr;
     return ptr<U>().get();
   }
 
   // test value type
-  template<class U, index_type expected = index_of<U>(), class = require_unrelated<U> >
+  template<class U, index_type expected = type_index<U>() >
   bool is() const { return index == expected; }
   
 
@@ -130,13 +160,13 @@ public:
   };
   
 
-  variant(const variant& other) : index(other.index) {
+  variant(const variant& other) noexcept : index(other.index) {
     using thunk_type = void (variant::*)(const variant&);
     static const thunk_type thunk [] = { &variant::copy_construct<T>... };
     (this->*thunk[index])(other);
   }
 
-  variant(variant&& other) : index(other.index) {
+  variant(variant&& other) noexcept : index(other.index) {
     using thunk_type = void (variant::*)(variant&&);
     static const thunk_type thunk [] = { &variant::move_construct<T>... };
     (this->*thunk[index])(std::move(other));
@@ -149,15 +179,16 @@ public:
 
     using thunk_type = void (variant::*)(const variant&);
     
-    if( index == other) {
+    if( index == other.index ) {
       static const thunk_type thunk [] = { &variant::copy<T>... };
       (this->*thunk[index])(other);
     } else {
       this->~variant();
+      index = other.index;
       static const thunk_type thunk [] = { &variant::copy_construct<T>... };
       (this->*thunk[index])(other);      
     }
-
+    return *this;
   }
 
   variant& operator=(variant&& other) {
@@ -165,15 +196,16 @@ public:
 
     using thunk_type = void (variant::*)(variant&&);
     
-    if( index == other) {
+    if( index == other.index ) {
       static const thunk_type thunk [] = { &variant::move<T>... };
       (this->*thunk[index])(std::move(other));
     } else {
       this->~variant();
+      index = other.index;      
       static const thunk_type thunk [] = { &variant::move_construct<T>... };
       (this->*thunk[index])(std::move(other));      
     }
-
+    return *this;
   }
 
   // apply visitor
@@ -185,6 +217,23 @@ public:
     static const thunk_type thunk[] = { apply_thunk<return_type, T, Visitor, const variant, Args...>... };
     return thunk[index](std::forward<Visitor>(visitor), *this, std::forward<Args>(args)...);
   }
+
+
+  // comparison operators
+  bool operator==(const variant& other) const {
+    if(index != other.index) return false;
+    return apply(compare_visitor<std::equal_to>(), other);
+  }
+
+  bool operator!=(const variant& other) const {
+    return !operator==(other);
+  }
+
+  
+  bool operator<(const variant& other) const {
+    return index < other.index || (index == other.index && apply(compare_visitor<std::less>(), other));
+  }
+
   
 };
 

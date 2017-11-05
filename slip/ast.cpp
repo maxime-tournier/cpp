@@ -29,6 +29,8 @@ namespace slip {
 
 
     struct repr_visitor {
+
+      using value_type = sexpr;
       
       template<class T>
       sexpr operator()(const literal<T>& self) const {
@@ -44,8 +46,8 @@ namespace slip {
       }
 
 
-      sexpr operator()(const type::list& self) const {
-        return map(self, [](const type& e) { return repr(e); });
+      sexpr operator()(const ast::type::list& self) const {
+        return map(self, [](const ast::type& e) { return repr(e); });
       }
 
       
@@ -57,7 +59,7 @@ namespace slip {
       sexpr operator()(const ref<lambda>& self) const {
         return kw::lambda
           >>= map(self->args, [this](const lambda::arg& s) -> sexpr {
-              return s.map<sexpr>(*this);
+              return s.apply( repr_visitor() );
             })
           >>= repr(self->body)
           >>= sexpr::list();
@@ -112,7 +114,7 @@ namespace slip {
       sexpr operator()(const type_constructor& self) const { return self.name; }      
 
       sexpr operator()(const type_application& self) const {
-        return repr(self.type) >>= map(self.args, [](const type& t) { return repr(t); } );
+        return repr(self.type) >>= map(self.args, [](const ast::type& t) { return repr(t); } );
       }
       
       // template<class T>
@@ -124,11 +126,11 @@ namespace slip {
 
     
     sexpr repr(const expr& self) {
-      return self.map<sexpr>( repr_visitor() );
+      return self.apply( repr_visitor() );
     }
 
     sexpr repr(const type& self) {
-      return self.map<sexpr>( repr_visitor() );
+      return self.apply( repr_visitor() );
     }
 
     
@@ -341,7 +343,8 @@ namespace slip {
     
     
     struct expr_visitor {
-
+      using value_type = expr;
+      
       template<class T>
       expr operator()(const T& self) const {
         return literal<T>{self};
@@ -384,7 +387,7 @@ namespace slip {
     
 
     static expr check_expr(const sexpr& e) {
-      return e.map<expr>(expr_visitor());
+      return e.apply(expr_visitor());
     }
     
 
@@ -405,7 +408,8 @@ namespace slip {
     
 
     struct toplevel_visitor : expr_visitor {
-
+      using value_type = toplevel;
+      
       template<class T>
       toplevel operator()(const T& self) const {
         return expr_visitor::operator()(self);
@@ -415,7 +419,7 @@ namespace slip {
 
     
     toplevel check_toplevel(const sexpr& e) {
-      return e.map<toplevel>(toplevel_visitor());
+      return e.apply(toplevel_visitor());
     }
 
     

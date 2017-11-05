@@ -1,7 +1,7 @@
 #ifndef LISP_SEXPR_HPP
 #define LISP_SEXPR_HPP
 
-#include "../variant.hpp"
+#include "variant.hpp"
 
 #include "list.hpp"
 #include "symbol.hpp"

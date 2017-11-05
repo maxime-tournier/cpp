@@ -23,7 +23,7 @@ namespace slip {
       
       sexpr::list curr = args;
       try{
-        const symbol& name = head(curr).cast<symbol>();
+        const symbol& name = head(curr).get<symbol>();
         curr = tail(curr);
         
         const sexpr body = expand(ctx, head(curr));
@@ -33,7 +33,7 @@ namespace slip {
         
         return kw::def >>= name >>= body >>= sexpr::list();
         
-      } catch( value::bad_cast& e) {
+      } catch( std::bad_cast e) {
         fail();
       } catch( empty_list& e) {
         fail();
@@ -44,6 +44,9 @@ namespace slip {
 
 
     struct quasiquote_visitor {
+
+      using value_type = sexpr;
+      
       template<class T>
       sexpr operator()(const T& self, const ref<environment>& ctx) const {
         return kw::quote >>= self >>= sexpr::list();
@@ -62,7 +65,7 @@ namespace slip {
 
         // (list (quasiquote self)...)
         return symbol("list") >>= map(self, [&ctx](const sexpr& e) {
-            return e.map<sexpr>(quasiquote_visitor(), ctx);
+            return e.apply(quasiquote_visitor(), ctx);
           });
       }
       
@@ -74,7 +77,7 @@ namespace slip {
         throw syntax_error("(quasiquote `expr`)");
       }
       
-      return args->head.map<sexpr>(quasiquote_visitor(), ctx);
+      return args->head.apply(quasiquote_visitor(), ctx);
     }
 
 
@@ -182,7 +185,7 @@ namespace slip {
       };
       try{
         return kw::cond >>= map(args, [&ctx](const sexpr& e) -> sexpr {
-            sexpr::list curr = e.cast<sexpr::list>();
+            sexpr::list curr = e.get<sexpr::list>();
             
             const sexpr test = expand(ctx, head(curr));
             curr = tail(curr);
@@ -197,7 +200,7 @@ namespace slip {
         
       } catch(empty_list& e){
         fail();
-      } catch(value::bad_cast& e) {
+      } catch( std::bad_cast e) {
         fail();
       }
       
@@ -228,7 +231,8 @@ namespace slip {
 
   
   struct expand_visitor {
-
+    using value_type = sexpr;
+    
     template<class T>
     sexpr operator()(const T& self, const ref<environment>& ctx) const {
       return self;
@@ -283,7 +287,7 @@ namespace slip {
 
 
   struct expand_seq_visitor : expand_visitor {
-
+    
     using expand_visitor::operator();
     
     sexpr operator()(const sexpr::list& self, const ref<environment>& ctx) const {
@@ -303,13 +307,13 @@ namespace slip {
   
   sexpr expand(const ref<environment>& ctx, const sexpr& expr) {
     
-    const auto res = expr.map<sexpr>(expand_visitor(), ctx);
+    const auto res = expr.apply(expand_visitor(), ctx);
     // std::clog << "expand: " << expr << " -> " << res << std::endl;
     return res;
   }
 
   sexpr expand_seq(const ref<environment>& ctx, const sexpr& expr) {
-    const auto res = expr.map<sexpr>(expand_seq_visitor(), ctx);
+    const auto res = expr.apply(expand_seq_visitor(), ctx);
     // std::clog << "expand: " << expr << " -> " << res << std::endl;
     return res;
   }
@@ -331,7 +335,7 @@ namespace slip {
   
   
   sexpr expand_toplevel(const ref<environment>& ctx, const sexpr& expr) {
-    const auto res = expr.map<sexpr>(expand_toplevel_visitor(), ctx);
+    const auto res = expr.apply(expand_toplevel_visitor(), ctx);
     return res;
   }
 

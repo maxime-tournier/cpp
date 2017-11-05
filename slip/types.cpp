@@ -185,6 +185,7 @@ namespace slip {
     
 
     struct type_kind_visitor {
+      using value_type = kind;
       
       kind operator()(const constant& self) const { return self.kind; }
       kind operator()(const variable& self) const { return self.kind; }    
@@ -196,7 +197,7 @@ namespace slip {
   
 
     struct kind type::kind() const {
-      return map<struct kind>(type_kind_visitor());
+      return apply(type_kind_visitor());
     }
 
 
@@ -288,8 +289,7 @@ namespace slip {
     };
 
     
-    struct occurs_error // : unification_error
-    {
+    struct occurs_error { // : unification_error
       occurs_error(const variable& var, const struct type& type)
         : var(var), type(type) {
 
@@ -303,7 +303,8 @@ namespace slip {
 
     template<class UF>
     struct occurs_check {
-
+      using value_type = bool;
+      
       bool operator()(const constant& self, const variable& var, UF& uf) const {
         return false;
       }
@@ -316,8 +317,8 @@ namespace slip {
       bool operator()(const ref<application>& self, const variable& var, UF& uf) const {
 
         return
-          uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ||
-          uf.find(self->func).template map<bool>(occurs_check(), var, uf);
+          uf.find(self->arg).apply(occurs_check(), var, uf) ||
+          uf.find(self->func).apply(occurs_check(), var, uf);
       }
       
     };
@@ -360,7 +361,7 @@ namespace slip {
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
         
-        if( type(self) != rhs && rhs.map<bool>(occurs_check<UF>(), self, uf)) {
+        if( type(self) != rhs && rhs.apply(occurs_check<UF>(), self, uf)) {
           throw occurs_error{self, rhs.get< ref<application> >()};
         }
 
@@ -521,7 +522,8 @@ namespace slip {
     static type infer(state& self, const ast::type& node);    
 
     struct type_visitor {
-
+      using value_type = type;
+      
       using variables_type = std::map<symbol, variable >;
       
       type operator()(const ast::type_variable& self, state& tc) const {
@@ -556,7 +558,7 @@ namespace slip {
     
     static type infer(state& self, const ast::type& node) {
       try {
-        return node.map<type>(type_visitor(), self);
+        return node.apply(type_visitor(), self);
       } catch( ... ) {
         std::cerr << "when inferring type for: " << repr(node) << std::endl;
         throw;
@@ -566,7 +568,7 @@ namespace slip {
 
     // expression switch
     struct expr_visitor {
-
+      using value_type = inferred<type, ast::expr>;
 
       // literals
       template<class T>
@@ -783,7 +785,7 @@ namespace slip {
 
     static inferred<type, ast::expr> infer(state& self, const ast::expr& node) {
       try{
-        return node.map< inferred<type, ast::expr> >(expr_visitor(), self);
+        return node.apply(expr_visitor(), self);
       } catch( unification_error& e )  {
         std::stringstream ss;
 
@@ -800,7 +802,8 @@ namespace slip {
     // finding nice representants (apply substitution)
     // TODO rename substitute
     struct nice {
-
+      using value_type = type;
+      
       template<class UF>
       type operator()(const constant& self, UF& uf) const {
         return self;
@@ -817,14 +820,14 @@ namespace slip {
           return res;
         }
         
-        return res.map<type>(nice(), uf);
+        return res.apply(nice(), uf);
       }
 
 
       template<class UF>
       type operator()(const ref<application>& self, UF& uf) const {
         return map(self, [&](const type& c) {
-            return c.map<type>(nice(), uf);
+            return c.apply(nice(), uf);
           });
       }
       
@@ -835,6 +838,8 @@ namespace slip {
 
     // instantiation
     struct instantiate_visitor {
+      using value_type = type;
+      
       using map_type = std::map< variable, variable >;
       
       type operator()(const constant& self, const map_type& m) const {
@@ -849,7 +854,7 @@ namespace slip {
 
       type operator()(const ref<application>& self, const map_type& m) const {
         return map(self, [&](const type& c) {
-            return c.map<type>(instantiate_visitor(), m);
+            return c.apply(instantiate_visitor(), m);
           });
       }
       
@@ -866,7 +871,7 @@ namespace slip {
           return std::make_pair(v, fresh(v.kind));
         });
       
-      return poly.body.map<type>(instantiate_visitor(), map);
+      return poly.body.apply(instantiate_visitor(), map);
     }
 
 
@@ -934,7 +939,7 @@ namespace slip {
 
     // generalization
     scheme state::generalize(const type& mono) const {
-      scheme res(mono.map<type>(nice(), uf));
+      scheme res(mono.apply(nice(), uf));
 
       const auto all = vars(res.body);
     

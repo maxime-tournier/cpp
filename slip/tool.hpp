@@ -17,8 +17,8 @@ namespace slip {
         argument_error::check(last - first, sizeof...(Args));
         
         try{
-          return ptr( std::move(first[I].template cast<Args>()) ... );
-        } catch( typename Value::bad_cast& e) {
+          return ptr( std::move(first[I].template get<Args>()) ... );
+        } catch( std::bad_cast e) {
           throw type_error("bad type for builtin arg");
         }
 
