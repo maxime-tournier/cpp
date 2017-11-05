@@ -109,22 +109,22 @@ namespace slip {
         out << err.first->second;
       }
 
-      void operator()(const ref<application>& self, std::ostream& out,
+      void operator()(const application& self, std::ostream& out,
                       ostream_map& osm) const {
 
         // i have no idea what i'm doing lol
 
-        if(self->func == func_ctor) {
-          self->arg.apply(ostream_visitor(true), out, osm);
+        if(self.func == func_ctor) {
+          self.arg.apply(ostream_visitor(true), out, osm);
           out << ' ';
-          self->func.apply(ostream_visitor(true), out, osm);
+          self.func.apply(ostream_visitor(true), out, osm);
         } else {
           if(parens) out << '(';
-          // const bool sub = self->func.is< ref<application> >();
+          // const bool sub = self.func.is< ref<application> >();
           
-          self->func.apply(ostream_visitor(true), out, osm);
+          self.func.apply(ostream_visitor(true), out, osm);
           out << ' ';
-          self->arg.apply(ostream_visitor(false), out, osm);
+          self.arg.apply(ostream_visitor(false), out, osm);
           if(parens) out << ')';
         
         }
@@ -175,7 +175,7 @@ namespace slip {
     
 
     type type::operator()(const type& arg) const {
-      return make_ref<application>(*this, arg);
+      return application(*this, arg);
     }
     
     type operator>>=(const type& lhs, const type& rhs) {
@@ -189,8 +189,8 @@ namespace slip {
       
       kind operator()(const constant& self) const { return self.kind; }
       kind operator()(const variable& self) const { return self.kind; }    
-      kind operator()(const ref<application>& self) const  {
-        return self->func.kind().get<constructor>().to;
+      kind operator()(const application& self) const  {
+        return self.func.kind().get<constructor>().to;
       }  
     
     };
@@ -246,6 +246,13 @@ namespace slip {
 
 
 
+    bool application::operator==(const application& other) const {
+      return func == other.func && arg == other.arg;
+    }
+    
+    bool application::operator<(const application& other) const {
+      return func < other.func || (func == other.func && arg < other.arg);
+    }
     
 
 
@@ -314,11 +321,11 @@ namespace slip {
       }
 
 
-      bool operator()(const ref<application>& self, const variable& var, UF& uf) const {
+      bool operator()(const application& self, const variable& var, UF& uf) const {
 
         return
-          uf.find(self->arg).apply(occurs_check(), var, uf) ||
-          uf.find(self->func).apply(occurs_check(), var, uf);
+          uf.find(self.arg).apply(occurs_check(), var, uf) ||
+          uf.find(self.func).apply(occurs_check(), var, uf);
       }
       
     };
@@ -362,7 +369,7 @@ namespace slip {
         assert( uf.find(rhs) == rhs );        
         
         if( type(self) != rhs && rhs.apply(occurs_check<UF>(), self, uf)) {
-          throw occurs_error{self, rhs.get< ref<application> >()};
+          throw occurs_error{self, rhs.get<application>()};
         }
 
         // kind preserving unification
@@ -399,19 +406,20 @@ namespace slip {
 
 
       // application / application
-      void operator()(const ref<application>& lhs, const ref<application>& rhs, UF& uf) const {
+      void operator()(const application& lhs, const application& rhs, UF& uf) const {
         pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
         const auto indent = pp.indent();        
         
-        uf.find(lhs->func).apply( unify_visitor(pp), uf.find(rhs->func), uf);
+        uf.find(lhs.func).apply( unify_visitor(pp), uf.find(rhs.func), uf);
 
         // dispatch on kind
-        if(lhs->arg.kind() == rows()) {
-          unify_rows(pp, uf, lhs->arg, rhs->arg);
-        } else 
+        if(lhs.arg.kind() == rows()) {
+          unify_rows(pp, uf, lhs.arg, rhs.arg);
+        } else {
           // standard unification
-        uf.find(lhs->arg).apply( unify_visitor(pp), uf.find(rhs->arg), uf);
-          
+          uf.find(lhs.arg).apply( unify_visitor(pp), uf.find(rhs.arg), uf);
+        }
+        
       }
 
     };
@@ -442,14 +450,15 @@ namespace slip {
     public:
       
       row_helper(type row) {
-        while(row.is< ref<application> >() ) {
-          auto& app = row.get< ref<application> >();
-            
-          symbol label = app->func.get< ref<application> >()->func.get<constant>().name;
-          type tau = app->func.get< ref<application> >()->arg;
+        while(row.is< application >() ) {
+          application app = row.get< application >();
+          
+          symbol label = app.func.get<application>().func.get<constant>().name;
+          type tau = app.func.get<application>().arg;
+          
           data.emplace(label, tau);
             
-          row = app->arg;
+          row = app.arg;
         }
 
         if(row.is< variable >() ) {
@@ -825,7 +834,7 @@ namespace slip {
 
 
       template<class UF>
-      type operator()(const ref<application>& self, UF& uf) const {
+      type operator()(const application& self, UF& uf) const {
         return map(self, [&](const type& c) {
             return c.apply(nice(), uf);
           });
@@ -852,7 +861,7 @@ namespace slip {
         return it->second;
       }
 
-      type operator()(const ref<application>& self, const map_type& m) const {
+      type operator()(const application& self, const map_type& m) const {
         return map(self, [&](const type& c) {
             return c.apply(instantiate_visitor(), m);
           });
@@ -921,9 +930,9 @@ namespace slip {
         res.insert(self);
       }
 
-      void operator()(const ref<application>& self, result_type& res) const {
-        self->func.apply( vars_visitor(), res );
-        self->arg.apply( vars_visitor(), res );      
+      void operator()(const application& self, result_type& res) const {
+        self.func.apply( vars_visitor(), res );
+        self.arg.apply( vars_visitor(), res );      
       }
     
     };

@@ -116,7 +116,7 @@ namespace slip {
     struct application;
 
 
-    struct type : variant< constant, variable, ref<application> > {
+    struct type : variant< constant, variable, application > {
       
       using type::variant::variant;
     
@@ -135,15 +135,18 @@ namespace slip {
       type arg;
 
       application(type func, type arg);
+      application(const application& ) = default;
 
-
+      bool operator==(const application& other) const;
+      bool operator<(const application& other) const;      
+      
       // used to remember "true" argcount in lambdas when currying
       std::size_t argc = 0;
     };
 
     template<class F>
-    static ref<application> map(const ref<application>& self, const F& f) {
-      return make_ref<application>(f(self->func), f(self->arg));
+    static application map(const application& self, const F& f) {
+      return {f(self.func), f(self.arg)};
     }
     
 
