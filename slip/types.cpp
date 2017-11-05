@@ -31,7 +31,7 @@ namespace slip {
         
       };
 
-      using ostream_map = std::map< ref<variable>, var >;
+      using ostream_map = std::map< variable, var >;
 
       struct ostream_visitor;
       
@@ -103,7 +103,7 @@ namespace slip {
         out << self.name;
       }
       
-      void operator()(const ref<variable>& self, std::ostream& out, 
+      void operator()(const variable& self, std::ostream& out, 
                       ostream_map& osm) const {
         auto err = osm.emplace( std::make_pair(self, var{osm.size(), false} ));
         out << err.first->second;
@@ -187,7 +187,7 @@ namespace slip {
     struct type_kind_visitor {
       
       kind operator()(const constant& self) const { return self.kind; }
-      kind operator()(const ref<variable>& self) const { return self->kind; }    
+      kind operator()(const variable& self) const { return self.kind; }    
       kind operator()(const ref<application>& self) const  {
         return *self->func.kind().get<constructor >().to;
       }  
@@ -290,12 +290,12 @@ namespace slip {
     
     struct occurs_error // : unification_error
     {
-      occurs_error(const ref<variable>& var, const struct type& type)
+      occurs_error(const variable& var, const struct type& type)
         : var(var), type(type) {
 
       }
       
-      ref<variable> var;
+      variable var;
       struct type type;
     };
 
@@ -304,16 +304,16 @@ namespace slip {
     template<class UF>
     struct occurs_check {
 
-      bool operator()(const constant& self, const ref<variable>& var, UF& uf) const {
+      bool operator()(const constant& self, const variable& var, UF& uf) const {
         return false;
       }
 
-      bool operator()(const ref<variable>& self, const ref<variable>& var, UF& uf) const {
+      bool operator()(const variable& self, const variable& var, UF& uf) const {
         return self == var;
       }
 
 
-      bool operator()(const ref<application>& self, const ref<variable>& var, UF& uf) const {
+      bool operator()(const ref<application>& self, const variable& var, UF& uf) const {
 
         return
           uf.find(self->arg).template map<bool>(occurs_check(), var, uf) ||
@@ -354,7 +354,7 @@ namespace slip {
 
 
       // variable / type
-      void operator()(const ref<variable>& self, const type& rhs, UF& uf) const {
+      void operator()(const variable& self, const type& rhs, UF& uf) const {
         pp << "unifying: " << type(self) << " ~ " << rhs << std::endl;
         
         assert( uf.find(self) == self );
@@ -365,17 +365,17 @@ namespace slip {
         }
 
         // kind preserving unification
-        if( self->kind != rhs.kind() ) {
+        if( self.kind != rhs.kind() ) {
           std::stringstream ss;
 
-          pretty_printer(ss) << "when unifying: " << type(self) << " :: " << self->kind 
+          pretty_printer(ss) << "when unifying: " << type(self) << " :: " << self.kind 
                              << " ~ " << rhs << " :: " << rhs.kind();
           
           throw kind_error(ss.str());
         }
         
         // TODO 
-        if( rhs.is<ref<variable> >() && self->depth < rhs.get< ref<variable> >()->depth) {
+        if( rhs.is<variable>() && self.depth < rhs.get< variable >().depth) {
           // the topmost variable wins
           uf.link(rhs, self);
           return;
@@ -437,7 +437,7 @@ namespace slip {
     class row_helper {
       std::map<symbol, type> data;
       std::set<symbol> keys;
-      ref<variable> tail;
+      std::unique_ptr<variable> tail;
     public:
       
       row_helper(type row) {
@@ -451,8 +451,8 @@ namespace slip {
           row = app->arg;
         }
 
-        if(row.is< ref<variable> >() ) {
-          tail = row.get< ref<variable> >();
+        if(row.is< variable >() ) {
+          tail.reset( new variable(row.get<variable>()) );
         }
 
         for(const auto& it : data) keys.insert(it.first);
@@ -466,12 +466,12 @@ namespace slip {
                             std::inserter(diff, diff.begin()));
         
         if(tail) {            
-          type tmp = make_ref<variable>(tail->kind, tail->depth);
+          type tmp = variable(tail->kind, tail->depth);
           for(symbol s : diff) {
             tmp = row_extension_ctor(s)(other.data.at(s))(tmp);
           }
           
-          uf.link(tail, tmp);
+          uf.link(*tail, tmp);
         } else if(!diff.empty()) {
           // TODO unification error if other has no tail?
         }
@@ -522,15 +522,15 @@ namespace slip {
 
     struct type_visitor {
 
-      using variables_type = std::map<symbol, ref<variable> >;
+      using variables_type = std::map<symbol, variable >;
       
       type operator()(const ast::type_variable& self, state& tc) const {
         try {
           const scheme& p = tc.find(self.name);
-          assert(p.body.is<ref<variable>>());
+          assert(p.body.is<variable>());
           return p.body;
         } catch( unbound_variable& ) {
-          const ref<variable> a = tc.fresh();
+          const variable a = tc.fresh();
           tc.def(self.name, tc.generalize(a));
           return a;
         }
@@ -808,7 +808,7 @@ namespace slip {
 
 
       template<class UF>
-      type operator()(const ref<variable>& self, UF& uf) const {
+      type operator()(const variable& self, UF& uf) const {
 
         const type res = uf->find(self);
         
@@ -835,13 +835,13 @@ namespace slip {
 
     // instantiation
     struct instantiate_visitor {
-      using map_type = std::map< ref<variable>, ref<variable> >;
+      using map_type = std::map< variable, variable >;
       
       type operator()(const constant& self, const map_type& m) const {
         return self;
       }
 
-      type operator()(const ref<variable>& self, const map_type& m) const {
+      type operator()(const variable& self, const map_type& m) const {
         auto it = m.find(self);
         if(it == m.end()) return self;
         return it->second;
@@ -862,8 +862,8 @@ namespace slip {
 
       // associate each bound variable to a fresh one
       auto out = std::inserter(map, map.begin());
-      std::transform(poly.forall.begin(), poly.forall.end(), out, [&](const ref<variable>& v) {
-          return std::make_pair(v, fresh(v->kind));
+      std::transform(poly.forall.begin(), poly.forall.end(), out, [&](const variable& v) {
+          return std::make_pair(v, fresh(v.kind));
         });
       
       return poly.body.map<type>(instantiate_visitor(), map);
@@ -890,8 +890,8 @@ namespace slip {
     }
     
 
-    ref<variable> state::fresh(kind k) const {
-      return make_ref<variable>(k, env->depth);
+    variable state::fresh(kind k) const {
+      return {k, env->depth};
     }
 
 
@@ -908,11 +908,11 @@ namespace slip {
     // variables
     struct vars_visitor {
 
-      using result_type = std::set< ref<variable> >;
+      using result_type = std::set< variable >;
     
       void operator()(const constant&, result_type& res) const { }
       
-      void operator()(const ref<variable>& self, result_type& res) const {
+      void operator()(const variable& self, result_type& res) const {
         res.insert(self);
       }
 
@@ -942,8 +942,8 @@ namespace slip {
       auto out = std::back_inserter(res.forall);
 
       const std::size_t depth = this->env->depth;
-      std::copy_if(all.begin(), all.end(), out, [depth](const ref<variable>& v) {
-          return v->depth >= depth;
+      std::copy_if(all.begin(), all.end(), out, [depth](const variable& v) {
+          return v.depth >= depth;
         });
 
       return res;
@@ -981,7 +981,7 @@ namespace slip {
     std::ostream& operator<<(std::ostream& out, const scheme& self) {
       pretty_printer pp(out);
       
-      for(const ref<variable>& var : self.forall) {
+      for(const variable& var : self.forall) {
         pp.osm.emplace( std::make_pair(var, pretty_printer::var{pp.osm.size(), true} ) );
       }
       

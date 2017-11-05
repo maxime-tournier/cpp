@@ -94,13 +94,19 @@ namespace slip {
 
     
     struct variable {
-      const struct kind kind;
+      std::size_t id;
+      
+      struct kind kind;
       std::size_t depth;        // TODO const?
 
       variable(struct kind kind, std::size_t depth)
         : kind(kind), depth(depth) {
-
+        static std::size_t count = 0;
+        id = count++;
       }
+
+      bool operator==(const variable& other) const { return id == other.id; }
+      bool operator<(const variable& other) const { return id < other.id; }
       
     };
 
@@ -108,7 +114,7 @@ namespace slip {
     struct application;
 
 
-    struct type : variant< constant, ref<variable>, ref<application> > {
+    struct type : variant< constant, variable, ref<application> > {
       
       using type::variant::variant;
     
@@ -141,7 +147,7 @@ namespace slip {
 
     // type schemes
     struct scheme {
-      using forall_type = std::vector< ref<variable> >;
+      using forall_type = std::vector< variable >;
       forall_type forall;
       const type body;
 
@@ -206,7 +212,7 @@ namespace slip {
 
       const scheme& find(symbol id) const;
 
-      ref<variable> fresh(kind k = terms()) const;
+      variable fresh(kind k = terms()) const;
 
       
     };
