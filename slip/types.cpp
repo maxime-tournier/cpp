@@ -595,12 +595,12 @@ namespace slip {
 
 
       // lambdas
-      inferred<type, ast::expr> operator()(const ref<ast::lambda>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::lambda& self, state& tc) const {
 
         state sub = tc.scope();
 
         // create/define arg types
-        const list< type > args = map(self->args, [&](const ast::lambda::arg& x) {
+        const list< type > args = map(self.args, [&](const ast::lambda::arg& x) {
 
             // TODO typed variables
             const type a = tc.fresh();
@@ -622,14 +622,14 @@ namespace slip {
 
         // TODO FIXME this is to fix nullary applications until typed function
         // args are available
-        if(size(self->args) == 1 && self->args->head.name() == kw::wildcard) {
+        if(size(self.args) == 1 && self.args->head.name() == kw::wildcard) {
           args->head = unit_type;
         }
         
         
 
         // infer body type in subcontext
-        const inferred<type, ast::expr> body = infer(sub, self->body);
+        const inferred<type, ast::expr> body = infer(sub, self.body);
 
         // return complete application type
         const type res = foldr(body.type, args, [](const type& lhs, const type& rhs) {
@@ -637,7 +637,7 @@ namespace slip {
           });
 
         // and rewritten lambda body
-        const ast::expr node = make_ref<ast::lambda>(self->args, body.node);
+        const ast::expr node = ast::lambda(self.args, body.node);
         
         return {res, node};
       }

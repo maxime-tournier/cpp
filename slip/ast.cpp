@@ -56,12 +56,12 @@ namespace slip {
       }
 
 
-      sexpr operator()(const ref<lambda>& self) const {
+      sexpr operator()(const lambda& self) const {
         return kw::lambda
-          >>= map(self->args, [this](const lambda::arg& s) -> sexpr {
+          >>= map(self.args, [this](const lambda::arg& s) -> sexpr {
               return s.apply( repr_visitor() );
             })
-          >>= repr(self->body)
+          >>= repr(self.body)
           >>= sexpr::list();
       }
 
@@ -245,7 +245,7 @@ namespace slip {
         // TODO make them unit here?
         if(!vars) vars = kw::wildcard >>= vars;
         
-        return make_ref<lambda>(vars, check_expr(args->tail->head));
+        return lambda(vars, check_expr(args->tail->head));
         
       } catch( error& ) {
         throw syntax_error("(lambda (`arg`...) `expr`)");

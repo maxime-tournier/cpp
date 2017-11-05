@@ -82,7 +82,7 @@ namespace slip {
                            literal<real>,
                            literal< ref<string> >,
                            variable,
-                           ref<lambda>,
+                           lambda,
                            ref<application>,
                            ref<definition>,
                            ref<binding>,
@@ -143,10 +143,11 @@ namespace slip {
       
       lambda(const list<arg>& args, const expr& body)
         : args(args), body(body) { }
-      
-      const list<arg> args;
-      const expr body;
 
+      lambda(const lambda&) = default;
+      
+      list<arg> args;
+      expr body;
     };
 
     
