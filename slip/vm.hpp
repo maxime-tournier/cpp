@@ -37,10 +37,10 @@ namespace slip {
     using slip::real;
     using slip::list;
 
-
-    
     using slip::string;
 
+    // TODO proper nan-tagged values
+    
     struct value : variant< unit, boolean, integer, real, symbol, ref<string>, list<value>,
                             builtin,
                             ref<closure>, ref<partial>,

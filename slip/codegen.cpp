@@ -148,17 +148,17 @@ namespace slip {
       }
 
       
-      void operator()(const ref<ast::definition>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::definition& self, vm::bytecode& res, ref<variables>& ctx) const {
 
         // 
-        ctx->add_var(self->id);
+        ctx->add_var(self.id);
       
         // save some space on the stack by pushing a dummy var
         res.push_back( opcode::PUSHU );
         
         // TODO better ?
-        ctx->defining = &self->id;
-        compile(res, ctx, self->value);
+        ctx->defining = &self.id;
+        compile(res, ctx, self.value);
         ctx->defining = nullptr;
         
         // def evals to nil, so we just swap result and dummy var
@@ -166,11 +166,11 @@ namespace slip {
       }
 
 
-      void operator()(const ref<ast::binding>& self, vm::bytecode& res, ref<variables>& ctx) const {
-        operator()(make_ref<ast::definition>(self->id, self->value), res, ctx);
+      void operator()(const ast::binding& self, vm::bytecode& res, ref<variables>& ctx) const {
+        operator()(ast::definition(self.id, self.value), res, ctx);
       }
       
-      void operator()(const ref<ast::lambda>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::lambda& self, vm::bytecode& res, ref<variables>& ctx) const {
         // sub variables
         ref<variables> sub = make_ref<variables>(ctx);
 
@@ -182,7 +182,7 @@ namespace slip {
         }
 
         // populate sub with args
-        for(const ast::lambda::arg& arg : self->args) {
+        for(const ast::lambda::arg& arg : self.args) {
           const symbol s = arg.name();
             
           if(s == kw::wildcard) {
@@ -207,7 +207,7 @@ namespace slip {
         res.label(start);
         // res.push_back( opcode::PEEK );
 
-        compile(res, sub, self->body);
+        compile(res, sub, self.body);
         res.push_back( opcode::RET );
         
         // push closure      
@@ -231,7 +231,7 @@ namespace slip {
           compile(res, ctx, ast::variable{s});
         }
 
-        const std::size_t m = ordered.size(), n = size(self->args);
+        const std::size_t m = ordered.size(), n = size(self.args);
         
         res.push_back( opcode::CLOS );
         res.push_back( vm::instruction(m) ); 
@@ -249,17 +249,17 @@ namespace slip {
       }
 
       
-      void operator()(const ref<ast::application>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::application& self, vm::bytecode& res, ref<variables>& ctx) const {
 
         // compile args in reverse order
-        const std::size_t n = foldr(0, self->args, [&](const ast::expr& e, std::size_t i) {
+        const std::size_t n = foldr(0, self.args, [&](const ast::expr& e, std::size_t i) {
             compile(res, ctx, e);
             return i + 1;
           });
 
         // special applications
-        if(self->func.is< ast::selection >() ) {
-          select(self->func.get<ast::selection>(), res, ctx);
+        if(self.func.is< ast::selection >() ) {
+          select(self.func.get<ast::selection>(), res, ctx);
 
           // extra args
           if(n > 1) {
@@ -272,7 +272,7 @@ namespace slip {
         
         
         // compile function
-        compile(res, ctx, self->func);
+        compile(res, ctx, self.func);
 
         // TODO optimize nullary applications
         
