@@ -963,16 +963,29 @@ namespace slip {
 
 
 
+
+    struct toplevel_visitor {
+      using value_type = inferred<scheme, ast::toplevel>;
+
+      value_type operator()(const ast::expr& self, state& tc) {
+        const inferred<type, ast::expr> res = infer(tc, self);        
+        return {tc.generalize(res.type), self};
+      }
+
+
+      value_type operator()(const ast::module& self, state& tc) {
+        std::stringstream ss;
+        ss << "type checking/inference not implemented: " << repr(self);
+        
+        throw error(ss.str());
+      }
+      
+      
+    };
+    
   
-    inferred<scheme, ast::toplevel> infer(state& self, const ast::toplevel& node) {
-
-      static const int once = (self = self.scope(), 0);
-      
-      const inferred<type, ast::expr> res = infer(self, node.get<ast::expr>());
-
-      const type mono = self.generalize(res.type).body;
-      
-      return {self.generalize(res.type), node};
+    inferred<scheme, ast::toplevel> infer(state& tc, const ast::toplevel& node) {
+      return node.apply(toplevel_visitor(), tc);
     }
 
 
