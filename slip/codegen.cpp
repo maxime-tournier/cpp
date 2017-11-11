@@ -418,7 +418,7 @@ namespace slip {
       
       void operator()(const ast::expr& self, vm::bytecode& res, ref<variables>& ctx) const {
         std::stringstream ss;
-        ss << self;
+        ss << repr(self);
         throw error("compile: unimplemented: " + ss.str());
       }
     };

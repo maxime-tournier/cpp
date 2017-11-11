@@ -783,7 +783,7 @@ namespace slip {
       // fallback case
       inferred<type, ast::expr> operator()(const ast::expr& self, state& tc) const {
         std::stringstream ss;
-        ss << "type inference unimplemented for " << self;
+        ss << "type inference unimplemented for " << repr(self);
         throw error(ss.str());
       }
       

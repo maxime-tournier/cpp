@@ -97,9 +97,7 @@ namespace slip {
     };
 
     sexpr repr(const expr& self);
-    std::ostream& operator<<(std::ostream& out, const expr& self);
     
-
     struct record::row {
       const symbol label;
       const expr value;
@@ -196,11 +194,9 @@ namespace slip {
 
     
     // TODO type, etc
-    struct toplevel : variant<expr> {
+    struct toplevel : variant<expr, module> {
       using toplevel::variant::variant;
     };
-    
-    std::ostream& operator<<(std::ostream& out, const toplevel& self);    
     
     sexpr repr(const toplevel& self);
     

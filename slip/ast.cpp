@@ -136,10 +136,6 @@ namespace slip {
     }
 
     
-    std::ostream& operator<<(std::ostream& out, const expr& self) {
-      return out << repr(self);
-    }
-    
     
 
     static expr check_expr(const sexpr& e);
