@@ -1,14 +1,11 @@
 #include "vm.hpp"
 #include <iostream>
 
-#include "syntax.hpp"
 #include "parse.hpp"
 
 #include <sstream>
 
 #include "tool.hpp"
-#include "syntax.hpp"
-
 #include "../indices.hpp"
 
 

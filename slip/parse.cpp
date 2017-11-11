@@ -2,7 +2,6 @@
 #include "parse.hpp"
 
 #include "sexpr.hpp"
-#include "syntax.hpp"
 
 namespace slip {
 

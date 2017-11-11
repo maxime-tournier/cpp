@@ -89,11 +89,6 @@ namespace slip {
       
     };
 
-    static constant make_constant(symbol name, struct kind kind = terms() ) {
-      return {name, kind};
-    }
-    
-
     
     struct variable {
       std::size_t id;

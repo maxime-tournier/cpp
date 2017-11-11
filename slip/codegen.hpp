@@ -3,7 +3,7 @@
 
 #include <map>
 
-#include "eval.hpp"
+#include "sexpr.hpp"
 #include "context.hpp"
 
 namespace slip {
@@ -29,9 +29,9 @@ namespace slip {
       
       const symbol* defining = nullptr;
 
-      // push unnamed local variable, return its index
+      // push anonymous local variable, return its index
       integer add_var() { return size++; }
-
+      
       // push named (unique) local variable
       integer add_var(symbol s) {
         auto res = locals.insert( std::make_pair(s, add_var() ) );
@@ -42,23 +42,18 @@ namespace slip {
         return res.first->second;
       }
 
+      // declare anonymous/named function args, return its index (backwards) from stack top
       integer add_arg() { return args++; }
       integer add_arg(symbol s) {
         auto res = locals.insert( std::make_pair(s, -add_arg() ) );
-        if(!res.second) {
-          throw slip::error("duplicate argument");
-        }
+        if(!res.second) throw std::runtime_error("duplicate variable");
+        
         return res.first->second;
       }
-      
       
 
-      std::size_t capture(symbol s) {
-        if(!parent) throw slip::unbound_variable(s);
-      
-        auto res = captured.insert( std::make_pair(s, captured.size()));
-        return res.first->second;
-      }
+      // add s to the list of captured variables
+      std::size_t capture(symbol s);
     
     };
 

@@ -1,6 +1,5 @@
 #include "jit.hpp"
 
-#include "eval.hpp"
 #include "codegen.hpp"
 
 #include "ast.hpp"

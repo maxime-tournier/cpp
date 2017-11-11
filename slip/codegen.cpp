@@ -17,8 +17,18 @@ namespace slip {
     using vm::bytecode;
     using vm::opcode;
 
-
+    // TODO much smaller actually :-/
     static constexpr std::size_t max_record_size = 256;
+
+
+    
+    std::size_t variables::capture(symbol s) {
+      if(!parent) throw std::runtime_error("unbound variable: " + s.str());
+      
+      auto res = captured.insert( std::make_pair(s, captured.size()));
+      return res.first->second;
+    }    
+
     
     // TODO 
     static std::size_t prime_hash(symbol label) {
@@ -57,11 +67,6 @@ namespace slip {
     static void compile(vm::bytecode& res, ref<variables>& ctx, const ast::expr& e);
 
 
-    static void quote(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
-      // literal(res, args->head);
-    }
-
-
     static void pure(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
       // return compile(res, ctx, args->head);
     }
@@ -85,7 +90,7 @@ namespace slip {
       } 
 
       // this should not happen with typechecking
-      throw unbound_variable(name);
+      throw std::runtime_error("unbound variable: " + name.str());
 
     }
 

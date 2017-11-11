@@ -6,8 +6,6 @@
 #include "sexpr.hpp"
 
 
-// TODO repr ?
-
 namespace slip {
 
   
@@ -16,11 +14,12 @@ namespace slip {
     const extern symbol seq, var, pure, run;
     
     const extern symbol record;
-    
-    const extern symbol quote, unquote, quasiquote;
-    
-    const extern symbol type;
 
+    const extern symbol module;
+
+
+    // 
+    const extern symbol quote, unquote, quasiquote;
     const extern symbol ref, get, set;
     
     // const extern symbol ref, getref, setref;
@@ -182,10 +181,8 @@ namespace slip {
     };
 
 
-    
-
-    // structures
-    struct structure {
+    // module definitions
+    struct module {
       const symbol name;
       const list< type_variable > args;
 
@@ -195,7 +192,6 @@ namespace slip {
       };
 
       const list<row> rows;
-      
     };
 
     

@@ -1,6 +1,6 @@
 #include "ast.hpp"
 
-#include "syntax.hpp"
+#include <map>
 
 namespace slip {
 
@@ -17,8 +17,7 @@ namespace slip {
       unquote = "unquote";
 
     const symbol record = "record";
-    
-    const symbol type = "type";
+    const symbol module = "module";    
     
     const symbol var = "var", pure = "pure", run = "run";
     const symbol ref = "ref", get = "get", set = "set";
@@ -116,6 +115,9 @@ namespace slip {
       sexpr operator()(const type_application& self) const {
         return repr(self.type) >>= map(self.args, [](const ast::type& t) { return repr(t); } );
       }
+
+      
+      
       
       // template<class T>
       // sexpr operator()(const T& self) const {

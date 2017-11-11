@@ -14,7 +14,6 @@ namespace slip {
     struct unbound_variable : type_error {
       unbound_variable(symbol id) : type_error("unbound variable \"" + id.str() + "\"") { }
     };
-
     
     // pretty-printing types
     struct pretty_printer {
@@ -159,9 +158,9 @@ namespace slip {
     }
     
     
-    const type func_ctor = make_constant("->", terms() >>= terms() >>= terms() );
-    const type list_ctor = make_constant("list", terms() >>= terms() );
-    const type io_ctor = make_constant("io", terms() >>= terms() );
+    const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
+    const type list_ctor = constant("list", terms() >>= terms() );
+    const type io_ctor = constant("io", terms() >>= terms() );
     
 
     // row extension
@@ -170,8 +169,8 @@ namespace slip {
       return constant(label, row_extension_kind);
     }
 
-    const type record_ctor = make_constant("record", rows() >>= terms());
-    const type empty_row_ctor = make_constant("{}", rows());
+    const type record_ctor = constant("record", rows() >>= terms());
+    const type empty_row_ctor = constant("{}", rows());
     
 
     type type::operator()(const type& arg) const {
@@ -258,12 +257,12 @@ namespace slip {
 
     
     // term types
-    const type unit_type = make_constant("unit"),
-              boolean_type = make_constant("boolean"),
-              integer_type = make_constant("integer"),
-              real_type = make_constant("real"),
-              string_type = make_constant("string"),
-              symbol_type = make_constant("symbol");
+    const type unit_type = constant("unit"),
+              boolean_type = constant("boolean"),
+              integer_type = constant("integer"),
+              real_type = constant("real"),
+              string_type = constant("string"),
+              symbol_type = constant("symbol");
     
 
     

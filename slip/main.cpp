@@ -17,11 +17,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include "eval.hpp"
-
 #include "tool.hpp"
 #include "vm.hpp"
-#include "syntax.hpp"
 
 #include "jit.hpp"
 
@@ -82,23 +79,6 @@ static int process(std::istream& in, Action action) {
 
   return 1;
 }
-
-
-static const auto interpreter = [] {
-  const ref<slip::environment> ctx = slip::std_env();
-  
-  return [ctx](slip::sexpr&& e) {
-    const slip::sexpr ex = expand_seq(ctx, e);
-    const slip::value val = eval(ctx, ex);
-    
-    if(!val.is<slip::unit>()) {
-      std::cout << val << std::endl;  
-    }
-    
-    return parse::pure(e);
-  };
-};
-
 
 
 
@@ -226,7 +206,6 @@ static po::variables_map parse_options(int argc, char** argv) {
     ("help", "produce help message")
     ("filename", po::value< std::string >(), "input file")
 
-    ("interpreter,i", "interpreter")
     ("bytecode,b", "bytecode")
     ("dump", "dump bytecode")    
     ;
@@ -251,25 +230,15 @@ static po::variables_map parse_options(int argc, char** argv) {
 
 
 
-
-
 int main(int argc, char** argv) {
 
   const po::variables_map vm = parse_options(argc, argv);
 
   using action_type = std::function< parse::any<slip::sexpr> (slip::sexpr&&) > ;
   
-  action_type action = nullptr;
-
+  const bool dump = vm.count("dump");    
+  action_type action = compiler(dump);
   
-  if( vm.count("interpreter") ) {
-    action = interpreter();
-  } else {
-    const bool dump = vm.count("dump");    
-    action = compiler(dump);
-  }
-  
-
   if( vm.count("filename") ) {
     const std::string filename = vm["filename"].as< std::string >();
     std::ifstream file( filename );

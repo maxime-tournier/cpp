@@ -1,13 +1,15 @@
 #ifndef LISP_VM_HPP
 #define LISP_VM_HPP
 
-#include "eval.hpp"
-
 #include "../dynamic_sized.hpp"
-
 #include "../indices.hpp"
 
 #include <iostream>
+#include <vector>
+#include <map>
+
+#include "sexpr.hpp"
+
 
 namespace slip {
 
@@ -58,8 +60,10 @@ namespace slip {
 
       
     };
-    // not sure about this though
-    static_assert(sizeof(value) == sizeof(slip::value), "value size mismatch");
+
+    
+    // // not sure about this though
+    // static_assert(sizeof(value) == sizeof(slip::value), "value size mismatch");
 
     
     std::ostream& operator<<(std::ostream& out, const value& self);
