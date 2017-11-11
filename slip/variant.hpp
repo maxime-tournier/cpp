@@ -6,7 +6,6 @@
 #include <memory>
 
 
-
 namespace detail {
 
   // pick the right index/constructor from a value

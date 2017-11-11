@@ -18,6 +18,8 @@ namespace slip {
 
     struct stack : machine::data_stack_type { };
 
+    static const instruction* dump_instr(std::ostream& out, const instruction* self);
+    
     value pop(stack* self) {
       assert(self->size() > 0);
       value res = std::move(self->back());
@@ -75,7 +77,7 @@ namespace slip {
         {opcode::STOREC, 1},      
         {opcode::CLOS, 3},
 
-        {opcode::RECORD, 3},
+        {opcode::RECORD, 2},
         {opcode::GETATTR, 1},      
       
       };
@@ -191,7 +193,7 @@ namespace slip {
 
 
 
-    const instruction* dump_instr(std::ostream& out, const instruction* self) {
+    static const instruction* dump_instr(std::ostream& out, const instruction* self) {
       
       switch(self->op) {
         // case opcode::PUSH:
@@ -553,7 +555,9 @@ namespace slip {
             const std::size_t hash = code[++ip].value;
             
             assert( data_stack.back().is< ref<record> >() );
-            const ref<record>& arg = data_stack.back().get< ref<record> >();
+
+            // note: we don't alias since we affect right after
+            const ref<record> arg = data_stack.back().get< ref<record> >();
 
             const std::size_t index = arg->magic % hash;
 
