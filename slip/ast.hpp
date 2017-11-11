@@ -68,10 +68,10 @@ namespace slip {
       list<branch> branches;
     };
 
-
-    struct row;
-
     struct record {
+      
+      struct row;
+
       list<row> rows;
     };
     
@@ -101,19 +101,24 @@ namespace slip {
     std::ostream& operator<<(std::ostream& out, const expr& self);
     
 
+    struct record::row {
+      const symbol label;
+      const expr value;
+    };
+    
     struct type;
 
     struct type_constructor {
-      symbol name;
+      const symbol name;
     };
 
     struct type_variable {
-      symbol name;
+      const symbol name;
     };
 
     struct type_application {
-      type_constructor type;
-      list<ast::type> args;
+      const type_constructor type;
+      const list<ast::type> args;
     };
     
     struct type : variant< type_constructor, type_variable, type_application > {
@@ -152,9 +157,6 @@ namespace slip {
 
     
     struct application {
-      application(const expr& func, const list<expr>& args)
-        : func(func), args(args) { }
-        
       const expr func;
       const list<expr> args;
     };
@@ -163,10 +165,6 @@ namespace slip {
 
     // let bindings
     struct definition {
-      definition(const symbol& id, const expr& value)
-        : id(id),
-          value(value) { }
-        
       const symbol id;
       const expr value;
     };
@@ -174,31 +172,32 @@ namespace slip {
     
     // monadic binding in a sequence
     struct binding {
-      binding(const symbol& id, const expr& value)
-        : id(id),
-          value(value) { } 
-      
       const symbol id;
       const expr value;
     };
 
 
     struct branch {
-      branch(const expr& test, const expr& value)
-        : test(test), value(value) { }
-      
-      expr test, value;
+      const expr test, value;
     };
 
 
-    struct row {
-      row(const symbol& label, const expr& value)
-        : label(label), value(value) { }
-      
-      symbol label;
-      expr value;
-    };
     
+
+    // structures
+    struct structure {
+      const symbol name;
+      const list< type_variable > args;
+
+      struct row {
+        const symbol name;
+        const struct type type;
+      };
+
+      const list<row> rows;
+      
+    };
+
     
     // TODO type, etc
     struct toplevel : variant<expr> {
@@ -210,6 +209,11 @@ namespace slip {
     sexpr repr(const toplevel& self);
     
     toplevel check_toplevel(const sexpr& e);
+
+
+
+
+    
     
   }
   

@@ -105,7 +105,7 @@ namespace slip {
       }
 
       sexpr operator()(const record& self) const {
-        return symbol(kw::record) >>= map(self.rows, [](const row& r) -> sexpr {
+        return symbol(kw::record) >>= map(self.rows, [](const record::row& r) -> sexpr {
             return r.label >>= repr(r.value) >>= sexpr::list();
           });
       }
@@ -266,7 +266,7 @@ namespace slip {
       // fix nullary applications
       if(!args) args = literal<unit>() >>= args;
       
-      return application( check_expr(self->head), args);
+      return application{ check_expr(self->head), args};
     }
     
     
@@ -278,8 +278,8 @@ namespace slip {
         if( size(items) != 2 ) throw fail();
         if( !items->head.is<symbol>() ) throw fail();
 
-        return definition(items->head.get<symbol>(),
-                          check_expr(items->tail->head));
+        return definition{items->head.get<symbol>(),
+            check_expr(items->tail->head)};
         
       } catch( fail& ) {
         throw syntax_error("(def `symbol` `expr`)");
@@ -307,7 +307,7 @@ namespace slip {
               
               if(size(lst) != 2) throw fail();
 
-              return branch(check_expr(lst->head), check_expr(lst->tail->head));
+              return branch{check_expr(lst->head), check_expr(lst->tail->head)};
             }) };
 
         return res;
@@ -323,7 +323,7 @@ namespace slip {
     static expr check_record(const sexpr::list& items) {
       struct fail { };
       try{ 
-        const record result = { map(items, [](const sexpr& e) -> row {
+        const record result = { map(items, [](const sexpr& e) -> record::row {
             
             if(!e.is<sexpr::list>() ) throw fail();
             const sexpr::list& lst = e.get<sexpr::list>();
@@ -331,7 +331,7 @@ namespace slip {
             if(size(lst) != 2) throw fail();
             if(!lst->head.is<symbol>()) throw fail();
             
-            return row(lst->head.get<symbol>(), check_expr(lst->tail->head));
+            return {lst->head.get<symbol>(), check_expr(lst->tail->head)};
           })
         };
         
@@ -400,7 +400,7 @@ namespace slip {
         if( size(items) != 2 ) throw fail();
         if( !items->head.is<symbol>() ) throw fail();
 
-        return binding(items->head.get<symbol>(), check_expr(items->tail->head));
+        return binding{items->head.get<symbol>(), check_expr(items->tail->head)};
       } catch( fail& ) {
         throw syntax_error("(var `symbol` `expr`)");
       }

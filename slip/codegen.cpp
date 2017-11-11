@@ -167,7 +167,7 @@ namespace slip {
 
 
       void operator()(const ast::binding& self, vm::bytecode& res, ref<variables>& ctx) const {
-        operator()(ast::definition(self.id, self.value), res, ctx);
+        operator()(ast::definition{self.id, self.value}, res, ctx);
       }
       
       void operator()(const ast::lambda& self, vm::bytecode& res, ref<variables>& ctx) const {
@@ -374,7 +374,7 @@ namespace slip {
 
        // compile row values + build signature
         std::vector< symbol > sig;
-        for(const ast::row& r : self.rows ) {
+        for(const ast::record::row& r : self.rows ) {
           compile(res, ctx, r.value);
           sig.emplace_back(r.label);
         }
@@ -392,7 +392,7 @@ namespace slip {
           std::size_t n[ size ];
 
           std::size_t i = 0;
-          for(const ast::row& r : self.rows ) {
+          for(const ast::record::row& r : self.rows ) {
             a[i] = i;
             n[i] = prime_hash(r.label);
             ++i;

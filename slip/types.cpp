@@ -671,10 +671,9 @@ namespace slip {
         }
 
         // rewrite ast node
-        const ast::expr node =
-          ast::application(func.node, map(args, [](const inferred<type, ast::expr>& e) {
-                return e.node;
-              }));
+        const ast::application node = {func.node, map(args, [](const inferred<type, ast::expr>& e) {
+              return e.node;
+            })};
         
         return {result, node};
       }
@@ -684,14 +683,14 @@ namespace slip {
       inferred<type, ast::expr> operator()(const ast::condition& self, state& tc) const {
         const type result = tc.fresh();
 
-        const ast::expr node = ast::condition{ map(self.branches, [&](const ast::branch& b) {
-            const inferred<type, ast::expr> test = infer(tc, b.test);
-            tc.unify(boolean_type, test.type);
-            
-            const inferred<type, ast::expr> value = infer(tc, b.value);
-            tc.unify(value.type, result);
-
-            return ast::branch(test.node, value.node);
+        const ast::condition node = { map(self.branches, [&](const ast::branch& b) {
+              const inferred<type, ast::expr> test = infer(tc, b.test);
+              tc.unify(boolean_type, test.type);
+              
+              const inferred<type, ast::expr> value = infer(tc, b.value);
+              tc.unify(value.type, result);
+              
+              return ast::branch{test.node, value.node};
             })} ;
         
         return {result, node};
@@ -713,7 +712,7 @@ namespace slip {
 
         tc.def(self.id, tc.generalize(value.type));
 
-        const ast::expr node = ast::definition(self.id, value.node);
+        const ast::definition node = {self.id, value.node};
 
         return {io_ctor(unit_type), node};
       }
@@ -737,7 +736,7 @@ namespace slip {
         tc.find(self->id);
 
         // TODO should we rewrite as a def?
-        const ast::expr node = ast::binding(self->id, value.node);
+        const ast::binding node = {self->id, value.node};
         return {io_ctor(unit_type), node};
         
       }
@@ -765,7 +764,7 @@ namespace slip {
       // record literals
       inferred<type, ast::expr> operator()(const ast::record& self, state& tc) const {
         // TODO rewrite value terms
-        const type row = foldr( empty_row_ctor, self.rows, [&tc](const ast::row& lhs, const type& rhs) {
+        const type row = foldr( empty_row_ctor, self.rows, [&tc](const ast::record::row& lhs, const type& rhs) {
             return row_extension_ctor(lhs.label)( infer(tc, lhs.value).type )( rhs );
           });
         
