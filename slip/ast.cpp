@@ -26,6 +26,11 @@ namespace slip {
   
   namespace ast {
 
+    template<class T>
+    static bool starts_with(const sexpr::list& x, const T& what) {
+      return x && x->head.is<T>() && x->head.get<T>() == what;
+    }
+    
 
     struct repr_visitor {
 
@@ -116,7 +121,17 @@ namespace slip {
         return repr(self.type) >>= map(self.args, [](const ast::type& t) { return repr(t); } );
       }
 
-      
+
+      sexpr operator()(const expr& self) const {
+        return self.apply(repr_visitor());
+      }
+
+
+      sexpr operator()(const module& self) const {
+        return kw::module >>= repr(self.type) >>= map(self.rows, [&](const module::row& row) -> sexpr {
+            return row.name >>= repr(row.type) >>= sexpr::list();
+          });
+      }
       
       
       // template<class T>
@@ -403,10 +418,43 @@ namespace slip {
         throw syntax_error("(var `symbol` `expr`)");
       }
     }
-    
+
+
+    static module check_module(const sexpr::list& items) {
+      struct fail { };
+      try {
+        if(size(items) < 1) throw fail();
+        
+        const ast::type type = check_type(items->head);
+
+        // TODO make sure we only have type variables as parameters
+        const list<module::row> rows = map(items->tail, [](const sexpr& e) {
+            if(!e.is<sexpr::list>()) throw fail();
+            const sexpr::list& self = e.get<sexpr::list>();
+
+            if(size(self) != 2) throw fail();
+            if(!self->head.is<symbol>()) throw fail();
+            
+            return module::row{self->head.get<symbol>(), check_type(self->tail->head)};
+          });
+
+        return module{type, rows};
+      } catch( fail ) {
+        throw syntax_error("(module (`symbol` `tyvars`...)  (`symbol` `type`)...)");
+      }
+    }
 
     struct toplevel_visitor : expr_visitor {
       using value_type = toplevel;
+
+      toplevel operator()(const sexpr::list& self) const {
+        if( starts_with(self, kw::module) ) {
+          return check_module(self->tail);
+        }
+        
+        return expr_visitor::operator()(self);
+      }
+      
       
       template<class T>
       toplevel operator()(const T& self) const {
@@ -426,7 +474,7 @@ namespace slip {
     }
 
     sexpr repr(const toplevel& self) {
-      return repr(self.get<expr>());
+      return self.apply( repr_visitor() );
     }
     
   }

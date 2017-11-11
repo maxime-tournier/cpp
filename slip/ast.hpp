@@ -181,9 +181,8 @@ namespace slip {
 
     // module definitions
     struct module {
-      const symbol name;
-      const list< type_variable > args;
-
+      struct type type;
+      
       struct row {
         const symbol name;
         const struct type type;
@@ -201,10 +200,6 @@ namespace slip {
     sexpr repr(const toplevel& self);
     
     toplevel check_toplevel(const sexpr& e);
-
-
-
-
     
     
   }
