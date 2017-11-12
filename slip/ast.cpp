@@ -56,7 +56,7 @@ namespace slip {
 
       
       sexpr operator()(const lambda::typed& self) const {
-        return self.name >>= repr(self.type) >>= sexpr::list();
+        return self.ctor >>= self.arg >>= sexpr::list();
       }
 
 
@@ -232,14 +232,15 @@ namespace slip {
         if(!e.is<sexpr::list>()) throw error();
 
         const sexpr::list& arg = e.get<sexpr::list>();
-        if( size(arg) != 2) throw error();
-
+        if( size(arg) < 2) throw error();
+        
         if( !arg->head.is<symbol>() ) throw error();
+        if( !arg->tail->head.is<symbol>() ) throw error();        
 
-        return lambda::typed{ arg->head.get<symbol>(), check_type(arg->tail->head) };            
+        return lambda::typed{arg->head.get<symbol>(), arg->tail->head.get<symbol>()};
         
       } catch(error& ) {
-        throw syntax_error("typed arg: `symbol` | (`symbol` `type`)");
+        throw syntax_error("typed arg: `symbol` | (`symbol` `symbol`)");
       }
     }
     

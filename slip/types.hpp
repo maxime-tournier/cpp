@@ -179,6 +179,9 @@ namespace slip {
     };
 
 
+    
+
+    
     // 
     struct datatypes : context< datatypes, type > {
       std::size_t depth;
@@ -190,8 +193,15 @@ namespace slip {
       }
       
     };
-    
 
+    struct data_constructor {
+      scheme source;
+      scheme target;
+
+      // target -> source (must be rank1)      
+      scheme unbox;
+    };
+    
     // inference state monad
     class state {
       using env_type = environment;
@@ -201,11 +211,14 @@ namespace slip {
       ref< uf_type > uf;
 
     public:
+      
       // type constructors
       using ctor_type = datatypes;
       ref<ctor_type> ctor;
 
-
+      // data constructors (FCP style)
+      std::map<symbol, data_constructor> data_ctor;
+      
     public:
       state(ref<env_type> env = make_ref<env_type>(),
             ref<uf_type> uf = make_ref<uf_type>(),

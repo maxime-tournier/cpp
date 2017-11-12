@@ -135,16 +135,16 @@ namespace slip {
     struct lambda {
 
       struct typed {
-        symbol name;
-        struct ast::type type;
+        symbol ctor;
+        symbol arg;
       };
 
       struct arg : variant<symbol, typed> {
         using arg::variant::variant;
 
         symbol name() const {
-          if( is<symbol>() ) return get<symbol>();
-          else return get<typed>().name;
+          if(is<symbol>()) return get<symbol>();
+          return get<typed>().arg;
         }
       };
       

@@ -157,7 +157,6 @@ static const auto compiler = [](bool dump_bytecode) {
     tc->ctor->locals.emplace(func_ctor.get<constant>().name, func_ctor);        
   }
 
-
   const type string_type = traits< ref<vm::string> >::type();
   const type unit_type = traits< vm::unit >::type();
   

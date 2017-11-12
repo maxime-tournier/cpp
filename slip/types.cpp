@@ -550,24 +550,36 @@ namespace slip {
 
         state sub = tc.scope();
 
-        // create/define arg types
+        // create/define (outer) arg types
         const list< type > args = map(self.args, [&](const ast::lambda::arg& x) {
 
-            // TODO typed variables
-            const type a = tc.fresh();
-
+            // typed lambda variables: use data constructor unbox function to
+            // deduce inner/outer types
             if(x.is<ast::lambda::typed>()) {
-              const type b = infer(*tc.ctor, x.get<ast::lambda::typed>().type);
-              tc.unify(a, b);
+              
+              const data_constructor& dctor = tc.data_ctor.at(x.get<ast::lambda::typed>().ctor);
+              
+              const type outer = tc.fresh(), inner = tc.fresh();
+              const type unbox = sub.instantiate(dctor.unbox);
+              
+              tc.unify(unbox, outer >>= inner);
+              
+              if(!(x.name() == kw::wildcard) ) {
+                sub.def(x.name(), sub.generalize(inner) );
+              }
+              
+              return outer;
+            } else {
+              const type a = tc.fresh();
+              
+              // note: var stays monomorphic after generalization              
+              if(!(x.name() == kw::wildcard) ) {
+                sub.def(x.name(), sub.generalize(a) );
+              }
+
+              return a;
             }
 
-            
-            // note: var stays monomorphic after generalization
-            if(!(x.name() == kw::wildcard) ) {
-              sub.def(x.name(), sub.generalize(a) );
-            }
-            
-            return a;
           });
 
 
@@ -599,7 +611,6 @@ namespace slip {
       inferred<type, ast::expr> operator()(const ast::application& self, state& tc) const {
 
         // TODO currying 
-        
         const inferred<type, ast::expr> func = infer(tc, self.func);
 
         // infer arg types
@@ -933,7 +944,10 @@ namespace slip {
         }
 
         // TODO how to infer kind?
-        throw unbound_variable(self.name);        
+        const kind k = terms();
+        const type res = variable(k, ctors.depth);
+        ctors.locals.emplace(self.name, res);
+        return res;
       }
 
       
@@ -995,35 +1009,35 @@ namespace slip {
         // type constructor
         const type ctor = constant(self.type.ctor.name, k);
         // TODO recursive definition?
-
-        // typecheck rows
+ 
+        // typecheck rows and build unboxed type
         state ctx = tc.scope();
+
+        const type rows = foldr(empty_row_ctor, self.rows, [&](const ast::module::row& lhs, const type& rhs) {
+            return row_extension_ctor(lhs.name)( infer(sub, lhs.type) ) (rhs);
+          });
         
-        for(const ast::module::row& r : self.rows) {
-          const scheme p = ctx.generalize( infer(sub, r.type) );
-          ctx.def(r.name, p);
-          std::clog << r.name << " : " << p << std::endl;
-        }
-        
-        // register it
+        const type unboxed = record_ctor(rows);
+
+        // register type constructor
         if(!tc.ctor->locals.emplace(self.type.ctor.name, ctor).second) {
           throw type_error("module redefinition");
         }
-        
-        // TODO typecheck and store module rows somewhere
 
-        // TODO all the stuff
-
-        // HACK
-        const type res = foldl(ctor, self.type.args, [&](const type& lhs, const ast::type& rhs) {
+        // module type (ctor applied to its variables)
+        const type module = foldl(ctor, self.type.args, [&](const type& lhs, const ast::type& rhs) {
             return lhs(sub.locals.at(rhs.get<ast::type_variable>().name));
           });
 
-        return {tc.generalize(res), self};
+        // data constructor
+        data_constructor data = {ctx.generalize( unboxed ),
+                                 tc.generalize( module ),
+                                 tc.generalize( module >>= unboxed ) };
         
-        std::stringstream ss;
-        ss << "type checking/inference not implemented: " << repr(self);
-        throw error(ss.str());
+        tc.data_ctor.emplace(self.type.ctor.name, data);
+
+        // TODO this should be io unit
+        return {tc.generalize(module), self};
       }
       
       
