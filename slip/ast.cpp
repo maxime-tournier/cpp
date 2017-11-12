@@ -427,7 +427,14 @@ namespace slip {
         
         const ast::type type = check_type(items->head);
 
-        // TODO make sure we only have type variables as parameters
+        // make sure application args are all type variables
+        if(auto app = type.get_if<type_application>()) {
+          for(const ast::type& x : app->args) {
+            if(!x.is<type_variable>()) throw fail();
+          }
+        }
+
+        // extract rows
         const list<module::row> rows = map(items->tail, [](const sexpr& e) {
             if(!e.is<sexpr::list>()) throw fail();
             const sexpr::list& self = e.get<sexpr::list>();
