@@ -108,7 +108,7 @@ struct binder {
 	using namespace slip;
   
 	jit->def(id, vm::wrap(f));
-	tc->def(id, signature(+f));
+	tc->def(id, tc->generalize(signature(+f)));
 
 	return *this;
   }
@@ -142,8 +142,18 @@ static const auto compiler = [](bool dump_bytecode) {
         return pop(args);
       });
 
-    tc->ctor->locals.emplace("int", traits< integer >::type());
-    tc->ctor->locals.emplace("list", list_ctor);    
+
+    const type builtins[] = { traits< unit >::type(),
+                              traits< boolean >::type(),
+                              traits< integer >::type(),
+                              traits< real >::type(),
+                              traits< ref<string> >::type() };
+                              
+    for(const type& t : builtins) {
+      tc->ctor->locals.emplace(t.get<constant>().name, t);
+    }
+    
+    tc->ctor->locals.emplace(list_ctor.get<constant>().name, list_ctor);    
   }
 
 

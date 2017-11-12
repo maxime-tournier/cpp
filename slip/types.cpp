@@ -265,9 +265,6 @@ namespace slip {
               symbol_type = constant("symbol");
     
 
-    
-
-    
   
     template<> type traits< slip::unit >::type() { return unit_type; }
     template<> type traits< slip::boolean >::type() { return boolean_type; }      
@@ -552,12 +549,20 @@ namespace slip {
       
     };
 
-  
+
+    static std::ostream& operator<<(std::ostream& out, const type& self) {
+      pretty_printer pp(out);
+      pp << self;
+      return out;
+    }
+
+    
     static type infer(const datatypes& ctors, const ast::type& self) {
       try {
         return self.apply(type_visitor(), ctors);
       } catch( error& e ) {
         std::cerr << "when inferring type for: " << repr(self) << std::endl;
+        ctors.debug( std::clog );
         throw;
       }
     }
@@ -972,13 +977,16 @@ namespace slip {
             return terms() >>= rhs;
           });
           
-        // define type constructor
+        // type constructor
         const type ctor = constant(self.type.ctor.name, k);
+        // TODO recursive definition?
 
+        // typecheck rows
         datatypes sub(tc.ctor);
+        state ctx = tc.scope();
         
         for(const ast::module::row& r : self.rows) {
-          
+          ctx.def(r.name, ctx.generalize( infer(sub, r.type) ));
         }
         
         // register it
@@ -995,7 +1003,7 @@ namespace slip {
             return lhs(assoc.at(rhs.get<ast::type_variable>()));
           });
 
-        return {res, self};
+        return {tc.generalize(res), self};
         
         std::stringstream ss;
         ss << "type checking/inference not implemented: " << repr(self);

@@ -151,7 +151,7 @@ namespace slip {
       forall_type forall;
       const type body;
 
-      scheme(const type& body);
+      explicit scheme(const type& body);
       
     };
 

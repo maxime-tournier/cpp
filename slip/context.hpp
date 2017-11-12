@@ -40,6 +40,18 @@ namespace slip {
       return nullptr;
     }
 
+
+    std::size_t debug(std::ostream& out) const {
+      std::size_t indent = 0;
+      if(parent) indent = 1 + parent->debug(out);
+
+      for(const auto& p: locals) {
+        for(std::size_t i = 0; i < indent; ++i) out << " ";
+        out << p.first << ": " << p.second << '\n';
+      }
+      
+      return indent;
+    }
     
   };
 
