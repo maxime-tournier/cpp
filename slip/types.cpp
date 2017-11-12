@@ -527,50 +527,37 @@ namespace slip {
     // type inference for expressions
     static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
 
-    static type infer(state& self, const ast::type& node);    
-
-
-    // type inference for type nodes
+    // type inference for type nodes    
+    static type infer(const datatypes& self, const ast::type& node);    
+    
     struct type_visitor {
       using value_type = type;
-      
-      using variables_type = std::map<symbol, variable >;
-      
-      type operator()(const ast::type_variable& self, state& tc) const {
-        try {
-          const scheme& p = tc.find(self.name);
-          assert(p.body.is<variable>());
-          return p.body;
-        } catch( unbound_variable& ) {
-          const variable a = tc.fresh();
-          tc.def(self.name, tc.generalize(a));
-          return a;
+
+      // variable/constructor: lookup
+      template<class T>
+      type operator()(const T& self, const datatypes& ctors) const {
+        if(auto t = ctors.find(self.name)) {
+          return *t;
         }
+        
+        throw unbound_variable(self.name);
       }
 
-      type operator()(const ast::type_constructor& self, state& tc) const {
-        auto it = tc.ctor->find(self.name);
-        if(it == tc.ctor->end()) throw unbound_variable(self.name);
-        return it->second;
-      }
-
-      
-      type operator()(const ast::type_application& self, state& tc) const {
-        return foldl(infer(tc, self.ctor), self.args, [&tc](const type& lhs, const ast::type& rhs) {
-            return lhs(infer(tc, rhs));
+      // applications
+      type operator()(const ast::type_application& self, const datatypes& ctors) const {
+        return foldl(infer(ctors, self.ctor), self.args, [&ctors](const type& lhs, const ast::type& rhs) {
+            return lhs(infer(ctors, rhs));
           });
       }
-      
       
     };
 
   
-    // type nodes
-    static type infer(state& self, const ast::type& node) {
+    static type infer(const datatypes& ctors, const ast::type& self) {
       try {
-        return node.apply(type_visitor(), self);
-      } catch( ... ) {
-        std::cerr << "when inferring type for: " << repr(node) << std::endl;
+        return self.apply(type_visitor(), ctors);
+      } catch( error& e ) {
+        std::cerr << "when inferring type for: " << repr(self) << std::endl;
         throw;
       }
     }
@@ -607,7 +594,7 @@ namespace slip {
             const type a = tc.fresh();
 
             if(x.is<ast::lambda::typed>()) {
-              const type b = infer(tc, x.get<ast::lambda::typed>().type);
+              const type b = infer(*tc.ctor, x.get<ast::lambda::typed>().type);
               tc.unify(a, b);
             }
 
@@ -888,11 +875,7 @@ namespace slip {
 
     
     const scheme& state::find(symbol id) const {
-
-      if(scheme* p = env->find(id)) {
-        return *p;
-      }
-
+      if(auto p = env->find(id)) return *p;
       throw unbound_variable(id);
     }
 
@@ -992,8 +975,17 @@ namespace slip {
         // define type constructor
         const type ctor = constant(self.type.ctor.name, k);
 
-        // TODO register it somewhere
-
+        datatypes sub(tc.ctor);
+        
+        for(const ast::module::row& r : self.rows) {
+          
+        }
+        
+        // register it
+        if(!tc.ctor->locals.emplace(self.type.ctor.name, ctor).second) {
+          throw type_error("module redefinition");
+        }
+        
         // TODO typecheck and store module rows somewhere
 
         // TODO all the stuff

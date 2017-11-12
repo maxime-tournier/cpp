@@ -142,8 +142,8 @@ static const auto compiler = [](bool dump_bytecode) {
         return pop(args);
       });
 
-    tc->ctor->emplace("int", traits< integer >::type());
-    tc->ctor->emplace("list", list_ctor);    
+    tc->ctor->locals.emplace("int", traits< integer >::type());
+    tc->ctor->locals.emplace("list", list_ctor);    
   }
 
 

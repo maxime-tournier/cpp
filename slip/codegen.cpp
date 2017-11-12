@@ -76,7 +76,7 @@ namespace slip {
       const symbol& name = args->head.get<symbol>();
       const sexpr& value = args->tail->head;
       
-      if( integer* index = ctx->find(name) ) {
+      if( auto index = ctx->find(name) ) {
 
         // compile(res, ctx, value);
         

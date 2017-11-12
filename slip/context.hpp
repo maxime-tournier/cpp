@@ -27,14 +27,14 @@ namespace slip {
       (void) check;
     }
 
-    value_type* find_local(symbol key) {
+    const value_type* find_local(symbol key) const {
       auto it = locals.find(key);
       if(it != locals.end()) return &it->second;
       return nullptr;
     }
     
-    value_type* find(symbol key) {
-      value_type* res = find_local(key);
+    const value_type* find(symbol key) const {
+      const value_type* res = find_local(key);
       if( res ) return res;
       if( parent ) return parent->find(key);
       return nullptr;

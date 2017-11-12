@@ -179,6 +179,18 @@ namespace slip {
     };
 
 
+    // 
+    struct datatypes : context< datatypes, type > {
+      std::size_t depth;
+
+      datatypes( const ref<datatypes>& parent = {} )
+        : datatypes::context(parent),
+        depth( parent ? parent->depth + 1 : 0 ) {
+        
+      }
+      
+    };
+    
 
     // inference state monad
     class state {
@@ -190,11 +202,9 @@ namespace slip {
 
     public:
       // type constructors
-      using ctor_type = std::map<symbol, type>;
+      using ctor_type = datatypes;
       ref<ctor_type> ctor;
 
-      
-      // TODO nested type environments for type variables
 
     public:
       state(ref<env_type> env = make_ref<env_type>(),
