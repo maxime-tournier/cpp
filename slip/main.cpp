@@ -153,7 +153,8 @@ static const auto compiler = [](bool dump_bytecode) {
       tc->ctor->locals.emplace(t.get<constant>().name, t);
     }
     
-    tc->ctor->locals.emplace(list_ctor.get<constant>().name, list_ctor);    
+    tc->ctor->locals.emplace(list_ctor.get<constant>().name, list_ctor);
+    tc->ctor->locals.emplace(func_ctor.get<constant>().name, func_ctor);        
   }
 
 

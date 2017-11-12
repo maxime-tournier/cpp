@@ -519,54 +519,12 @@ namespace slip {
 
 
 
+
+    static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
+    static type infer(datatypes& self, const ast::type& node);    
     
     
     // type inference for expressions
-    static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
-
-    // type inference for type nodes    
-    static type infer(const datatypes& self, const ast::type& node);    
-    
-    struct type_visitor {
-      using value_type = type;
-
-      // variable/constructor: lookup
-      template<class T>
-      type operator()(const T& self, const datatypes& ctors) const {
-        if(auto t = ctors.find(self.name)) {
-          return *t;
-        }
-        
-        throw unbound_variable(self.name);
-      }
-
-      // applications
-      type operator()(const ast::type_application& self, const datatypes& ctors) const {
-        return foldl(infer(ctors, self.ctor), self.args, [&ctors](const type& lhs, const ast::type& rhs) {
-            return lhs(infer(ctors, rhs));
-          });
-      }
-      
-    };
-
-
-    static std::ostream& operator<<(std::ostream& out, const type& self) {
-      pretty_printer pp(out);
-      pp << self;
-      return out;
-    }
-
-    
-    static type infer(const datatypes& ctors, const ast::type& self) {
-      try {
-        return self.apply(type_visitor(), ctors);
-      } catch( error& e ) {
-        std::cerr << "when inferring type for: " << repr(self) << std::endl;
-        ctors.debug( std::clog );
-        throw;
-      }
-    }
-    
 
     // expression switch
     struct expr_visitor {
@@ -954,6 +912,62 @@ namespace slip {
 
 
 
+    // type inference for type nodes   
+    struct type_visitor {
+      using value_type = type;
+
+      // constructor: lookup
+      type operator()(const ast::type_constructor& self, datatypes& ctors) const {
+        if(auto t = ctors.find(self.name)) {
+          return *t;
+        }
+        
+        throw unbound_variable(self.name);
+      }
+
+
+      // variables: lookup / auto-define
+      type operator()(const ast::type_variable& self, datatypes& ctors) const {
+        if(auto t = ctors.find(self.name)) {
+          return *t;
+        }
+
+        // TODO how to infer kind?
+        throw unbound_variable(self.name);        
+      }
+
+      
+      // applications
+      type operator()(const ast::type_application& self, datatypes& ctors) const {
+        return foldl(infer(ctors, self.ctor), self.args, [&ctors](const type& lhs, const ast::type& rhs) {
+            return lhs(infer(ctors, rhs));
+          });
+      }
+      
+    };
+
+
+    static std::ostream& operator<<(std::ostream& out, const type& self) {
+      pretty_printer pp(out);
+      pp << self;
+      return out;
+    }
+
+    
+    static type infer(datatypes& ctors, const ast::type& self) {
+      try {
+        return self.apply(type_visitor(), ctors);
+      } catch( error& e ) {
+        std::cerr << "when inferring type for: " << repr(self) << std::endl;
+        ctors.debug( std::clog );
+        throw;
+      }
+    }
+    
+
+    
+
+    // toplevel visitor
     struct toplevel_visitor {
       using value_type = inferred<scheme, ast::toplevel>;
 
@@ -963,14 +977,15 @@ namespace slip {
       }
 
 
+      // modules
       value_type operator()(const ast::module& self, state& tc) {
 
         // extract type variables and build kind
-        std::map< ast::type_variable, variable > assoc;
-
+        datatypes sub(tc.ctor);        
+        
         const kind init = terms();
         const kind k = foldr( init, self.type.args, [&](const ast::type& lhs, const kind& rhs) {
-            if( !assoc.emplace(lhs.get<ast::type_variable>(), tc.fresh()).second ) {
+            if( !sub.locals.emplace(lhs.get<ast::type_variable>().name, tc.fresh()).second ) {
               throw type_error("duplicate type variable");
             }
             
@@ -982,11 +997,12 @@ namespace slip {
         // TODO recursive definition?
 
         // typecheck rows
-        datatypes sub(tc.ctor);
         state ctx = tc.scope();
         
         for(const ast::module::row& r : self.rows) {
-          ctx.def(r.name, ctx.generalize( infer(sub, r.type) ));
+          const scheme p = ctx.generalize( infer(sub, r.type) );
+          ctx.def(r.name, p);
+          std::clog << r.name << " : " << p << std::endl;
         }
         
         // register it
@@ -1000,7 +1016,7 @@ namespace slip {
 
         // HACK
         const type res = foldl(ctor, self.type.args, [&](const type& lhs, const ast::type& rhs) {
-            return lhs(assoc.at(rhs.get<ast::type_variable>()));
+            return lhs(sub.locals.at(rhs.get<ast::type_variable>().name));
           });
 
         return {tc.generalize(res), self};
