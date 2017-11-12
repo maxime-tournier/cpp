@@ -204,6 +204,7 @@ namespace slip {
     
     // inference state monad
     class state {
+    public:
       using env_type = environment;
       ref<env_type> env;
 
@@ -214,15 +215,15 @@ namespace slip {
       
       // type constructors
       using ctor_type = datatypes;
-      ref<ctor_type> ctor;
+      static ref<ctor_type> ctor;
 
       // data constructors (FCP style)
-      std::map<symbol, data_constructor> data_ctor;
+      using data_ctor_type = std::map<symbol, data_constructor>;
+      static ref<data_ctor_type> data_ctor;
       
     public:
       state(ref<env_type> env = make_ref<env_type>(),
-            ref<uf_type> uf = make_ref<uf_type>(),
-            ref<ctor_type> ctor = make_ref<ctor_type>());
+            ref<uf_type> uf = make_ref<uf_type>());
       
       scheme generalize(const type& t) const;
       type instantiate(const scheme& p) const;

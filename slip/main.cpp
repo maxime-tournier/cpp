@@ -210,7 +210,7 @@ static const auto compiler = [](bool dump_bytecode) {
       
     } catch(...) {
       std::cout << " : " << p.type << std::endl;
-      throw;
+      // throw;
     }
 
     return parse::pure(s);

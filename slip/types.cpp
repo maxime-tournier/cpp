@@ -9,7 +9,39 @@
 namespace slip {
 
   namespace types {
+    static std::ostream& operator<<(std::ostream& out, const type& self);
 
+
+    ref<state::data_ctor_type> state::data_ctor = make_ref<data_ctor_type>();
+    ref<state::ctor_type> state::ctor = make_ref<ctor_type>();    
+
+
+    // variables
+    struct vars_visitor {
+      using result_type = std::set< variable >;
+    
+      void operator()(const constant&, result_type& res) const { }
+      
+      void operator()(const variable& self, result_type& res) const {
+        res.insert(self);
+      }
+
+      void operator()(const application& self, result_type& res) const {
+        self.func.apply( vars_visitor(), res );
+        self.arg.apply( vars_visitor(), res );      
+      }
+    
+    };
+
+
+    static vars_visitor::result_type vars(const type& self) {
+      vars_visitor::result_type res;
+      self.apply(vars_visitor(), res);
+      return res;
+    }
+    
+    
+    
     // env lookup/def
     struct unbound_variable : type_error {
       unbound_variable(symbol id) : type_error("unbound variable \"" + id.str() + "\"") { }
@@ -276,10 +308,9 @@ namespace slip {
     template<> type traits< ref<slip::string> >::type() { return string_type; }
     
 
-    state::state(ref<env_type> env, ref<uf_type> uf, ref<ctor_type> ctor) 
+    state::state(ref<env_type> env, ref<uf_type> uf) 
       : env( env ),
-        uf( uf ),
-        ctor(ctor) {
+        uf( uf ) {
       
     }
 
@@ -359,7 +390,7 @@ namespace slip {
 
       // variable / type
       void operator()(const variable& self, const type& rhs, UF& uf) const {
-        pp << "unifying: " << type(self) << " ~ " << rhs << std::endl;
+        pp << "unifying: " << type(self) << "  ~  " << rhs << std::endl;
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -373,7 +404,7 @@ namespace slip {
           std::stringstream ss;
 
           pretty_printer(ss) << "when unifying: " << type(self) << " :: " << self.kind 
-                             << " ~ " << rhs << " :: " << rhs.kind();
+                             << "  ~  " << rhs << " :: " << rhs.kind();
           
           throw kind_error(ss.str());
         }
@@ -392,7 +423,7 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;
+        pp << "unifying: " << type(lhs) << "  ~  " << type(rhs) << std::endl;
 
         if(!(lhs == rhs )) {
           throw unification_error(lhs, rhs);
@@ -403,7 +434,7 @@ namespace slip {
 
       // application / application
       void operator()(const application& lhs, const application& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << " ~ " << type(rhs) << std::endl;        
+        pp << "unifying: " << type(lhs) << "  ~  " << type(rhs) << std::endl;        
         const auto indent = pp.indent();        
         
         uf.find(lhs.func).apply( unify_visitor(pp), uf.find(rhs.func), uf);
@@ -424,7 +455,7 @@ namespace slip {
     void state::unify(const type& lhs, const type& rhs) {
 
       pretty_printer pp(std::clog);
-      pp << "unify: " << lhs << " ~ " << rhs << std::endl;
+      pp << "unify: " << lhs << "  ~  " << rhs << std::endl;
       const auto indent = pp.indent();
 
       const type flhs = uf->find(lhs);
@@ -557,14 +588,16 @@ namespace slip {
             // deduce inner/outer types
             if(x.is<ast::lambda::typed>()) {
               
-              const data_constructor& dctor = tc.data_ctor.at(x.get<ast::lambda::typed>().ctor);
-              
-              const type outer = tc.fresh(), inner = tc.fresh();
-              const type unbox = sub.instantiate(dctor.unbox);
-              
-              tc.unify(unbox, outer >>= inner);
+              const data_constructor& dctor = tc.data_ctor->at(x.get<ast::lambda::typed>().ctor);
+
+              // obtain outer as target type, instantiated at the calling level
+              const type outer = tc.instantiate(dctor.target); 
               
               if(!(x.name() == kw::wildcard) ) {
+                // inner type is instantiated at called level, unified with
+                // unbox application with outer type, and generalized
+                const type inner = sub.fresh();
+                tc.unify(sub.instantiate(dctor.unbox), outer >>= inner);
                 sub.def(x.name(), sub.generalize(inner) );
               }
               
@@ -871,37 +904,12 @@ namespace slip {
       // TODO should we use nested union-find too?
       ref<env_type> sub = make_ref<env_type>(env);
 
-      return state( sub, uf, ctor);
+      return state( sub, uf );
     }
     
 
 
-    // variables
-    struct vars_visitor {
 
-      using result_type = std::set< variable >;
-    
-      void operator()(const constant&, result_type& res) const { }
-      
-      void operator()(const variable& self, result_type& res) const {
-        res.insert(self);
-      }
-
-      void operator()(const application& self, result_type& res) const {
-        self.func.apply( vars_visitor(), res );
-        self.arg.apply( vars_visitor(), res );      
-      }
-    
-    };
-
-
-    static vars_visitor::result_type vars(const type& self) {
-      vars_visitor::result_type res;
-      self.apply(vars_visitor(), res);
-      return res;
-    }
-    
-    
 
     // generalization
     scheme state::generalize(const type& mono) const {
@@ -998,8 +1006,11 @@ namespace slip {
         datatypes sub(tc.ctor);        
         
         const kind init = terms();
+        
         const kind k = foldr( init, self.type.args, [&](const ast::type& lhs, const kind& rhs) {
-            if( !sub.locals.emplace(lhs.get<ast::type_variable>().name, tc.fresh()).second ) {
+            // TODO kind?
+            const type a = variable(terms(), 0);
+            if( !sub.locals.emplace(lhs.get<ast::type_variable>().name, a).second ) {
               throw type_error("duplicate type variable");
             }
             
@@ -1029,12 +1040,16 @@ namespace slip {
             return lhs(sub.locals.at(rhs.get<ast::type_variable>().name));
           });
 
+        const scheme unbox = tc.generalize( module >>= unboxed );
+
+        std::clog << "unbox: " << unbox << std::endl;
+        
         // data constructor
         data_constructor data = {ctx.generalize( unboxed ),
                                  tc.generalize( module ),
-                                 tc.generalize( module >>= unboxed ) };
+                                 unbox};
         
-        tc.data_ctor.emplace(self.type.ctor.name, data);
+        tc.data_ctor->emplace(self.type.ctor.name, data);
 
         // TODO this should be io unit
         return {tc.generalize(module), self};
