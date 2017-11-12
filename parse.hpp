@@ -581,8 +581,8 @@ namespace parse {
   struct eof {
 
     maybe<eof> operator()(std::istream& in) const {
-      in.peek();
-      if(in.eof()) return eof();
+      const int next = in.peek();
+      if(next == std::istream::traits_type::eof()) return eof();
       return {};
     }
     

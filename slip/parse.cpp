@@ -20,7 +20,7 @@ namespace slip {
   
   static const auto alpha = chr(std::isalpha);
   static const auto alnum = chr(std::isalnum);
-
+  
   static const auto quote = chr<'\''>();
   static const auto backquote = chr<'`'>();
   static const auto comma = chr<','>();        
@@ -33,7 +33,9 @@ namespace slip {
     const auto initial = token(alpha | special | chr("'"), skip);
     const auto subsequent = alnum | special;    
 
-    const auto number = debug("number") <<= 
+    const auto number = debug("number") <<=
+      
+      // TODO we need to check that next char is not an alpha
       token(lit<slip::real>(), skip) >> [](slip::real&& x) {
 
       integer n = x;
@@ -71,7 +73,7 @@ namespace slip {
     
     expr = debug("expr") <<= list | atom; 
     
-    return expr | parse::error<sexpr, parse_error>();
+    return expr;
   }
 
 }

@@ -1,3 +1,5 @@
+// #define PARSE_ENABLE_DEBUG
+
 #include <iostream>
 #include "parse.hpp"
 
@@ -48,13 +50,16 @@ static void read_loop(const F& f) {
 
 
 
-
 template<class Action>
 static int process(std::istream& in, Action action) {
   in >> std::noskipws;
   
   try{
-    (slip::parser() >> action)(in);
+    const auto eof = parse::debug("eof") <<= parse::eof();
+    const auto error = parse::debug("error") <<= parse::error<parse::eof, slip::parse_error>();
+    
+    const auto parser = (*(slip::parser() >> action), eof | error);
+    parser(in);
     return 0;
   }
   catch( slip::parse_error& e) {
@@ -257,8 +262,8 @@ int main(int argc, char** argv) {
   if( vm.count("filename") ) {
     const std::string filename = vm["filename"].as< std::string >();
     std::ifstream file( filename );
-    
-    return process(file, action );
+
+    process(file, action );
     
   } else {
   
