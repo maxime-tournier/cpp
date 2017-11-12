@@ -186,12 +186,17 @@ static const auto compiler = [](bool dump_bytecode) {
     const ast::toplevel node = ast::check_toplevel(s);
 
     const types::inferred<types::scheme, ast::toplevel> p = infer(*tc, node);
-    const vm::value v = jit->eval(p.node, dump_bytecode);
-    
-    std::cout << " : " << p.type;
-    std::cout << " = " << v;
-    
-    std::cout << std::endl;
+
+    try {
+      const vm::value v = jit->eval(p.node, dump_bytecode);
+
+      std::cout << " : " << p.type
+                << " = " << v << std::endl;
+      
+    } catch(...) {
+      std::cout << " : " << p.type << std::endl;
+      throw;
+    }
 
     return parse::pure(s);
   };

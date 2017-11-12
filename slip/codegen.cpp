@@ -427,10 +427,25 @@ namespace slip {
     static void compile(vm::bytecode& res, ref<variables>& ctx, const ast::expr& e) {
       e.apply(compile_expr(), res, ctx);
     }
+
+
+    struct toplevel_visitor {
+      
+      void operator()(const ast::expr& self, vm::bytecode& res, ref<variables>& ctx) const {
+        compile(res, ctx, self);
+      }
+
+      void operator()(const ast::module& self, vm::bytecode& res, ref<variables>& ctx) const {
+        std::stringstream ss;
+        ss << "not implemented: codegen for " << repr(self);
+        throw error(ss.str());
+      }
+      
+    };
     
     
     void compile(vm::bytecode& res, ref<variables>& ctx, const ast::toplevel& e) {
-      compile(res, ctx, e.get<ast::expr>());
+      e.apply(toplevel_visitor(), res, ctx);
     }
 
   }

@@ -529,6 +529,8 @@ namespace slip {
 
     static type infer(state& self, const ast::type& node);    
 
+
+    // type inference for type nodes
     struct type_visitor {
       using value_type = type;
       
@@ -554,7 +556,7 @@ namespace slip {
 
       
       type operator()(const ast::type_application& self, state& tc) const {
-        return foldl(infer(tc, self.type), self.args, [&tc](const type& lhs, const ast::type& rhs) {
+        return foldl(infer(tc, self.ctor), self.args, [&tc](const type& lhs, const ast::type& rhs) {
             return lhs(infer(tc, rhs));
           });
       }
@@ -563,7 +565,7 @@ namespace slip {
     };
 
   
-    
+    // type nodes
     static type infer(state& self, const ast::type& node) {
       try {
         return node.apply(type_visitor(), self);
@@ -974,9 +976,37 @@ namespace slip {
 
 
       value_type operator()(const ast::module& self, state& tc) {
+
+        // extract type variables and build kind
+        std::map< ast::type_variable, variable > assoc;
+
+        const kind init = terms();
+        const kind k = foldr( init, self.type.args, [&](const ast::type& lhs, const kind& rhs) {
+            if( !assoc.emplace(lhs.get<ast::type_variable>(), tc.fresh()).second ) {
+              throw type_error("duplicate type variable");
+            }
+            
+            return terms() >>= rhs;
+          });
+          
+        // define type constructor
+        const type ctor = constant(self.type.ctor.name, k);
+
+        // TODO register it somewhere
+
+        // TODO typecheck and store module rows somewhere
+
+        // TODO all the stuff
+
+        // HACK
+        const type res = foldl(ctor, self.type.args, [&](const type& lhs, const ast::type& rhs) {
+            return lhs(assoc.at(rhs.get<ast::type_variable>()));
+          });
+
+        return {res, self};
+        
         std::stringstream ss;
         ss << "type checking/inference not implemented: " << repr(self);
-        
         throw error(ss.str());
       }
       

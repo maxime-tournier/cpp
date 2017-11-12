@@ -214,7 +214,6 @@ namespace slip {
 
       variable fresh(kind k = terms()) const;
 
-      
     };
 
 

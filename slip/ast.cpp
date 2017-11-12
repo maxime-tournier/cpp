@@ -118,7 +118,7 @@ namespace slip {
       sexpr operator()(const type_constructor& self) const { return self.name; }      
 
       sexpr operator()(const type_application& self) const {
-        return repr(self.type) >>= map(self.args, [](const ast::type& t) { return repr(t); } );
+        return repr(self.ctor) >>= map(self.args, [](const ast::type& t) { return repr(t); } );
       }
 
 
@@ -427,11 +427,13 @@ namespace slip {
         
         const ast::type type = check_type(items->head);
 
+        // TODO promote naked type ctors to nullary applications?        
+        if(!type.is<type_application>()) throw fail();
+        const ast::type_application& app = type.get<type_application>();
+        
         // make sure application args are all type variables
-        if(auto app = type.get_if<type_application>()) {
-          for(const ast::type& x : app->args) {
-            if(!x.is<type_variable>()) throw fail();
-          }
+        for(const ast::type& x : app.args) {
+          if(!x.is<type_variable>()) throw fail();
         }
 
         // extract rows
@@ -445,7 +447,7 @@ namespace slip {
             return module::row{self->head.get<symbol>(), check_type(self->tail->head)};
           });
 
-        return module{type, rows};
+        return module{app, rows};
       } catch( fail ) {
         throw syntax_error("(module (`symbol` `tyvars`...)  (`symbol` `type`)...)");
       }

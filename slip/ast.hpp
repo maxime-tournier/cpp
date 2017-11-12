@@ -111,13 +111,18 @@ namespace slip {
 
     struct type_variable {
       const symbol name;
+
+      bool operator<(const type_variable& other) const {
+        return name < other.name;
+      }
     };
 
     struct type_application {
-      const type_constructor type;
+      const type_constructor ctor;
       const list<ast::type> args;
     };
-    
+
+    // TODO exclude naked type_constructors? (= nullary applications)
     struct type : variant< type_constructor, type_variable, type_application > {
       using type::variant::variant;
 
@@ -181,7 +186,7 @@ namespace slip {
 
     // module definitions
     struct module {
-      struct type type;
+      type_application type;
       
       struct row {
         const symbol name;
