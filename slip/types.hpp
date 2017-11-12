@@ -256,6 +256,9 @@ namespace slip {
     struct traits {
       static struct type type();
     };
+
+
+    extern bool debug_unification;
     
   }
   

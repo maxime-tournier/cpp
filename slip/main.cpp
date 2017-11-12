@@ -225,9 +225,8 @@ static po::variables_map parse_options(int argc, char** argv) {
   desc.add_options()
     ("help", "produce help message")
     ("filename", po::value< std::string >(), "input file")
-
-    ("bytecode,b", "bytecode")
-    ("dump", "dump bytecode")    
+    ("dump", "dump bytecode")
+    ("debug", "debug unification")
     ;
 
   po::positional_options_description p;
@@ -258,6 +257,10 @@ int main(int argc, char** argv) {
   
   const bool dump = vm.count("dump");    
   action_type action = compiler(dump);
+
+  if( vm.count("debug") ) {
+    slip::types::debug_unification = true;
+  }
   
   if( vm.count("filename") ) {
     const std::string filename = vm["filename"].as< std::string >();

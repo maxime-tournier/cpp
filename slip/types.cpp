@@ -11,7 +11,6 @@ namespace slip {
   namespace types {
     static std::ostream& operator<<(std::ostream& out, const type& self);
 
-
     ref<state::data_ctor_type> state::data_ctor = make_ref<data_ctor_type>();
     ref<state::ctor_type> state::ctor = make_ref<ctor_type>();    
 
@@ -48,13 +47,14 @@ namespace slip {
     };
     
     // pretty-printing types
+    // TODO clean this shit
     struct pretty_printer {
 
       struct var {
         std::size_t index;
         bool quantified;
 
-        friend  std::ostream& operator<<(std::ostream& out, const var& self) {
+        friend std::ostream& operator<<(std::ostream& out, const var& self) {
           if( self.quantified ) out << "'";
           else out << "!";
           return out << char('a' + self.index);
@@ -86,7 +86,7 @@ namespace slip {
       };
 
       indent_type indent() { return {this}; }
-      
+
       std::ostream& out() {
         if(flag) {
           for(std::size_t i = 0; i < depth; ++i) {
@@ -112,7 +112,7 @@ namespace slip {
 
         using type = decltype(f);
         
-        if(f == (type)std::endl) {
+        if(f == type(std::endl)) {
           flag = true;
         }
         return *this;
@@ -358,13 +358,27 @@ namespace slip {
     };
 
 
-
+    
     
 
     template<class UF>
     static void unify_rows(pretty_printer& pp, UF& uf, const type& lhs, const type& rhs);
     
+    bool debug_unification = false;
+    
+    struct debug_unify {
+      pretty_printer& pp;
+      pretty_printer::indent_type indent;
 
+      debug_unify(pretty_printer& pp, const type& lhs, const type& rhs)
+        : pp( debug_unification ? (pp << "unify: " << type(lhs) << "  ~  " << type(rhs) << std::endl) : pp),
+          indent(pp.indent()) {
+        
+      }
+      
+    };
+
+    
     template<class UF>
     struct unify_visitor {
 
@@ -378,7 +392,6 @@ namespace slip {
       // reverse dispatch
       template<class T>
       void operator()(const T& self, const type& rhs, UF& uf) const {
-        
         // double dispatch
         if( try_reverse ) {
           return rhs.apply( unify_visitor(pp, false), self, uf);
@@ -390,7 +403,7 @@ namespace slip {
 
       // variable / type
       void operator()(const variable& self, const type& rhs, UF& uf) const {
-        pp << "unifying: " << type(self) << "  ~  " << rhs << std::endl;
+        const debug_unify debug(pp, self, rhs);
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
@@ -402,14 +415,14 @@ namespace slip {
         // kind preserving unification
         if( self.kind != rhs.kind() ) {
           std::stringstream ss;
-
+          
           pretty_printer(ss) << "when unifying: " << type(self) << " :: " << self.kind 
                              << "  ~  " << rhs << " :: " << rhs.kind();
           
           throw kind_error(ss.str());
         }
         
-        // TODO 
+        // TODO figure this out
         if( rhs.is<variable>() && self.depth < rhs.get< variable >().depth) {
           // the topmost variable wins
           uf.link(rhs, self);
@@ -423,8 +436,8 @@ namespace slip {
 
 
       void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << "  ~  " << type(rhs) << std::endl;
-
+        const debug_unify debug(pp, lhs, rhs);
+        
         if(!(lhs == rhs )) {
           throw unification_error(lhs, rhs);
         }
@@ -434,8 +447,7 @@ namespace slip {
 
       // application / application
       void operator()(const application& lhs, const application& rhs, UF& uf) const {
-        pp << "unifying: " << type(lhs) << "  ~  " << type(rhs) << std::endl;        
-        const auto indent = pp.indent();        
+        const debug_unify debug(pp, lhs, rhs);
         
         uf.find(lhs.func).apply( unify_visitor(pp), uf.find(rhs.func), uf);
 
@@ -453,11 +465,9 @@ namespace slip {
 
 
     void state::unify(const type& lhs, const type& rhs) {
-
       pretty_printer pp(std::clog);
-      pp << "unify: " << lhs << "  ~  " << rhs << std::endl;
-      const auto indent = pp.indent();
-
+      const debug_unify debug(pp, lhs, rhs);
+      
       const type flhs = uf->find(lhs);
       const type frhs = uf->find(rhs);
 
@@ -1042,7 +1052,8 @@ namespace slip {
 
         const scheme unbox = tc.generalize( module >>= unboxed );
 
-        std::clog << "unbox: " << unbox << std::endl;
+        // TODO 
+        // std::clog << "unbox: " << unbox << std::endl;
         
         // data constructor
         data_constructor data = {ctx.generalize( unboxed ),
