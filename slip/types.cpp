@@ -315,6 +315,47 @@ namespace slip {
     }
 
 
+
+    // instantiation
+    struct instantiate_visitor {
+      using value_type = type;
+      
+      using map_type = std::map< variable, variable >;
+      
+      type operator()(const constant& self, const map_type& m) const {
+        return self;
+      }
+
+      type operator()(const variable& self, const map_type& m) const {
+        auto it = m.find(self);
+        if(it == m.end()) return self;
+        return it->second;
+      }
+
+      type operator()(const application& self, const map_type& m) const {
+        return map(self, [&](const type& c) {
+            return c.apply(instantiate_visitor(), m);
+          });
+      }
+      
+    };
+    
+
+
+    type state::instantiate(const scheme& p) const {
+      instantiate_visitor::map_type map;
+
+      // associate each bound variable to a fresh one
+      for(const variable& v : p.forall) {
+        map.emplace(v, fresh(v.kind));
+      }
+      
+      return p.body.apply(instantiate_visitor(), map);
+    }
+
+
+    
+
     
     // unification
     struct unification_error {
@@ -601,7 +642,7 @@ namespace slip {
               const data_constructor& dctor = tc.data_ctor->at(x.get<ast::lambda::typed>().ctor);
 
               // obtain outer as target type, instantiated at the calling level
-              const type outer = tc.instantiate(dctor.target); 
+              const type outer = tc.fresh();
               
               if(!(x.name() == kw::wildcard) ) {
                 // inner type is instantiated at called level, unified with
@@ -784,6 +825,52 @@ namespace slip {
         return {record_ctor(row) >>= alpha, self};
       }
       
+
+      // module exports
+      inferred<type, ast::expr> operator()(const ast::export_& self, state& tc) const {
+        const inferred<type, ast::expr> value = infer(tc, self.value);
+        
+        try {
+          // fetch associated data constructor
+          const data_constructor& dctor = tc.data_ctor->at(self.name);
+
+          // manually instantiate unbox type to keep track of variables
+          instantiate_visitor::map_type map;
+          for(const variable& v : dctor.unbox.forall) {
+            map.emplace(v, tc.fresh(v.kind));
+          }
+          
+          const type unbox = dctor.unbox.body.apply(instantiate_visitor(), map);
+
+          // obtain source/target types
+          const type source = tc.fresh();
+          const type target = tc.fresh();
+          
+          tc.unify(unbox, target >>= source);
+          tc.unify(source, value.type);
+          
+          // generalize source
+          const scheme p = tc.generalize(source);
+          
+          // all the variables in dctor.forall must remain quantified in p
+          for(const variable& v : dctor.forall) {
+            assert(map.find(v) != map.end());
+
+            if( p.forall.find( map.at(v) ) == p.forall.end() ) {
+              // TODO more details
+              throw type_error("generalization error");
+            }
+          }
+
+          return {target, value.node};
+          
+        } catch( std::out_of_range ) {
+          throw type_error("unknown module: " + self.name.str());
+        }
+        
+      }
+
+
       
 
       // fallback case
@@ -849,45 +936,6 @@ namespace slip {
 
 
 
-    // instantiation
-    struct instantiate_visitor {
-      using value_type = type;
-      
-      using map_type = std::map< variable, variable >;
-      
-      type operator()(const constant& self, const map_type& m) const {
-        return self;
-      }
-
-      type operator()(const variable& self, const map_type& m) const {
-        auto it = m.find(self);
-        if(it == m.end()) return self;
-        return it->second;
-      }
-
-      type operator()(const application& self, const map_type& m) const {
-        return map(self, [&](const type& c) {
-            return c.apply(instantiate_visitor(), m);
-          });
-      }
-      
-    };
-    
-
-
-    type state::instantiate(const scheme& poly) const {
-      instantiate_visitor::map_type map;
-
-      // associate each bound variable to a fresh one
-      auto out = std::inserter(map, map.begin());
-      std::transform(poly.forall.begin(), poly.forall.end(), out, [&](const variable& v) {
-          return std::make_pair(v, fresh(v.kind));
-        });
-      
-      return poly.body.apply(instantiate_visitor(), map);
-    }
-
-
 
 
     
@@ -928,9 +976,10 @@ namespace slip {
       const auto all = vars(res.body);
     
       // copy free variables (i.e. instantiated at a larger depth)
-      auto out = std::back_inserter(res.forall);
+      auto out = std::inserter(res.forall, res.forall.begin());
 
       const std::size_t depth = this->env->depth;
+      
       std::copy_if(all.begin(), all.end(), out, [depth](const variable& v) {
           return v.depth >= depth;
         });
@@ -1054,11 +1103,12 @@ namespace slip {
 
         // TODO 
         // std::clog << "unbox: " << unbox << std::endl;
+
+        // generalize rank2 vars in unboxed type
+        const scheme source = ctx.generalize( unboxed );
         
         // data constructor
-        data_constructor data = {ctx.generalize( unboxed ),
-                                 tc.generalize( module ),
-                                 unbox};
+        data_constructor data = {source.forall, unbox};
         
         tc.data_ctor->emplace(self.type.ctor.name, data);
 

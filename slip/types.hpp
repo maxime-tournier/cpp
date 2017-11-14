@@ -10,6 +10,7 @@
 #include "context.hpp"
 
 #include <vector>
+#include <set>
 
 #include <iostream>
 
@@ -147,8 +148,10 @@ namespace slip {
 
     // type schemes
     struct scheme {
-      using forall_type = std::vector< variable >;
+
+      using forall_type = std::set< variable >;
       forall_type forall;
+      
       const type body;
 
       explicit scheme(const type& body);
@@ -182,7 +185,7 @@ namespace slip {
     
 
     
-    // 
+    // datatype definitions
     struct datatypes : context< datatypes, type > {
       std::size_t depth;
 
@@ -194,12 +197,15 @@ namespace slip {
       
     };
 
+    // data constructors (FCP style)
     struct data_constructor {
-      scheme source;
-      scheme target;
-
+      // which variables are quantified in source
+      scheme::forall_type forall;
+      
       // target -> source (must be rank1)      
       scheme unbox;
+
+      // TODO check that forall is a subset of unbox.forall
     };
     
     // inference state monad
