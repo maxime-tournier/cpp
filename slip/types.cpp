@@ -53,11 +53,14 @@ namespace slip {
       struct var {
         std::size_t index;
         bool quantified;
+        std::size_t depth;
 
         friend std::ostream& operator<<(std::ostream& out, const var& self) {
           if( self.quantified ) out << "'";
           else out << "!";
-          return out << char('a' + self.index);
+          return out << char('a' + self.index)
+                     << "(" << self.depth << ")"
+            ;
         }
         
       };
@@ -136,10 +139,10 @@ namespace slip {
       
       void operator()(const variable& self, std::ostream& out, 
                       ostream_map& osm) const {
-        auto err = osm.emplace( std::make_pair(self, var{osm.size(), false} ));
+        auto err = osm.emplace( std::make_pair(self, var{osm.size(), false, self.depth} ));
         out << err.first->second;
       }
-
+      
       void operator()(const application& self, std::ostream& out,
                       ostream_map& osm) const {
 
@@ -845,12 +848,23 @@ namespace slip {
           // obtain source/target types
           const type source = tc.fresh();
           const type target = tc.fresh();
+
+          std::clog << "unbox: " << unbox << std::endl;          
+          std::clog << "value: " << value.type << std::endl;
+          std::clog << "depth: " << tc.env->depth << std::endl;
           
           tc.unify(unbox, target >>= source);
-          tc.unify(source, value.type);
-          
+          tc.unify(value.type, source);
+
+          std::clog << "source: " << source << std::endl;          
+
           // generalize source
           const scheme p = tc.generalize(source);
+          
+          std::clog << "source: " << p << std::endl;
+         
+
+          // TODO FIXME unification error
           
           // all the variables in dctor.forall must remain quantified in p
           for(const variable& v : dctor.forall) {

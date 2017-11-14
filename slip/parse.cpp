@@ -34,7 +34,8 @@ namespace slip {
     const auto subsequent = alnum | special;    
 
     const auto number = debug("number") <<=
-      
+
+      // TODO proper parsing of e.g 1.0
       // TODO we need to check that next char is not an alpha
       token(lit<slip::real>(), skip) >> [](slip::real&& x) {
 
