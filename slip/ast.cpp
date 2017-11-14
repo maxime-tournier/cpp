@@ -17,7 +17,7 @@ namespace slip {
       unquote = "unquote";
 
     const symbol record = "record";
-    const symbol module = "module";    
+    const symbol module = "module", export_ = "export";    
     
     const symbol var = "var", pure = "pure", run = "run";
     const symbol ref = "ref", get = "get", set = "set";
@@ -121,6 +121,12 @@ namespace slip {
         return repr(self.ctor) >>= map(self.args, [](const ast::type& t) { return repr(t); } );
       }
 
+      sexpr operator()(const export_& self) const {
+        return kw::export_ >>= self.name >>= repr(self.value) >>= sexpr::list();
+      }
+
+        
+      
 
       sexpr operator()(const expr& self) const {
         return self.apply(repr_visitor());
@@ -134,10 +140,10 @@ namespace slip {
       }
       
       
-      // template<class T>
-      // sexpr operator()(const T& self) const {
-      //   throw error(std::string("repr unimplemented for: ") + typeid(T).name() );
-      // }
+      template<class T>
+      sexpr operator()(const T& self) const {
+        throw error(std::string("repr unimplemented for: ") + typeid(T).name() );
+      }
       
     };
 
@@ -159,12 +165,14 @@ namespace slip {
     using special_type = expr (const sexpr::list& e);
 
     static special_type check_lambda,
-                    check_application,
-                    check_definition,
-                    check_condition,
-                    check_sequence,
-                    check_binding,
-                    check_record;
+      check_application,
+      check_definition,
+      check_condition,
+      check_sequence,
+      check_binding,
+      check_record,
+      check_export
+      ;
     
     static expr check_binding(const sexpr::list&);
 
@@ -174,7 +182,8 @@ namespace slip {
       {kw::cond, check_condition},
       {kw::var, check_binding},
       {kw::seq, check_sequence},
-      {kw::record, check_record},      
+      {kw::record, check_record},
+      {kw::export_, check_export},            
     };
     
 
@@ -194,61 +203,56 @@ namespace slip {
 
     static type_variable check_type_variable(const symbol& s) {
       if(s.str()[0] != '\'' || s.str().size() < 2) throw syntax_error("`'symbol`");
-
       return {s};
     }
 
     
     static type check_type(const sexpr& e) {
-      struct error {};
-
+      static const syntax_error error("type: `symbol` | `'symbol` | (`symbol` `type`...)");
+      
       try {
         if(e.is<symbol>())  {
-          const symbol s = e.get<symbol>();
+          const symbol& s = e.get<symbol>();
           
           if(s.str()[0] == '\'') return check_type_variable(s);
           else return check_type_constructor(s);
         }
 
-        if(!e.is<sexpr::list>()) throw error();
-
         // type constructor
         const sexpr::list& arg = e.get<sexpr::list>();      
-        if(size(arg) < 2) throw error(); // or is it not?
+        if(size(arg) < 2) throw error; // TODO or is it not? do we want nullary type
+                                       // applications?
 
-        return ast::type_application{ check_type_constructor(arg->head), map(arg->tail, &check_type) };
+        return ast::type_application{ check_type_constructor(arg->head),
+            map(arg->tail, &check_type) };
         
-      } catch( error& ) {
-        throw syntax_error("type: `symbol` | `'symbol` | (`symbol` `type`...)");
+      } catch( std::bad_cast ) {
+        throw error;
       }
     }
 
+    
     static lambda::arg check_lambda_arg(const sexpr& e) {
-      struct error { };
-
+      static const syntax_error error("typed arg: `symbol` | (`symbol` `symbol`)");
+      
       try {
         if(e.is<symbol>()) return e.get<symbol>();
-        
-        if(!e.is<sexpr::list>()) throw error();
-
         const sexpr::list& arg = e.get<sexpr::list>();
-        if( size(arg) < 2) throw error();
         
-        if( !arg->head.is<symbol>() ) throw error();
-        if( !arg->tail->head.is<symbol>() ) throw error();        
-
-        return lambda::typed{arg->head.get<symbol>(), arg->tail->head.get<symbol>()};
+        if( size(arg) != 2) throw error;
         
-      } catch(error& ) {
-        throw syntax_error("typed arg: `symbol` | (`symbol` `symbol`)");
+        return lambda::typed{ at(arg, 0).get<symbol>(), at(arg, 1).get<symbol>()};
+        
+      } catch(std::bad_cast) {
+        throw error;
       }
     }
     
+    
     static expr check_lambda(const sexpr::list& args) {
-      struct error { };
-
+      static const syntax_error error("(lambda (`arg`...) `expr`)");
       try {
-        if(size(args) != 2 || !args->head.is<sexpr::list>() ) throw error();
+        if(size(args) != 2) throw error;
         
         list<lambda::arg> vars =
           map(args->head.get<sexpr::list>(), [](const sexpr& e) {
@@ -261,22 +265,21 @@ namespace slip {
         
         return lambda(vars, check_expr(args->tail->head));
         
-      } catch( error& ) {
-        throw syntax_error("(lambda (`arg`...) `expr`)");
+      } catch(std::bad_cast) {
+        throw error;
       }
       
     }
     
 
     static expr check_application(const sexpr::list& self) {
-      if(!self) {
-        throw syntax_error("empty list in application");
-      }
-
+      static const syntax_error error("empty list in application");
+      if(!self) throw error;
+      
       list<expr> args = map(self->tail, [](const sexpr& e) {
           return check_expr(e);
         });
-
+      
       // fix nullary applications
       if(!args) args = literal<unit>() >>= args;
       
@@ -285,49 +288,38 @@ namespace slip {
     
     
     static expr check_definition(const sexpr::list& items) {
-      struct fail { };
-      
+      static const syntax_error error("(def `symbol` `expr`)");
       try {
+        if( size(items) != 2 ) throw error;
         
-        if( size(items) != 2 ) throw fail();
-        if( !items->head.is<symbol>() ) throw fail();
-
         return definition{items->head.get<symbol>(),
             check_expr(items->tail->head)};
         
-      } catch( fail& ) {
-        throw syntax_error("(def `symbol` `expr`)");
+      } catch(std::bad_cast) {
+        throw error;
       }
     }
 
 
     
     static expr check_sequence(const sexpr::list& items) {
-      const ast::sequence res = {map(items, [](const sexpr& e) {
+      return sequence{map(items, [](const sexpr& e) {
             return check_expr(e);
           })};
-      
-      return res;
     }
 
     static expr check_condition(const sexpr::list& items) {
-      struct fail {};
+      static const syntax_error error("(cond (`expr` `expr`)...)");
       
       try{
-
-        const condition res = { map(items, [](const sexpr& e) {
-              if(!e.is<sexpr::list>()) throw fail();
+        return condition{ map(items, [](const sexpr& e) {
               const sexpr::list& lst = e.get<sexpr::list>();
-              
-              if(size(lst) != 2) throw fail();
-
+              if(size(lst) != 2) throw error;
               return branch{check_expr(lst->head), check_expr(lst->tail->head)};
             }) };
-
-        return res;
         
-      } catch( fail ) {
-        throw syntax_error("(cond (`expr` `expr`)...)");
+      } catch(std::bad_cast) {
+        throw error;
       }
       
     }
@@ -335,25 +327,34 @@ namespace slip {
     
 
     static expr check_record(const sexpr::list& items) {
-      struct fail { };
+      static const syntax_error error("(record (`symbol` `expr`)...)");
+      
       try{ 
-        const record result = { map(items, [](const sexpr& e) -> record::row {
-            
-            if(!e.is<sexpr::list>() ) throw fail();
-            const sexpr::list& lst = e.get<sexpr::list>();
-            
-            if(size(lst) != 2) throw fail();
-            if(!lst->head.is<symbol>()) throw fail();
-            
-            return {lst->head.get<symbol>(), check_expr(lst->tail->head)};
-          })
-        };
-        
-        return result;
-      } catch (fail ) {
-        throw syntax_error("(record (`symbol` `expr`)...)");
+        return record{ map(items, [](const sexpr& e) -> record::row {
+              const sexpr::list& lst = e.get<sexpr::list>();
+              
+              if(size(lst) != 2) throw error;
+              return {lst->head.get<symbol>(), check_expr(lst->tail->head)};
+            })
+            };
+      } catch (std::bad_cast) {
+        throw error;
       }
     };
+
+
+
+    static expr check_export(const sexpr::list& items) {
+      static const syntax_error error("(export `symbol` `expr`)");
+      
+      try{
+        if(size(items) != 2) throw error;
+        return export_{at(items, 0).get<symbol>(), check_expr(at(items, 1)) };
+      } catch(std::bad_cast) {
+        throw error;
+      }
+    };
+    
     
     
     struct expr_visitor {

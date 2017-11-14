@@ -15,10 +15,8 @@ namespace slip {
     
     const extern symbol record;
 
-    const extern symbol module;
-
-
-    // 
+    const extern symbol module, export_;
+    
     const extern symbol quote, unquote, quasiquote;
     const extern symbol ref, get, set;
     
@@ -39,6 +37,7 @@ namespace slip {
     struct condition;
     struct binding;
     struct escape;
+    struct export_;
     
     struct selection {
       selection(symbol label) : label(label) { }
@@ -88,7 +87,8 @@ namespace slip {
                            sequence,
                            condition,
                            selection,
-                           record> {
+                           record,
+                           export_> {
       
       using expr::variant::variant;
 
@@ -195,6 +195,14 @@ namespace slip {
 
       const list<row> rows;
     };
+
+
+    // module export (rank2 -> rank1 boxing)
+    struct export_ {
+      symbol name;
+      expr value;
+    };
+    
 
     
     // TODO type, etc

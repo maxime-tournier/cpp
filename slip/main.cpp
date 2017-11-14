@@ -221,7 +221,7 @@ static const auto compiler = [](bool dump_bytecode) {
 
 namespace po = boost::program_options;
 static po::variables_map parse_options(int argc, char** argv) {
-  po::options_description desc("Allowed options");
+  po::options_description desc("allowed options");
   desc.add_options()
     ("help", "produce help message")
     ("filename", po::value< std::string >(), "input file")

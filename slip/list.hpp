@@ -116,9 +116,9 @@ namespace slip {
 
   
   template<class Head>
-  const Head& get( const list<Head>& self, std::size_t i ) {
+  const Head& at(const list<Head>& self, std::size_t i) {
     if(i == 0) return self->head;
-    return get(self->tail, i - 1);
+    return at(self->tail, i - 1);
   }
   
   
