@@ -25,6 +25,10 @@ namespace slip {
   static const auto backquote = chr<'`'>();
   static const auto comma = chr<','>();        
 
+
+  parse::any<unit> skipper() {
+    return skip >> [](char) { return pure(unit()); };
+  }
   
   parse::any<sexpr> parser() {
     

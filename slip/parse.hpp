@@ -7,8 +7,9 @@
 namespace slip {
 
   struct sexpr;
-
-  parse::any<sexpr> skipper();  
+  struct unit;
+  
+  parse::any<unit> skipper();  
   parse::any<sexpr> parser();
   
 }

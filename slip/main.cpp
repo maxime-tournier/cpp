@@ -55,7 +55,7 @@ static int process(std::istream& in, Action action) {
   in >> std::noskipws;
   
   try{
-    const auto eof = parse::debug("eof") <<= parse::eof();
+    const auto eof = parse::debug("eof") <<= parse::token(parse::eof(), slip::skipper());
     const auto error = parse::debug("error") <<= parse::error<parse::eof, slip::parse_error>();
     
     const auto parser = (*(slip::parser() >> action), eof | error);
