@@ -1,5 +1,5 @@
 
-* done
+# done
 
 - basic hindley-milner calculus
 
@@ -36,7 +36,7 @@
          (pure (@attr x 2.0)))))
     ``` 
 
-* needed
+# needed
 
 - currying: store argc for builtin functions
 
@@ -51,17 +51,16 @@
   - find a way to hash symbols with prime numbers globally
   - fix minimum record size?
 
-* planned
+# planned
 
 - typeclasses
   - need higher-kinded polymorphism for monads
-  - maybe [http://web.cecs.pdx.edu/~mpj/pubs/popl97-fcp.pdf] could work?
 
 - automatic coercion when passing modules around in functions (using typeclasses?)
 
 - better vm/llvm/???
 
-* lolwat
+# lolwat
 
 - existentials? 
   - could row-polymorphism be used instead to package interfaces?
