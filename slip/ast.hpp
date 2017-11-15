@@ -122,6 +122,7 @@ namespace slip {
       const list<ast::type> args;
     };
 
+
     // TODO exclude naked type_constructors? (= nullary applications)
     struct type : variant< type_constructor, type_variable, type_application > {
       using type::variant::variant;

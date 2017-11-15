@@ -144,6 +144,12 @@ namespace slip {
     static application map(const application& self, const F& f) {
       return {f(self.func), f(self.arg)};
     }
+
+    template<class F>
+    static void iter(const application& self, const F& f) {
+      f(self.func); f(self.arg);
+    }
+
     
 
     // type schemes

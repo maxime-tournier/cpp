@@ -59,7 +59,7 @@ namespace slip {
           if( self.quantified ) out << "'";
           else out << "!";
           return out << char('a' + self.index)
-                     << "(" << self.depth << ")"
+                     << "[" << self.depth << "]"
             ;
         }
         
@@ -422,6 +422,34 @@ namespace slip {
       
     };
 
+
+    struct promote_visitor {
+      // make sure all type variables in a type unify with a variable with given
+      // depth
+      std::size_t depth;
+
+      template<class UF>
+      void operator()(const constant& self, UF& uf) const { }
+
+      template<class UF>
+      void operator()(const variable& self, UF& uf) const {
+        if(self.depth > depth) {
+          uf.link(self, variable(self.kind, depth));
+        }
+      }
+
+
+      template<class UF>
+      void operator()(const application& self, UF& uf) const {
+        
+        iter(self, [&](const type& x) {
+            uf.find(x).apply(*this, uf);
+          });
+        
+      }
+      
+    };
+    
     
     template<class UF>
     struct unify_visitor {
@@ -465,15 +493,14 @@ namespace slip {
           
           throw kind_error(ss.str());
         }
+
+        // we will link self to rhs, but we might need to promote rhs to
+        // self.depth (if it's deeper or a type application)
+        const bool promote_rhs = rhs.is<application>() ||
+          (rhs.is<variable>() && rhs.get<variable>().depth > self.depth);
+
+        if(promote_rhs) rhs.apply(promote_visitor{self.depth}, uf);
         
-        // TODO figure this out
-        if( rhs.is<variable>() && self.depth < rhs.get< variable >().depth) {
-          // the topmost variable wins
-          uf.link(rhs, self);
-          return;
-        }
-        
-        // debug( std::clog << "linking", type(self), rhs ) << std::endl;
         uf.link(self, rhs);
         
       }
@@ -856,15 +883,9 @@ namespace slip {
           tc.unify(unbox, target >>= source);
           tc.unify(value.type, source);
 
-          std::clog << "source: " << source << std::endl;          
-
           // generalize source
           const scheme p = tc.generalize(source);
-          
           std::clog << "source: " << p << std::endl;
-         
-
-          // TODO FIXME unification error
           
           // all the variables in dctor.forall must remain quantified in p
           for(const variable& v : dctor.forall) {
@@ -987,7 +1008,7 @@ namespace slip {
     scheme state::generalize(const type& mono) const {
       scheme res(mono.apply(nice(), uf));
 
-      const auto all = vars(res.body);
+      const vars_visitor::result_type all = vars(res.body);
     
       // copy free variables (i.e. instantiated at a larger depth)
       auto out = std::inserter(res.forall, res.forall.begin());
@@ -1120,6 +1141,8 @@ namespace slip {
 
         // generalize rank2 vars in unboxed type
         const scheme source = ctx.generalize( unboxed );
+        std::clog << "unboxed: " << unboxed << std::endl;
+        std::clog << "source: " << source << std::endl;
         
         // data constructor
         data_constructor data = {source.forall, unbox};

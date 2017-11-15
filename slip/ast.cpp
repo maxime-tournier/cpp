@@ -208,7 +208,7 @@ namespace slip {
 
     
     static type check_type(const sexpr& e) {
-      static const syntax_error error("type: `symbol` | `'symbol` | (`symbol` `type`...)");
+      static const syntax_error error("type: `symbol` | `'symbol` | (`symbol` `type` `type`...)");
       
       try {
         if(e.is<symbol>())  {
@@ -423,35 +423,41 @@ namespace slip {
 
 
     static module check_module(const sexpr::list& items) {
-      struct fail { };
+      static const syntax_error error("(module (`symbol` `tyvars`...)  (`symbol` `type`)...)");
+
       try {
-        if(size(items) < 1) throw fail();
+        // TODO do we want empty module?
+        if(size(items) < 1) throw error;
         
         const ast::type type = check_type(items->head);
 
-        // TODO promote naked type ctors to nullary applications?        
-        if(!type.is<type_application>()) throw fail();
-        const ast::type_application& app = type.get<type_application>();
+        struct check {
+          using value_type = type_application;
+          
+          value_type operator()(const type_application& self) const { return self; }
+          value_type operator()(const type_constructor& self) const { return {self, {}}; }
+          value_type operator()(const type_variable& self) const { throw error; }
+          
+        };
+
+        const type_application app = type.apply(check());
         
         // make sure application args are all type variables
         for(const ast::type& x : app.args) {
-          if(!x.is<type_variable>()) throw fail();
+          if(!x.is<type_variable>()) throw error;
         }
-
+        
         // extract rows
         const list<module::row> rows = map(items->tail, [](const sexpr& e) {
-            if(!e.is<sexpr::list>()) throw fail();
             const sexpr::list& self = e.get<sexpr::list>();
-
-            if(size(self) != 2) throw fail();
-            if(!self->head.is<symbol>()) throw fail();
+            if(size(self) != 2) throw error;
             
             return module::row{self->head.get<symbol>(), check_type(self->tail->head)};
           });
 
         return module{app, rows};
-      } catch( fail ) {
-        throw syntax_error("(module (`symbol` `tyvars`...)  (`symbol` `type`)...)");
+      } catch( std::bad_cast ) {
+        throw error;
       }
     }
 
