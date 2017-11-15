@@ -591,7 +591,6 @@ namespace slip {
           
           uf.link(*tail, tmp);
         } else if(!diff.empty()) {
-          // TODO unification error if other has no tail?
           std::stringstream ss;
           ss << "the following attributes cannot be matched:";
           for(const symbol& s : diff) {
