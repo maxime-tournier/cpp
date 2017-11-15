@@ -4,7 +4,7 @@
 - basic hindley-milner calculus
 
 - vm with function currying 
-[https://www.microsoft.com/en-us/research/publication/make-fast-curry-pushenter-vs-evalapply/]
+[see](https://www.microsoft.com/en-us/research/publication/make-fast-curry-pushenter-vs-evalapply/)
 
 - row polymorphism à la [Daan
   Leijen](https://www.microsoft.com/en-us/research/publication/extensible-records-with-scoped-labels/)
