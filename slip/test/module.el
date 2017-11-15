@@ -1,29 +1,20 @@
 
 
 (module (foo 'a)
-        (test (-> 'a integer)))
-
-(def f (lambda ( (foo x) )
-         x))
-         ;; (@test x)))
-f
+        (attr (-> 'a integer)))
 
 (module bar
-        (test (-> 'b integer)))
-
-(def g (lambda ( (bar x) )
-         x))
-g
+        (attr (-> 'b integer)))
 
 (def one (lambda (x) 1))
 
-(export foo (record (test one)))
-(export bar (record (test one)))
+;; (export foo (record (test one)))
+(export bar (record (attr2 one)))
 
-;; (def test (lambda (f)
-;;             (export bar (record (test f)))))
+(def test (lambda (f)
+            (export bar (record (attr f)))))
 
-;; (test (lambda (x) 1))
+(test one)
 
 
 

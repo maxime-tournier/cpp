@@ -592,6 +592,12 @@ namespace slip {
           uf.link(*tail, tmp);
         } else if(!diff.empty()) {
           // TODO unification error if other has no tail?
+          std::stringstream ss;
+          ss << "the following attributes cannot be matched:";
+          for(const symbol& s : diff) {
+            ss << " " << s;
+          }
+          throw type_error(ss.str());
         }
         
       }
@@ -876,22 +882,24 @@ namespace slip {
           const type source = tc.fresh();
           const type target = tc.fresh();
 
-          std::clog << "unbox: " << unbox << std::endl;          
-          std::clog << "value: " << value.type << std::endl;
-          std::clog << "depth: " << tc.env->depth << std::endl;
+          // std::clog << "unbox: " << unbox << std::endl;          
+          // std::clog << "value: " << value.type << std::endl;
+          // std::clog << "depth: " << tc.env->depth << std::endl;
           
           tc.unify(unbox, target >>= source);
           tc.unify(value.type, source);
 
           // generalize source
           const scheme p = tc.generalize(source);
-          std::clog << "source: " << p << std::endl;
+          // std::clog << "source: " << p << std::endl;
           
           // all the variables in dctor.forall must remain quantified in p
           for(const variable& v : dctor.forall) {
             assert(map.find(v) != map.end());
 
-            if( p.forall.find( map.at(v) ) == p.forall.end() ) {
+            const type sv = tc.uf->find( map.at(v) );
+            
+            if( !sv.is<variable>() || p.forall.find( sv.get<variable>() ) == p.forall.end() ) {
               // TODO more details
               throw type_error("generalization error");
             }
