@@ -8,25 +8,29 @@ features:
 - a small **bytecode compiler + vm**. you can see the resulting bytecode using: 
   `$ ./slip --dump`
 
-- a few **primitive types**: `unit, boolean, integer, real, string, symbol`
+- a few **primitive types**: `unit, boolean, integer, real, string`
 - a few non-primitive types:
   - function types `'a -> 'b`
-  - lists `list 'a`
-  - mutable refs `ref 'a 'b`
-  - computations `io 'a 'b`
+  - lists: `list 'a`
+  - computations: `io 'a`
+  - record types: `(record (foo 1) (bar true))` attribute selection: `(@foo x)`
+  - modules (records with polymorphic attribute types, boxed behind rank1 types)
+    `(module my-module (length (-> 'a integer)))`
   
 - very few primitive functions so far (more will be added once typeclasses are
   in):
   - `+, -, /, *, %, =` for integers
   - `cons` for list
-  - empty list is `nil : list 'a`
+  - empty list: `nil : list 'a`
 
-- **conditionals**: `(cond ((test1 value1) (test2 value2) ... )`
 - **lambdas**: `(lambda (x) x) : 'a -> 'a`
 - **definitions** (let-polymorphism) `(def id (lambda (x) x)) : io unit`
 
-- **sequencing** is typechecked using a monad similar to haskell's `ST`:
 
+
+- **conditionals**: `(cond ((test1 value1) (test2 value2) ... )`
+
+- **sequencing** is typechecked using a monad similar to haskell's `ST`:
     ```lisp
         (do
             (var x (pure 0))
@@ -41,18 +45,4 @@ features:
       (similar to `runST` in haskell): `(run (var x (pure 0) ) (pure x))` has
       type `integer`
       
-    - the language is strict: the monad is only for type-checking purpose
-    
-- **mutable references**
-  - `ref : 'a -> io ref 'a 'b` where `'a` is the value type and `'b` is a
-    phantom thread type
-
-  - `get : ref 'a 'b -> io 'a 'b` dereferences a cell
-  - `set : ref 'a 'b  -> 'a -> io unit 'b` mutates value
-
-  it is expected that threading sequencing and mutation in such a monadic way
-  will remove the need for ML's value restriction. since the monad is safely
-  escapable, it should keep `io` from creeping up everywhere.
-
-- there is also a small lisp interpreter that might be useful for a macro
-  system
+    - the language is strict: the `io` monad is only for type-checking purpose
