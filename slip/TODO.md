@@ -54,7 +54,7 @@
 # planned
 
 - typeclasses
-  - need higher-kinded polymorphism for monads
+  - need [higher-order polymorphism](http://web.cecs.pdx.edu/~mpj/pubs/springschool95.pdf) for monads
 
 - automatic coercion when passing modules around in functions (using typeclasses?)
 
