@@ -1077,6 +1077,65 @@ namespace slip {
     };
 
 
+    struct kind_visitor {
+      using value_type = kind;
+      
+      kind operator()(const ast::type_constructor& self, datatypes& ctors) const {
+        if(auto t = ctors.find(self.name)) {
+          return t->kind();
+        }
+        
+        throw unbound_variable(self.name);
+      }
+
+      kind operator()(const ast::type_variable& self, datatypes& ctors) const {
+
+        // try{ return db.at(self); }
+        // catch( std::out_of_range ) {
+        //   kind_variable res;
+        //   db.emplace(self, res);
+        // }
+
+        // return res;
+      }
+
+
+      kind operator()(const ast::type_application& self, datatypes& ctor) const {
+
+        // const kind func = self.ctor.apply( kind_visitor(), ctor );
+
+        // // build  kind
+        // const kind result = kind_variable();
+
+        // const kind call = foldr(result, self.args, [](const ast::type& lhs, const kind& rhs) -> kind {
+        //     return infer_kind(lhs, rhs) >>= rhs;
+        //   });
+        
+        // unify_kinds(func, call);
+        // return result;
+      }
+      
+      static void unify_kinds(const kind& lhs, const kind& rhs) {
+
+        // if(lhs.is<constructor>() && rhs.is<constructor>()) {
+        //   unify_kinds(lhs.get<constructor>().from, rhs.get<constructor>().from);
+        //   unify_kinds(lhs.get<constructor>().to, rhs.get<constructor>().to);          
+        //   return;
+        // }
+
+        // if(lhs.is<kind_variable>() || rhs.is<kind_variable>()) {
+        //   // unify shit
+        // }
+
+        // // constants
+        
+      }
+      
+      
+    };
+
+    
+
     static std::ostream& operator<<(std::ostream& out, const type& self) {
       pretty_printer pp(out);
       pp << self;

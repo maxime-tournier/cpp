@@ -26,9 +26,11 @@ namespace slip {
     ////////////////////
     // kinds
     struct kind;
-    
+
+    // TODO row/terms should be kind constants
     struct terms;
     struct rows;
+
     struct constructor;
 
     // a kind variable
