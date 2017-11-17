@@ -251,6 +251,11 @@ namespace slip {
         // TODO parentheses
         out << self.from << " -> " << self.to;
       }
+
+
+      void operator()(const kind_variable&, std::ostream& out) const {
+        out << '?';
+      }
       
       
     };
@@ -636,12 +641,14 @@ namespace slip {
 
 
 
+    
+
+    
 
     static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
     static type infer(datatypes& self, const ast::type& node);    
     
-    
-    // type inference for expressions
+
 
     // expression switch
     struct expr_visitor {
@@ -1088,6 +1095,7 @@ namespace slip {
     }
     
 
+        
     
 
     // toplevel visitor

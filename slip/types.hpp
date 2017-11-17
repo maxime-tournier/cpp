@@ -26,11 +26,15 @@ namespace slip {
     ////////////////////
     // kinds
     struct kind;
+    
     struct terms;
     struct rows;
     struct constructor;
 
-    struct kind : variant<terms, rows, constructor> {
+    // a kind variable
+    struct kind_variable;
+    
+    struct kind : variant<terms, rows, constructor, kind_variable> {
       using kind::variant::variant;
     };
     
@@ -62,6 +66,22 @@ namespace slip {
     constructor operator>>=(const kind& lhs, const kind& rhs);
 
 
+    struct kind_variable {
+      std::size_t index;
+      kind_variable() {
+        static std::size_t count = 0;
+        index = count++;
+      }
+
+      bool operator==(const kind_variable& other) const {
+        return index == other.index;
+      }
+
+      bool operator<(const kind_variable& other) const {
+        return index < other.index;
+      }
+    };
+    
 
     std::ostream& operator<<(std::ostream& out, const kind& self);
     
