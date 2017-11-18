@@ -54,13 +54,15 @@ namespace slip {
       struct var {
         std::size_t index;
         bool quantified;
-        std::size_t depth;
+
+        variable orig;
 
         friend std::ostream& operator<<(std::ostream& out, const var& self) {
           if( self.quantified ) out << "'";
           else out << "!";
           return out << char('a' + self.index)
-                     << "[" << self.depth << "]"
+                     // << "[" << self.orig.depth << "]"
+                     // << " :: " << self.orig.kind;
             ;
         }
         
@@ -140,7 +142,7 @@ namespace slip {
       
       void operator()(const variable& self, std::ostream& out, 
                       ostream_map& osm) const {
-        auto err = osm.emplace(self, var{osm.size(), false, self.depth});
+        auto err = osm.emplace(self, var{osm.size(), false, self});
         out << err.first->second;
       }
       
@@ -1044,8 +1046,9 @@ namespace slip {
     struct type_visitor {
       using value_type = type;
 
-      // constructor: lookup
-      type operator()(const ast::type_constant& self, datatypes& ctors) const {
+      // variables/constants: lookup
+      template<class T>
+      type operator()(const T& self, datatypes& ctors) const {
         if(auto t = ctors.find(self.name)) {
           return *t;
         }
@@ -1053,21 +1056,6 @@ namespace slip {
         throw unbound_variable(self.name);
       }
 
-
-      // variables: lookup / auto-define
-      type operator()(const ast::type_variable& self, datatypes& ctors) const {
-        if(auto t = ctors.find(self.name)) {
-          return *t;
-        }
-
-        // TODO how to infer kind?
-        const kind k = terms();
-        const type res = variable(k, ctors.depth);
-        ctors.locals.emplace(self.name, res);
-        return res;
-      }
-
-      
       // applications
       type operator()(const ast::type_application& self, datatypes& ctors) const {
         return foldl(infer(ctors, self.ctor), self.args, [&ctors](const type& lhs, const ast::type& rhs) {
@@ -1078,6 +1066,16 @@ namespace slip {
     };
 
 
+    static type infer(datatypes& ctors, const ast::type& self) {
+      try {
+        return self.apply(type_visitor(), ctors);
+      } catch( error& e ) {
+        std::cerr << "...when inferring type for: " << repr(self) << std::endl;
+        ctors.debug( std::clog );
+        throw;
+      }
+    }
+    
     
     struct infer_kind_visitor {
       using value_type = kind;
@@ -1086,7 +1084,8 @@ namespace slip {
       kind operator()(const T& self, const DB& db, UF& uf) const {
         if(auto* k = db.find(self.name)) {
           return *k;
-        }  
+        }
+
         throw unbound_variable(self.name);
       }
 
@@ -1108,8 +1107,12 @@ namespace slip {
       }
 
       template<class UF>
-      static void unify_kinds(UF& uf, const kind& lhs, const kind& rhs) {
-
+      static void unify_kinds(UF& uf, kind lhs, kind rhs) {
+        // std::clog << "unifying kinds: " << lhs << " and: " << rhs << std::endl;
+        
+        lhs = uf.find(lhs);
+        rhs = uf.find(rhs);
+        
         if(lhs.is<constructor>() && rhs.is<constructor>()) {
           unify_kinds(uf, lhs.get<constructor>().from, rhs.get<constructor>().from);
           unify_kinds(uf, lhs.get<constructor>().to, rhs.get<constructor>().to);
@@ -1123,6 +1126,8 @@ namespace slip {
 
           // note: other becomes representant
           uf.link(var, other);
+
+          return;
         }
 
         if(lhs != rhs) {
@@ -1143,15 +1148,6 @@ namespace slip {
     }
 
     
-    static type infer(datatypes& ctors, const ast::type& self) {
-      try {
-        return self.apply(type_visitor(), ctors);
-      } catch( error& e ) {
-        std::cerr << "when inferring type for: " << repr(self) << std::endl;
-        ctors.debug( std::clog );
-        throw;
-      }
-    }
     
 
     // environment for kinding
@@ -1161,7 +1157,8 @@ namespace slip {
       struct fill_visitor {
 
         void operator()(const ast::type_variable& self, kind_db& db, const datatypes& ctors) const {
-          db.locals.emplace(self.name, kind_variable());
+          if( db.find(self.name) ) { }
+          else db.locals.emplace(self.name, kind_variable());
         }
 
         void operator()(const ast::type_constant& self, kind_db& db, const datatypes& ctors) const {
@@ -1185,11 +1182,33 @@ namespace slip {
       void fill(const datatypes& ctors, const ast::type& t) {
         t.apply( fill_visitor(), *this, ctors);
       }
+
+    };
+
+    // substitute all kind variables in a given kind
+    template<class UF>
+    struct substitute_kind_visitor {
+      using value_type = kind;
+
+      template<class T>
+      kind operator()(const T& self, const UF& uf) const { return self; }
+
+      kind operator()(const kind_variable& self, const UF& uf) const {
+        return uf.find(self);
+      }
+
+      kind operator()(const constructor& self, const UF& uf) const {
+        return constructor{ self.from.apply( substitute_kind_visitor(), uf),
+            self.to.apply( substitute_kind_visitor(), uf) };
+      }
       
     };
+
+    template<class UF>
+    static kind substitute(const kind& k, const UF& uf) {
+      return uf.find(k).apply(substitute_kind_visitor<UF>(), uf);
+    }
     
-
-
     
     // toplevel visitor
     struct toplevel_visitor {
@@ -1215,10 +1234,10 @@ namespace slip {
 
         {
           // process all types to gather information
-          ref<kind_db> sub = make_ref<kind_db>(db);
+          auto ksub = make_ref<kind_db>(db);
           for( const ast::module::row& r : self.rows ) {
-            sub->fill(*tc.ctor, r.type);
-            r.type.apply(infer_kind_visitor(), *db, uf);
+            ksub->fill(*tc.ctor, r.type);
+            r.type.apply(infer_kind_visitor(), *ksub, uf);
           }
         }
 
@@ -1226,27 +1245,27 @@ namespace slip {
         // parameters
         
         // extract type variables and build kind
-        datatypes sub(tc.ctor);        
-
+        auto sub = make_ref<datatypes>(tc.ctor);        
+        
         // modules are values
         const kind init = terms();
 
         // 
         const kind k = foldr(init, self.args, [&](const ast::type_variable& lhs, const kind& rhs) {
+            const kind ki = substitute(*db->find(lhs.name), uf);
             
-            const kind k = uf.find( *db->find(lhs.name) );
-            if(k.is<kind_variable>()) {
+            if(ki.is<kind_variable>()) {
               throw kind_error("could not infer kind for " + lhs.name.str());
             }
 
             // TODO current depth?
-            const type a = variable(k, 0);
+            const type ai = variable(ki, 0);
             
-            if( !sub.locals.emplace(lhs.name, a).second ) {
+            if( !sub->locals.emplace(lhs.name, ai).second ) {
               throw type_error("duplicate type variable");
             }
             
-            return terms() >>= rhs;
+            return ki >>= rhs;
           });
           
         // type constructor
@@ -1257,7 +1276,23 @@ namespace slip {
         state ctx = tc.scope();
 
         const type rows = foldr(empty_row_ctor, self.rows, [&](const ast::module::row& lhs, const type& rhs) {
-            return row_extension_ctor(lhs.name)( infer(sub, lhs.type) ) (rhs);
+            auto ssub = make_ref<datatypes>(sub);
+
+            // (re) infer kinds TODO don't do it twice
+            auto ksub = make_ref<kind_db>(db);
+            ksub->fill(*tc.ctor, lhs.type);
+            lhs.type.apply(infer_kind_visitor(), *ksub, uf);
+
+            // define type variables in ssub based on inferred kinds
+            for(auto& it : ksub->locals) {
+              if(it.second.is<kind_variable>()) {
+                const kind k = substitute(it.second, uf);
+                std::clog << it.first  << ": " << k << std::endl;
+                ssub->locals.emplace(it.first, variable(k, 1));
+              }
+            }
+            
+            return row_extension_ctor(lhs.name)( infer(*ssub, lhs.type) ) (rhs);
           });
         
         const type unboxed = record_ctor(rows);
@@ -1269,7 +1304,7 @@ namespace slip {
 
         // module type (ctor applied to its variables)
         const type module = foldl(ctor, self.args, [&](const type& lhs, const ast::type& rhs) {
-            return lhs(sub.locals.at(rhs.get<ast::type_variable>().name));
+            return lhs(sub->locals.at(rhs.get<ast::type_variable>().name));
           });
 
         const scheme unbox = tc.generalize( module >>= unboxed );
@@ -1318,7 +1353,7 @@ namespace slip {
       pretty_printer pp(out);
       
       for(const variable& var : self.forall) {
-        pp.osm.emplace( std::make_pair(var, pretty_printer::var{pp.osm.size(), true} ) );
+        pp.osm.emplace( std::make_pair(var, pretty_printer::var{pp.osm.size(), true, var} ) );
       }
       
       pp << self.body;

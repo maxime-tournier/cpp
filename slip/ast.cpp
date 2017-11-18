@@ -196,13 +196,15 @@ namespace slip {
     }
     
     static type_constant check_type_constructor(const sexpr& e) {
-      static const syntax_error error("`symbol`");
+      static const syntax_error error("tycon: `symbol`");
 
       try {
         const symbol s = e.get<symbol>();
 
         // exclude type variable
-        if(s.str()[0] == '\'') throw error;
+        if(s.str()[0] == '\'') {
+          throw error;
+        }
         return {s};
         
       } catch( std::bad_cast ) {
@@ -212,7 +214,7 @@ namespace slip {
 
     static type_variable check_type_variable(const symbol& s) {
       if(s.str()[0] != '\'' || s.str().size() < 2) {
-        throw syntax_error("`'symbol`");
+        throw syntax_error("tyvar: `'symbol`");
       }
       return {s};
     }
@@ -234,7 +236,7 @@ namespace slip {
         if(size(arg) < 2) throw error; // TODO or is it not? do we want nullary type
                                        // applications?
 
-        return ast::type_application{ check_type_constructor(arg->head),
+        return ast::type_application{ check_type(arg->head),
             map(arg->tail, &check_type) };
         
       } catch( std::bad_cast ) {

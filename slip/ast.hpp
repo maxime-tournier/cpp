@@ -131,6 +131,7 @@ namespace slip {
     };
     
     struct type_application {
+      type_application(const type_application& ) = default;
       const type ctor;
       const list<type> args;
     };
