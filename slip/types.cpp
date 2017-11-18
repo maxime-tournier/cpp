@@ -1076,8 +1076,20 @@ namespace slip {
       node.apply(fill_kind_visitor(), kenv, ctors);
       infer(uf, node, kenv);
     }
+
+
+    static void fill_variables(datatypes& ctors, const kinds::environment& kenv, const union_find<kind>& uf,
+                               std::size_t depth) {
+      for(auto& it : kenv.locals) {
+        if(it.second.is<kinds::variable>()) {
+          const kind k = substitute(it.second, uf);
+          ctors.locals.emplace(it.first, variable(k, depth)); // TODO hardcode
+        }
+      }
+
+    }
     
-    
+
     // toplevel visitor
     struct toplevel_visitor {
       using value_type = inferred<scheme, ast::toplevel>;
@@ -1096,7 +1108,7 @@ namespace slip {
         union_find<kind> uf;
         
         // declare stuff
-        for(const ast::type_variable& v : self.args) {
+        for(const ast::type_variable& v : self.args) { 
           fill_kind_visitor()(v, *kenv, *tc.ctor);
         }
 
@@ -1107,11 +1119,10 @@ namespace slip {
             fill_infer(uf, *ksub, r.type, *tc.ctor);
           }
         }
+        // note: at this point we must have sufficent information for kinding
+        // module args
 
-        // at this point we must have sufficent information for kinding
-        // parameters
-        
-        // extract type variables and build constructor kind
+        // module type environment
         auto sub = make_ref<datatypes>(tc.ctor);        
         
         // declare type variables for module args and build constructor kind
@@ -1129,26 +1140,20 @@ namespace slip {
             return ki >>= rhs;
           });
           
-        // type constructor
+        // module type constructor
         const type ctor = constant(self.ctor.name, k);
         // TODO recursive definition?
  
         // typecheck rows and build unboxed record type
         const type rows = foldr(empty_row_ctor, self.rows, [&](const ast::module::row& lhs, const type& rhs) {
             // (re) infer kinds TODO don't do it twice
-            auto ksub = make_ref<kinds::environment>(kenv);
-            fill_infer(uf, *ksub, lhs.type, *tc.ctor);
+            kinds::environment ksub(kenv);
+            fill_infer(uf, ksub, lhs.type, *tc.ctor);
             
-            // define type variables in ssub based on inferred kinds
-            auto ssub = make_ref<datatypes>(sub);
-            for(auto& it : ksub->locals) {
-              if(it.second.is<kinds::variable>()) {
-                const kind k = substitute(it.second, uf);
-                ssub->locals.emplace(it.first, variable(k, 1));
-              }
-            }
-            
-            return row_extension_ctor(lhs.name)( infer(*ssub, lhs.type) ) (rhs);
+            // declare type variables in ssub based on inferred kinds
+            datatypes ssub(sub);
+            fill_variables(ssub, ksub, uf, 1); // TODO hardcoded depth
+            return row_extension_ctor(lhs.name)( infer(ssub, lhs.type) ) (rhs);
           });
         
         const type unboxed = record_ctor(rows);
