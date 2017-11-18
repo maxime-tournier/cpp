@@ -951,42 +951,32 @@ namespace slip {
 
 
     
-    // finding nice representants (apply substitution)
-    // TODO rename substitute
-    struct nice {
+    // substitute all type variables
+    template<class UF>
+    struct substitute_visitor {
       using value_type = type;
       
-      template<class UF>
-      type operator()(const constant& self, UF& uf) const {
+      type operator()(const constant& self, const UF& uf) const {
         return self;
       }
 
-
-      template<class UF>
-      type operator()(const variable& self, UF& uf) const {
-
-        const type res = uf->find(self);
-        
-        if(res == type(self)) {
-          // debug(std::clog << "nice: ", type(self), res) << std::endl;          
-          return res;
-        }
-        
-        return res.apply(nice(), uf);
+      type operator()(const variable& self, const UF& uf) const { 
+        return uf.find(self);
       }
-
-
-      template<class UF>
-      type operator()(const application& self, UF& uf) const {
+      
+      type operator()(const application& self, const UF& uf) const {
         return map(self, [&](const type& c) {
-            return c.apply(nice(), uf);
+            return c.apply(substitute_visitor(), uf);
           });
       }
       
     };
 
 
-
+    template<class UF>
+    static type substitute(const type& t, const UF& uf) {
+      return uf.find(t).apply( substitute_visitor<UF>(), uf );
+    }
 
 
 
@@ -1023,7 +1013,7 @@ namespace slip {
 
     // generalization
     scheme state::generalize(const type& mono) const {
-      scheme res(mono.apply(nice(), uf));
+      scheme res( substitute(mono, *uf) );
 
       const vars_visitor::result_type all = vars(res.body);
     
