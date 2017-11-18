@@ -134,7 +134,7 @@ namespace slip {
       const type ctor;
       const list<type> args;
     };
-    
+
     
     struct lambda {
 

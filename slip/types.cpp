@@ -1082,31 +1082,24 @@ namespace slip {
     struct infer_kind_visitor {
       using value_type = kind;
       
-      template<class DB, class UF>
-      kind operator()(const ast::type_constant& self, DB& db, UF& uf) const {
-        try { return db(self.name); }
-        catch ( std::out_of_range ) {
-          throw unbound_variable(self.name);
-        }
+      template<class T, class DB, class UF>
+      kind operator()(const T& self, const DB& db, UF& uf) const {
+        if(auto* k = db.find(self.name)) {
+          return *k;
+        }  
+
+        throw unbound_variable(self.name);
       }
 
       template<class DB, class UF>
-      kind operator()(const ast::type_variable& self, DB& db, UF& uf) const {
-        try { return db(self.name); }
-        catch ( std::out_of_range ) {
-          throw unbound_variable(self.name);
-        }
-      }
-
-      template<class DB, class UF>
-      kind operator()(const ast::type_application& self, DB& db, UF& uf) const {
+      kind operator()(const ast::type_application& self, const DB& db, UF& uf) const {
 
         const kind func = self.ctor.apply( infer_kind_visitor(), db, uf);
         const kind result = kind_variable();
 
         const kind call =
           foldr(result, self.args, [&](const ast::type& lhs, const kind& rhs) {
-              const type result = lhs.apply(infer_kind_visitor(), db, uf) >>= rhs;
+              const kind result = lhs.apply(infer_kind_visitor(), db, uf) >>= rhs;
               return result;
             });
         
@@ -1129,6 +1122,7 @@ namespace slip {
             lhs.get<kind_variable>() : rhs.get<kind_variable>();
           const kind& other =  lhs.is<kind_variable>() ? rhs : lhs;
 
+          // note: other becomes representant
           uf.link(var, other);
         }
 
@@ -1142,7 +1136,6 @@ namespace slip {
       
     };
 
-    
 
     static std::ostream& operator<<(std::ostream& out, const type& self) {
       pretty_printer pp(out);
@@ -1162,9 +1155,43 @@ namespace slip {
     }
     
 
+    // environment for kinding
+    struct kind_db : context<kind_db, kind>{
+      using kind_db::context::context;
+
+      struct fill_visitor {
+
+        void operator()(const ast::type_variable& self, kind_db& db, const datatypes& ctors) const {
+          db.locals.emplace(self.name, kind_variable());
+        }
+
+        void operator()(const ast::type_constant& self, kind_db& db, const datatypes& ctors) const {
+          if( auto* t = ctors.find(self.name) ) { 
+            db.locals.emplace(self.name, t->kind());
+          } else {
+            throw unbound_variable(self.name);
+          }
+        }
+
+        void operator()(const ast::type_application& self, kind_db& db, const datatypes& ctors) const {
+          self.ctor.apply(fill_visitor(), db, ctors);
+          for(const ast::type& t : self.args) {
+            t.apply(fill_visitor(), db, ctors);
+          }
+        }
         
+        
+      };
+      
+      void fill(const datatypes& ctors, const ast::type& t) {
+        t.apply( fill_visitor(), *this, ctors);
+      }
+      
+    };
     
 
+
+    
     // toplevel visitor
     struct toplevel_visitor {
       using value_type = inferred<scheme, ast::toplevel>;
@@ -1178,6 +1205,27 @@ namespace slip {
       // modules
       value_type operator()(const ast::module& self, state& tc) {
 
+        // infer kind for module arguments
+        ref<kind_db> db = make_ref<kind_db>();
+        union_find<kind> uf;
+        
+        // declare stuff
+        for(const ast::type_variable& v : self.args) {
+          db->fill(*tc.ctor, v);
+        }
+
+        {
+          // process all types to gather information
+          ref<kind_db> sub = make_ref<kind_db>(db);
+          for( const ast::module::row& r : self.rows ) {
+            sub->fill(*tc.ctor, r.type);
+            r.type.apply(infer_kind_visitor(), *db, uf);
+          }
+        }
+
+        // at this point we should have sufficent information for kinding
+        // parameters
+        
         // extract type variables and build kind
         datatypes sub(tc.ctor);        
 
@@ -1185,10 +1233,17 @@ namespace slip {
         const kind init = terms();
 
         // 
-        const kind k = foldr(init, self.args, [&](const ast::type& lhs, const kind& rhs) {
-            // TODO kind?
-            const type a = variable(terms(), 0);
-            if( !sub.locals.emplace(lhs.get<ast::type_variable>().name, a).second ) {
+        const kind k = foldr(init, self.args, [&](const ast::type_variable& lhs, const kind& rhs) {
+            
+            const kind k = uf.find( *db->find(lhs.name) );
+            if(k.is<kind_variable>()) {
+              throw kind_error("could not infer kind for " + lhs.name.str());
+            }
+
+            // TODO current depth?
+            const type a = variable(k, 0);
+            
+            if( !sub.locals.emplace(lhs.name, a).second ) {
               throw type_error("duplicate type variable");
             }
             
