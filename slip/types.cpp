@@ -952,19 +952,19 @@ namespace slip {
 
     
     // substitute all type variables
-    template<class UF>
     struct substitute_visitor {
       using value_type = type;
+      using uf_type = union_find<type>;
       
-      type operator()(const constant& self, const UF& uf) const {
+      type operator()(const constant& self, const uf_type& uf) const {
         return self;
       }
 
-      type operator()(const variable& self, const UF& uf) const { 
+      type operator()(const variable& self, const uf_type& uf) const { 
         return uf.find(self);
       }
       
-      type operator()(const application& self, const UF& uf) const {
+      type operator()(const application& self, const uf_type& uf) const {
         return map(self, [&](const type& c) {
             return c.apply(substitute_visitor(), uf);
           });
@@ -973,9 +973,8 @@ namespace slip {
     };
 
 
-    template<class UF>
-    static type substitute(const type& t, const UF& uf) {
-      return uf.find(t).apply( substitute_visitor<UF>(), uf );
+    static type substitute(const type& t, const union_find<type>& uf) {
+      return uf.find(t).apply( substitute_visitor(), uf );
     }
 
 
