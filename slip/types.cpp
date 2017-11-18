@@ -181,34 +181,35 @@ namespace slip {
 
 
 
-    // kinds
-    constructor operator>>=(const kind& lhs, const kind& rhs) {
-      return {lhs, rhs};
-    }
 
 
-    bool constructor::operator==(const constructor& other) const {
-      return from == other.from && to == other.to;
-    }
+    // bool constructor::operator==(const constructor& other) const {
+    //   return from == other.from && to == other.to;
+    // }
 
-    bool constructor::operator<(const constructor& other) const {
-      return from < other.from || (from == other.from && to < other.to);
-    }
+    // bool constructor::operator<(const constructor& other) const {
+    //   return from < other.from || (from == other.from && to < other.to);
+    // }
     
+    using kinds::terms;
     
-    const type func_ctor = constant("->", terms() >>= terms() >>= terms() );
-    const type list_ctor = constant("list", terms() >>= terms() );
-    const type io_ctor = constant("io", terms() >>= terms() );
+    const type func_ctor = constant("->", terms >>= terms >>= terms );
+    const type list_ctor = constant("list", terms >>= terms );
+    const type io_ctor = constant("io", terms >>= terms );
     
 
     // row extension
-    const kind row_extension_kind = terms() >>= rows() >>= rows();
+    using kinds::rows;
+    using kinds::kind;    
+    
+    static const kinds::kind row_extension_kind = terms >>= rows >>= rows;
+    
     static type row_extension_ctor(symbol label) {
       return constant(label, row_extension_kind);
     }
 
-    const type record_ctor = constant("record", rows() >>= terms());
-    const type empty_row_ctor = constant("{}", rows());
+    const type record_ctor = constant("record", rows >>= terms);
+    const type empty_row_ctor = constant("{}", rows);
     
 
     type type::operator()(const type& arg) const {
@@ -221,65 +222,36 @@ namespace slip {
     }
     
 
+    
     struct type_kind_visitor {
       using value_type = kind;
       
       kind operator()(const constant& self) const { return self.kind; }
       kind operator()(const variable& self) const { return self.kind; }    
       kind operator()(const application& self) const  {
-        return self.func.kind().get<constructor>().to;
+        return self.func.kind().get<kinds::constructor>().to;
       }  
     
     };
   
 
-    struct kind type::kind() const {
+    kinds::kind type::kind() const {
       return apply(type_kind_visitor());
-    }
-
-
-    struct kind_ostream {
-
-      void operator()(const terms&, std::ostream& out) const {
-        out << '*';
-      }
-
-
-      void operator()(const rows&, std::ostream& out) const {
-        out << "row";
-      }
-      
-      
-      void operator()(const constructor& self, std::ostream& out) const {
-        // TODO parentheses
-        out << self.from << " -> " << self.to;
-      }
-
-
-      void operator()(const kind_variable&, std::ostream& out) const {
-        out << '?';
-      }
-      
-      
-    };
-    
-    std::ostream& operator<<(std::ostream& out, const kind& self) {
-      self.apply(kind_ostream(), out);
-      return out;      
     }
 
 
     application::application(type func, type arg)
       : func(func),
         arg(arg) {
+      using kinds::constructor;
       
-      if(!func.kind().is< constructor>()) {
+      if(!func.kind().is<constructor>()) {
         throw kind_error("type constructor expected");
       }
       
       if(func.kind().get<constructor>().from != arg.kind() ) {
         std::stringstream ss;
-        ss << "expected: " << func.kind().get< constructor >().from
+        ss << "expected: " << func.kind().get<constructor>().from
            << ", got: " << arg.kind();
            
         throw kind_error(ss.str());
@@ -531,7 +503,7 @@ namespace slip {
         uf.find(lhs.func).apply( unify_visitor(pp), uf.find(rhs.func), uf);
 
         // dispatch on kind
-        if(lhs.arg.kind() == rows()) {
+        if(lhs.arg.kind() == rows) {
           unify_rows(pp, uf, lhs.arg, rhs.arg);
         } else {
           // standard unification
@@ -642,9 +614,6 @@ namespace slip {
       unify(pp, uf, row_helper(lhs), row_helper(rhs));
     };
 
-
-
-    
 
     
 
@@ -864,7 +833,7 @@ namespace slip {
 
       inferred<type, ast::expr> operator()(const ast::selection& self, state& tc) const {
         const type alpha = tc.fresh();
-        const type rho = tc.fresh( rows() );
+        const type rho = tc.fresh( rows );
         const type row = row_extension_ctor(self.label)(alpha)(rho);
         
         return {record_ctor(row) >>= alpha, self};
@@ -999,10 +968,8 @@ namespace slip {
 
 
     state state::scope() const {
-
       // TODO should we use nested union-find too?
       ref<env_type> sub = make_ref<env_type>(env);
-
       return state( sub, uf );
     }
     
@@ -1082,7 +1049,7 @@ namespace slip {
       kind operator()(const ast::type_application& self, const DB& db, UF& uf) const {
 
         const kind func = self.ctor.apply( infer_kind_visitor(), db, uf);
-        const kind result = kind_variable();
+        const kind result = kinds::variable();
 
         const kind call =
           foldr(result, self.args, [&](const ast::type& lhs, const kind& rhs) {
@@ -1101,17 +1068,19 @@ namespace slip {
         
         lhs = uf.find(lhs);
         rhs = uf.find(rhs);
-        
+
+        using kinds::constructor;
         if(lhs.is<constructor>() && rhs.is<constructor>()) {
           unify_kinds(uf, lhs.get<constructor>().from, rhs.get<constructor>().from);
           unify_kinds(uf, lhs.get<constructor>().to, rhs.get<constructor>().to);
           return;
         }
 
-        if(lhs.is<kind_variable>() || rhs.is<kind_variable>()) {
-          const kind_variable& var =  lhs.is<kind_variable>() ?
-            lhs.get<kind_variable>() : rhs.get<kind_variable>();
-          const kind& other =  lhs.is<kind_variable>() ? rhs : lhs;
+        using kinds::variable;
+        if(lhs.is<variable>() || rhs.is<variable>()) {
+          const variable& var =  lhs.is<variable>() ?
+            lhs.get<variable>() : rhs.get<variable>();
+          const kind& other =  lhs.is<variable>() ? rhs : lhs;
 
           // note: other becomes representant
           uf.link(var, other);
@@ -1147,7 +1116,7 @@ namespace slip {
 
         void operator()(const ast::type_variable& self, kind_db& db, const datatypes& ctors) const {
           if( db.find(self.name) ) { }
-          else db.locals.emplace(self.name, kind_variable());
+          else db.locals.emplace(self.name, kinds::variable());
         }
 
         void operator()(const ast::type_constant& self, kind_db& db, const datatypes& ctors) const {
@@ -1182,12 +1151,12 @@ namespace slip {
       template<class T>
       kind operator()(const T& self, const UF& uf) const { return self; }
 
-      kind operator()(const kind_variable& self, const UF& uf) const {
+      kind operator()(const kinds::variable& self, const UF& uf) const {
         return uf.find(self);
       }
 
-      kind operator()(const constructor& self, const UF& uf) const {
-        return constructor{ self.from.apply( substitute_kind_visitor(), uf),
+      kind operator()(const kinds::constructor& self, const UF& uf) const {
+        return kinds::constructor{ self.from.apply( substitute_kind_visitor(), uf),
             self.to.apply( substitute_kind_visitor(), uf) };
       }
       
@@ -1237,13 +1206,13 @@ namespace slip {
         auto sub = make_ref<datatypes>(tc.ctor);        
         
         // modules are values
-        const kind init = terms();
+        const kind init = terms;
 
         // 
         const kind k = foldr(init, self.args, [&](const ast::type_variable& lhs, const kind& rhs) {
             const kind ki = substitute(*db->find(lhs.name), uf);
             
-            if(ki.is<kind_variable>()) {
+            if(ki.is<kinds::variable>()) {
               throw kind_error("could not infer kind for " + lhs.name.str());
             }
 
@@ -1274,7 +1243,7 @@ namespace slip {
 
             // define type variables in ssub based on inferred kinds
             for(auto& it : ksub->locals) {
-              if(it.second.is<kind_variable>()) {
+              if(it.second.is<kinds::variable>()) {
                 const kind k = substitute(it.second, uf);
                 std::clog << it.first  << ": " << k << std::endl;
                 ssub->locals.emplace(it.first, variable(k, 1));
@@ -1328,11 +1297,11 @@ namespace slip {
     
 
 
-    
+
     scheme::scheme(const type& body): body(body) {
-      if(body.kind() != terms()) {
+      if(body.kind() != terms) {
         std::stringstream ss;
-        ss << "expected: " << kind( terms()) << ", got: " << body.kind();
+        ss << "expected: " << terms << ", got: " << body.kind();
         throw kind_error(ss.str());
       }
     }

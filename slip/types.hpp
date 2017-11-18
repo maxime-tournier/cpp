@@ -1,5 +1,5 @@
-#ifndef SLIP_KINDS_HPP
-#define SLIP_KINDS_HPP
+#ifndef SLIP_TYPES_HPP
+#define SLIP_TYPES_HPP
 
 #include "variant.hpp"
 #include "../ref.hpp"
@@ -8,6 +8,7 @@
 #include "symbol.hpp"
 #include "error.hpp"
 #include "context.hpp"
+#include "kinds.hpp"
 
 #include <vector>
 #include <set>
@@ -23,82 +24,13 @@ namespace slip {
   
   namespace types {
 
-    ////////////////////
-    // kinds
-    struct kind;
-
-    // TODO row/terms should be kind constants
-    struct terms;
-    struct rows;
-
-    struct constructor;
-
-    // a kind variable
-    struct kind_variable;
-    
-    struct kind : variant<terms, rows, constructor, kind_variable> {
-      using kind::variant::variant;
-    };
-    
-
-    struct simple_kind {
-      template<class Derived>
-      friend bool operator==(const Derived& self, const Derived& other) { return true; }
-
-      template<class Derived>      
-      friend bool operator<(const Derived& self, const Derived& other) { return false; }      
-    };
-
-    // the kind of terms
-    struct terms : simple_kind { };
-
-    // the kind of rows
-    struct rows : simple_kind { };    
-
-    // kind of type constructors
-    struct constructor {
-      kind from, to;
-      
-      bool operator==(const constructor& other) const;
-      bool operator<(const constructor& other) const;
-
-      constructor(const constructor&) = default;
-    };
-
-    constructor operator>>=(const kind& lhs, const kind& rhs);
-
-
-    struct kind_variable {
-      std::size_t index;
-      kind_variable() {
-        static std::size_t count = 0;
-        index = count++;
-      }
-
-      bool operator==(const kind_variable& other) const {
-        return index == other.index;
-      }
-
-      bool operator<(const kind_variable& other) const {
-        return index < other.index;
-      }
-    };
-    
-
-    std::ostream& operator<<(std::ostream& out, const kind& self);
-    
-
-    
-
-    ////////////////////    
-    // types
     struct type;
 
     struct constant {
       symbol name;
-      struct kind kind;
+      kinds::kind kind;
       
-      constant(symbol name, struct kind kind = terms())
+      constant(symbol name, kinds::kind kind = kinds::terms)
         : name(name),
           kind(kind) { }
 
@@ -116,10 +48,10 @@ namespace slip {
     struct variable {
       std::size_t id;
       
-      struct kind kind;
+      kinds::kind kind;
       std::size_t depth;        // TODO const?
 
-      variable(struct kind kind, std::size_t depth)
+      variable(const kinds::kind& kind, const std::size_t& depth)
         : kind(kind), depth(depth) {
         static std::size_t count = 0;
         id = count++;
@@ -138,7 +70,7 @@ namespace slip {
       
       using type::variant::variant;
     
-      struct kind kind() const;
+      kinds::kind kind() const;
 
       // apply a type constructor to a type.
       // TODO only for applications
@@ -270,7 +202,7 @@ namespace slip {
 
       const scheme& find(symbol id) const;
 
-      variable fresh(kind k = terms()) const;
+      variable fresh(kinds::kind k = kinds::terms) const;
 
     };
 
