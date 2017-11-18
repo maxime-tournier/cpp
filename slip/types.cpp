@@ -43,7 +43,8 @@ namespace slip {
     
     // env lookup/def
     struct unbound_variable : type_error {
-      unbound_variable(symbol id) : type_error("unbound variable \"" + id.str() + "\"") { }
+      unbound_variable(symbol id) 
+        : type_error("unbound variable \"" + id.str() + "\"") { }
     };
     
     // pretty-printing types
@@ -139,7 +140,7 @@ namespace slip {
       
       void operator()(const variable& self, std::ostream& out, 
                       ostream_map& osm) const {
-        auto err = osm.emplace( std::make_pair(self, var{osm.size(), false, self.depth} ));
+        auto err = osm.emplace(self, var{osm.size(), false, self.depth});
         out << err.first->second;
       }
       

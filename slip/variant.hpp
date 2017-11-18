@@ -4,6 +4,7 @@
 #include <type_traits>
 #include <utility>
 #include <memory>
+#include <functional>
 
 
 namespace detail {
@@ -20,7 +21,9 @@ namespace detail {
   struct selector<size, H, T...> : selector<size, T...> {
 
     using selector<size, T...>::index;
-    static constexpr std::integral_constant<std::size_t, size - (1 + sizeof...(T))> index(const H& ) {
+    static constexpr std::integral_constant<std::size_t, 
+                                            size - (1 + sizeof...(T))> 
+    index(const H& ) {
       return {};
     }
     
