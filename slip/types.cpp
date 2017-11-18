@@ -1087,7 +1087,6 @@ namespace slip {
         if(auto* k = db.find(self.name)) {
           return *k;
         }  
-
         throw unbound_variable(self.name);
       }
 
