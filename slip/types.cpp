@@ -1033,72 +1033,6 @@ namespace slip {
     }
     
     
-    struct infer_kind_visitor {
-      using value_type = kind;
-      
-      template<class T, class DB, class UF>
-      kind operator()(const T& self, const DB& db, UF& uf) const {
-        if(auto* k = db.find(self.name)) {
-          return *k;
-        }
-
-        throw unbound_variable(self.name);
-      }
-
-      template<class DB, class UF>
-      kind operator()(const ast::type_application& self, const DB& db, UF& uf) const {
-
-        const kind func = self.ctor.apply( infer_kind_visitor(), db, uf);
-        const kind result = kinds::variable();
-
-        const kind call =
-          foldr(result, self.args, [&](const ast::type& lhs, const kind& rhs) {
-              const kind result = lhs.apply(infer_kind_visitor(), db, uf) >>= rhs;
-              return result;
-            });
-        
-        unify_kinds(uf, func, call);
-        
-        return result;
-      }
-
-      template<class UF>
-      static void unify_kinds(UF& uf, kind lhs, kind rhs) {
-        // std::clog << "unifying kinds: " << lhs << " and: " << rhs << std::endl;
-        
-        lhs = uf.find(lhs);
-        rhs = uf.find(rhs);
-
-        using kinds::constructor;
-        if(lhs.is<constructor>() && rhs.is<constructor>()) {
-          unify_kinds(uf, lhs.get<constructor>().from, rhs.get<constructor>().from);
-          unify_kinds(uf, lhs.get<constructor>().to, rhs.get<constructor>().to);
-          return;
-        }
-
-        using kinds::variable;
-        if(lhs.is<variable>() || rhs.is<variable>()) {
-          const variable& var =  lhs.is<variable>() ?
-            lhs.get<variable>() : rhs.get<variable>();
-          const kind& other =  lhs.is<variable>() ? rhs : lhs;
-
-          // note: other becomes representant
-          uf.link(var, other);
-
-          return;
-        }
-
-        if(lhs != rhs) {
-          std::stringstream ss;
-          ss << lhs << " vs. " << rhs;
-          throw kind_error(ss.str());
-        }
-        
-      }
-      
-    };
-
-
     static std::ostream& operator<<(std::ostream& out, const type& self) {
       pretty_printer pp(out);
       pp << self;
@@ -1107,42 +1041,42 @@ namespace slip {
 
     
     
+    // fill kind environment from type environment
+    struct fill_kind_visitor {
 
-    // environment for kinding
-    struct kind_db : context<kind_db, kind>{
-      using kind_db::context::context;
-
-      struct fill_visitor {
-
-        void operator()(const ast::type_variable& self, kind_db& db, const datatypes& ctors) const {
-          if( db.find(self.name) ) { }
-          else db.locals.emplace(self.name, kinds::variable());
-        }
-
-        void operator()(const ast::type_constant& self, kind_db& db, const datatypes& ctors) const {
-          if( auto* t = ctors.find(self.name) ) { 
-            db.locals.emplace(self.name, t->kind());
-          } else {
-            throw unbound_variable(self.name);
-          }
-        }
-
-        void operator()(const ast::type_application& self, kind_db& db, const datatypes& ctors) const {
-          self.ctor.apply(fill_visitor(), db, ctors);
-          for(const ast::type& t : self.args) {
-            t.apply(fill_visitor(), db, ctors);
-          }
-        }
-        
-        
-      };
+      using db_type = kinds::environment;
       
-      void fill(const datatypes& ctors, const ast::type& t) {
-        t.apply( fill_visitor(), *this, ctors);
+      void operator()(const ast::type_variable& self, db_type& db, const datatypes& ctors) const {
+        if( db.find(self.name) ) { }
+        else db.locals.emplace(self.name, kinds::variable());
       }
 
-    };
+      void operator()(const ast::type_constant& self, db_type& db, const datatypes& ctors) const {
+        if( auto* t = ctors.find(self.name) ) { 
+          db.locals.emplace(self.name, t->kind());
+        } else {
+          throw unbound_variable(self.name);
+        }
+      }
 
+      void operator()(const ast::type_application& self, db_type& db, const datatypes& ctors) const {
+        self.ctor.apply(fill_kind_visitor(), db, ctors);
+        for(const ast::type& t : self.args) {
+          t.apply(fill_kind_visitor(), db, ctors);
+        }
+      }
+        
+        
+    };
+    
+
+    // fill kenv with kind variables and infer kinds
+    static void fill_infer(union_find<kind>& uf, kinds::environment& kenv, 
+                           const ast::type& node, const datatypes& ctors) {
+      node.apply(fill_kind_visitor(), kenv, ctors);
+      infer(uf, node, kenv);
+    }
+    
     
     // toplevel visitor
     struct toplevel_visitor {
@@ -1158,46 +1092,39 @@ namespace slip {
       value_type operator()(const ast::module& self, state& tc) {
 
         // infer kind for module arguments
-        ref<kind_db> db = make_ref<kind_db>();
+        auto kenv = make_ref<kinds::environment>();
         union_find<kind> uf;
         
         // declare stuff
         for(const ast::type_variable& v : self.args) {
-          db->fill(*tc.ctor, v);
+          fill_kind_visitor()(v, *kenv, *tc.ctor);
         }
 
         {
           // process all types to gather information
-          auto ksub = make_ref<kind_db>(db);
+          auto ksub = make_ref<kinds::environment>(kenv);
           for( const ast::module::row& r : self.rows ) {
-            ksub->fill(*tc.ctor, r.type);
-            r.type.apply(infer_kind_visitor(), *ksub, uf);
+            fill_infer(uf, *ksub, r.type, *tc.ctor);
           }
         }
 
-        // at this point we should have sufficent information for kinding
+        // at this point we must have sufficent information for kinding
         // parameters
         
-        // extract type variables and build kind
+        // extract type variables and build constructor kind
         auto sub = make_ref<datatypes>(tc.ctor);        
         
-        // modules are values
-        const kind init = terms;
-
-        // 
-        const kind k = foldr(init, self.args, [&](const ast::type_variable& lhs, const kind& rhs) {
-            const kind ki = substitute(*db->find(lhs.name), uf);
+        // declare type variables for module args and build constructor kind
+        const kind k = foldr(terms, self.args, [&](const ast::type_variable& lhs, const kind& rhs) {
+            const kind ki = substitute(*kenv->find(lhs.name), uf);
             
             if(ki.is<kinds::variable>()) {
               throw kind_error("could not infer kind for " + lhs.name.str());
             }
 
-            // TODO current depth?
-            const type ai = variable(ki, 0);
-            
-            if( !sub->locals.emplace(lhs.name, ai).second ) {
-              throw type_error("duplicate type variable");
-            }
+            // TODO FIXME current depth?
+            const type ti = variable(ki, 0);
+            sub->locals.emplace(lhs.name, ti);
             
             return ki >>= rhs;
           });
@@ -1206,22 +1133,17 @@ namespace slip {
         const type ctor = constant(self.ctor.name, k);
         // TODO recursive definition?
  
-        // typecheck rows and build unboxed type
-        state ctx = tc.scope();
-
+        // typecheck rows and build unboxed record type
         const type rows = foldr(empty_row_ctor, self.rows, [&](const ast::module::row& lhs, const type& rhs) {
-            auto ssub = make_ref<datatypes>(sub);
-
             // (re) infer kinds TODO don't do it twice
-            auto ksub = make_ref<kind_db>(db);
-            ksub->fill(*tc.ctor, lhs.type);
-            lhs.type.apply(infer_kind_visitor(), *ksub, uf);
-
+            auto ksub = make_ref<kinds::environment>(kenv);
+            fill_infer(uf, *ksub, lhs.type, *tc.ctor);
+            
             // define type variables in ssub based on inferred kinds
+            auto ssub = make_ref<datatypes>(sub);
             for(auto& it : ksub->locals) {
               if(it.second.is<kinds::variable>()) {
                 const kind k = substitute(it.second, uf);
-                std::clog << it.first  << ": " << k << std::endl;
                 ssub->locals.emplace(it.first, variable(k, 1));
               }
             }
@@ -1243,17 +1165,16 @@ namespace slip {
 
         const scheme unbox = tc.generalize( module >>= unboxed );
 
-        // TODO 
-        // std::clog << "unbox: " << unbox << std::endl;
-
-        // generalize rank2 vars in unboxed type
+        // generalize rank2 vars in unboxed type: we push a scope so that module
+        // args remain monomorphic
+        state ctx = tc.scope();
         const scheme source = ctx.generalize( unboxed );
-        std::clog << "unboxed: " << unboxed << std::endl;
-        std::clog << "source: " << source << std::endl;
+        
+        // std::clog << "unboxed: " << unboxed << std::endl;
+        // std::clog << "source: " << source << std::endl;
         
         // data constructor
         data_constructor data = {source.forall, unbox};
-        
         tc.data_ctor->emplace(self.ctor.name, data);
 
         // TODO this should be io unit

@@ -462,6 +462,11 @@ namespace slip {
         const list<type_variable> args = map(app.args, [](const ast::type& t) {
             return t.get<type_variable>();
           });
+
+        // make sure we don't have duplicates
+        if( std::set<type_variable>( begin(args), end(args) ).size() < size(args) ) {
+          throw syntax_error("duplicate type variable in arguments");
+        }
         
         // extract rows
         const list<module::row> rows = map(items->tail, [](const sexpr& e) {

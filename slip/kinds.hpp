@@ -8,6 +8,7 @@
 #include "symbol.hpp"
 #include "error.hpp"
 #include "context.hpp"
+#include "ast.hpp"
 
 #include <iosfwd>
 
@@ -34,8 +35,8 @@ namespace slip {
     };
 
     // predefined constants
-    const constant terms{"*"};
-    const constant rows{"rows"};
+    const kind terms = constant{"*"};
+    const kind rows = constant{"rows"};
 
     // the kind of type constructors
     struct constructor {
@@ -71,6 +72,18 @@ namespace slip {
 
     // kind substitution
     kind substitute(const kind& self, const union_find<kind>& uf);
+
+
+    // kind environment
+    struct environment : context<environment, kind> {
+      using environment::context::context;
+    };
+
+
+
+    // infer kinds for an ast node under current substitution/context
+    kind infer(union_find<kind>& uf, const ast::type& node, const environment& env);
+    
   }
   
 }
