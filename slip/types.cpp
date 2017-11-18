@@ -1081,7 +1081,7 @@ namespace slip {
     
     struct infer_kind_visitor {
       using value_type = kind;
-
+      
       template<class DB, class UF>
       kind operator()(const ast::type_constant& self, DB& db, UF& uf) const {
         try { return db(self.name); }
@@ -1118,20 +1118,27 @@ namespace slip {
       template<class UF>
       static void unify_kinds(UF& uf, const kind& lhs, const kind& rhs) {
 
-        // if(lhs.is<constructor>() && rhs.is<constructor>()) {
-        //   unify_kinds(lhs.get<constructor>().from, rhs.get<constructor>().from);
-        //   unify_kinds(lhs.get<constructor>().to, rhs.get<constructor>().to);
-        //   return;
-        // }
+        if(lhs.is<constructor>() && rhs.is<constructor>()) {
+          unify_kinds(uf, lhs.get<constructor>().from, rhs.get<constructor>().from);
+          unify_kinds(uf, lhs.get<constructor>().to, rhs.get<constructor>().to);
+          return;
+        }
 
-        // if(lhs.is<kind_variable>() || rhs.is<kind_variable>()) {
-        //   // unify shit
-        // }
+        if(lhs.is<kind_variable>() || rhs.is<kind_variable>()) {
+          const kind_variable& var =  lhs.is<kind_variable>() ?
+            lhs.get<kind_variable>() : rhs.get<kind_variable>();
+          const kind& other =  lhs.is<kind_variable>() ? rhs : lhs;
 
-        // // constants
+          uf.link(var, other);
+        }
+
+        if(lhs != rhs) {
+          std::stringstream ss;
+          ss << lhs << " vs. " << rhs;
+          throw kind_error(ss.str());
+        }
         
       }
-      
       
     };
 
