@@ -64,6 +64,34 @@ namespace slip {
       self.apply( ostream_visitor(), out);
       return out;
     }
+
+    // substitute all kind variables in a given kind
+    struct substitute_kind_visitor {
+      using value_type = kind;
+      using uf_type = union_find<kind>;
+      
+      kind operator()(const constant& self, const uf_type& uf) const { 
+        return self;
+      }
+      
+      kind operator()(const variable& self, const uf_type& uf) const {
+        return uf.find(self);
+      }
+
+      kind operator()(const constructor& self, const uf_type& uf) const {
+        return map(self, [&uf](const kind& k) {
+            return k.apply(substitute_kind_visitor(), uf);
+          });
+      }
+      
+    };
+
+    kind substitute(const kind& k, const union_find<kind>& uf) {
+      return uf.find(k).apply(substitute_kind_visitor(), uf);
+    }
+    
+
+    
     
   }
 }

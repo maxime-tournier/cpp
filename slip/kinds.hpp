@@ -1,6 +1,8 @@
 #ifndef SLIP_KINDS_HPP
 #define SLIP_KINDS_HPP
 
+#include "../union_find.hpp"
+
 #include "variant.hpp"
 
 #include "symbol.hpp"
@@ -26,6 +28,7 @@ namespace slip {
     // constant kinds
     struct constant {
       const symbol name;
+      
       bool operator==(const constant& other) const;
       bool operator<(const constant& other) const;      
     };
@@ -45,18 +48,29 @@ namespace slip {
       bool operator<(const constructor& other) const;      
     };
 
+    template<class F>
+    static constructor map(const constructor& self, const F& f) {
+      return { f(self.from), f(self.to) };
+    }
+    
+    
     // convenience
     kind operator>>=(const kind& lhs, const kind& rhs);
 
     // a kind variable, used during kind inference
     struct variable {
       const std::size_t index;
+
       variable();
+      
       bool operator==(const variable& other) const;
       bool operator<(const variable& other) const;      
     };
 
     std::ostream& operator<<(std::ostream& out, const kind& self);
+
+    // kind substitution
+    kind substitute(const kind& self, const union_find<kind>& uf);
   }
   
 }

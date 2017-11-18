@@ -1143,30 +1143,6 @@ namespace slip {
 
     };
 
-    // substitute all kind variables in a given kind
-    template<class UF>
-    struct substitute_kind_visitor {
-      using value_type = kind;
-
-      template<class T>
-      kind operator()(const T& self, const UF& uf) const { return self; }
-
-      kind operator()(const kinds::variable& self, const UF& uf) const {
-        return uf.find(self);
-      }
-
-      kind operator()(const kinds::constructor& self, const UF& uf) const {
-        return kinds::constructor{ self.from.apply( substitute_kind_visitor(), uf),
-            self.to.apply( substitute_kind_visitor(), uf) };
-      }
-      
-    };
-
-    template<class UF>
-    static kind substitute(const kind& k, const UF& uf) {
-      return uf.find(k).apply(substitute_kind_visitor<UF>(), uf);
-    }
-    
     
     // toplevel visitor
     struct toplevel_visitor {
