@@ -16,10 +16,9 @@ compiler = meson.get_compiler('cpp')
 
 readline = compiler.find_library('readline', required: true)
 
-# boost = dependency('boost', modules : ['boost_program_options'], required: true)
-# boost = dependency('boost', modules : ['boost_program_options'], required: true)
+boost = dependency('boost', modules : ['program_options'], required: true)
+# boost = compiler.find_library ('boost_program_options', required: true)
 
-boost = compiler.find_library ('boost_program_options', required: true)
 std = compiler.find_library ('stdc++', required: true)
 
 if get_option('buildtype') == 'release' or get_option('buildtype') == 'debugoptimized'
