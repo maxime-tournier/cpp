@@ -1079,50 +1079,48 @@ namespace slip {
 
 
     
-    struct kind_visitor {
+    struct infer_kind_visitor {
       using value_type = kind;
 
-      template<class UF>
-      kind operator()(const ast::type_constant& self, datatypes& ctors, UF& uf) const {
-        if(auto t = ctors.find(self.name)) {
-          return t->kind();
+      template<class DB, class UF>
+      kind operator()(const ast::type_constant& self, DB& db, UF& uf) const {
+        try { return db(self.name); }
+        catch ( std::out_of_range ) {
+          throw unbound_variable(self.name);
         }
+      }
+
+      template<class DB, class UF>
+      kind operator()(const ast::type_variable& self, DB& db, UF& uf) const {
+        try { return db(self.name); }
+        catch ( std::out_of_range ) {
+          throw unbound_variable(self.name);
+        }
+      }
+
+      template<class DB, class UF>
+      kind operator()(const ast::type_application& self, DB& db, UF& uf) const {
+
+        const kind func = self.ctor.apply( infer_kind_visitor(), db, uf);
+        const kind result = kind_variable();
+
+        const kind call =
+          foldr(result, self.args, [&](const ast::type& lhs, const kind& rhs) {
+              const type result = lhs.apply(infer_kind_visitor(), db, uf) >>= rhs;
+              return result;
+            });
         
-        throw unbound_variable(self.name);
+        unify_kinds(uf, func, call);
+        
+        return result;
       }
 
       template<class UF>
-      kind operator()(const ast::type_variable& self, datatypes& ctors, UF& uf) const {
-
-        // try{ return db.at(self); }
-        // catch( std::out_of_range ) {
-        //   kind_variable res;
-        //   db.emplace(self, res);
-        // }
-
-        // return res;
-      }
-
-      template<class UF>
-      kind operator()(const ast::type_application& self, datatypes& ctor, UF& uf) const {
-        // const kind func = operator()(self.ctor.apply( kind_visitor(), ctor, uf);
-
-        // build  kind
-        // const kind result = kind_variable();
-
-        // const kind call = foldr(result, self.args, [](const ast::type& lhs, const kind& rhs) -> kind {
-        //     return infer_kind(lhs, rhs) >>= rhs;
-        //   });
-        
-        // unify_kinds(func, call);
-        // return result;
-      }
-      
-      static void unify_kinds(const kind& lhs, const kind& rhs) {
+      static void unify_kinds(UF& uf, const kind& lhs, const kind& rhs) {
 
         // if(lhs.is<constructor>() && rhs.is<constructor>()) {
         //   unify_kinds(lhs.get<constructor>().from, rhs.get<constructor>().from);
-        //   unify_kinds(lhs.get<constructor>().to, rhs.get<constructor>().to);          
+        //   unify_kinds(lhs.get<constructor>().to, rhs.get<constructor>().to);
         //   return;
         // }
 
@@ -1175,7 +1173,8 @@ namespace slip {
 
         // extract type variables and build kind
         datatypes sub(tc.ctor);        
-        
+
+        // modules are values
         const kind init = terms();
 
         // 

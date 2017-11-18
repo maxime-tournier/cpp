@@ -65,6 +65,7 @@ namespace slip {
       constructor(const constructor&) = default;
     };
 
+    // TODO return kind?
     constructor operator>>=(const kind& lhs, const kind& rhs);
 
 
