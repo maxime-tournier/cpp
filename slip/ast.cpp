@@ -115,10 +115,12 @@ namespace slip {
       }
 
       sexpr operator()(const type_variable& self) const { return self.name; }
-      sexpr operator()(const type_constructor& self) const { return self.name; }      
+      sexpr operator()(const type_constant& self) const { return self.name; }      
 
       sexpr operator()(const type_application& self) const {
-        return repr(self.ctor) >>= map(self.args, [](const ast::type& t) { return repr(t); } );
+        return repr(self.ctor) >>= map(self.args, [](const ast::type& t) { 
+            return repr(t);
+          });
       }
 
       sexpr operator()(const export_& self) const {
@@ -134,7 +136,8 @@ namespace slip {
 
 
       sexpr operator()(const module& self) const {
-        return kw::module >>= repr(self.type) >>= map(self.rows, [&](const module::row& row) -> sexpr {
+        return kw::module >>= (repr(self.ctor) >>= map(self.args, repr_visitor()) )
+          >>= map(self.rows, [&](const module::row& row) -> sexpr {
             return row.name >>= repr(row.type) >>= sexpr::list();
           });
       }
@@ -192,17 +195,25 @@ namespace slip {
       return ast::variable{s};
     }
     
-    static type_constructor check_type_constructor(const sexpr& e) {
-      if(!e.is<symbol>()) throw syntax_error("`symbol`");
-      const symbol s = e.get<symbol>();
-      
-      if(s.str()[0] == '\'') throw syntax_error("`symbol`");
-      
-      return {s};
+    static type_constant check_type_constructor(const sexpr& e) {
+      static const syntax_error error("`symbol`");
+
+      try {
+        const symbol s = e.get<symbol>();
+
+        // exclude type variable
+        if(s.str()[0] == '\'') throw error;
+        return {s};
+        
+      } catch( std::bad_cast ) {
+        throw error;
+      }
     }
 
     static type_variable check_type_variable(const symbol& s) {
-      if(s.str()[0] != '\'' || s.str().size() < 2) throw syntax_error("`'symbol`");
+      if(s.str()[0] != '\'' || s.str().size() < 2) {
+        throw syntax_error("`'symbol`");
+      }
       return {s};
     }
 
@@ -423,10 +434,11 @@ namespace slip {
 
 
     static module check_module(const sexpr::list& items) {
-      static const syntax_error error("(module (`symbol` `tyvars`...)  (`symbol` `type`)...)");
-
+      static const syntax_error error("(module (`symbol` `tyvars`...) "
+                                      "(`symbol` `type`)...)");
+      
       try {
-        // TODO do we want empty module?
+        // TODO do we want empty modules?
         if(size(items) < 1) throw error;
         
         const ast::type type = check_type(items->head);
@@ -435,17 +447,19 @@ namespace slip {
           using value_type = type_application;
           
           value_type operator()(const type_application& self) const { return self; }
-          value_type operator()(const type_constructor& self) const { return {self, {}}; }
+          value_type operator()(const type_constant& self) const { return {self, {}};}
           value_type operator()(const type_variable& self) const { throw error; }
           
         };
-
-        const type_application app = type.apply(check());
         
-        // make sure application args are all type variables
-        for(const ast::type& x : app.args) {
-          if(!x.is<type_variable>()) throw error;
-        }
+        // normalize to a type application
+        const type_application app = type.apply(check());
+
+        // extract application func/args
+        const type_constant ctor = app.ctor.get<type_constant>();
+        const list<type_variable> args = map(app.args, [](const ast::type& t) {
+            return t.get<type_variable>();
+          });
         
         // extract rows
         const list<module::row> rows = map(items->tail, [](const sexpr& e) {
@@ -455,7 +469,7 @@ namespace slip {
             return module::row{self->head.get<symbol>(), check_type(self->tail->head)};
           });
 
-        return module{app, rows};
+        return module{ctor, args, rows};
       } catch( std::bad_cast ) {
         throw error;
       }

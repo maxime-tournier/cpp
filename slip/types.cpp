@@ -1045,7 +1045,7 @@ namespace slip {
       using value_type = type;
 
       // constructor: lookup
-      type operator()(const ast::type_constructor& self, datatypes& ctors) const {
+      type operator()(const ast::type_constant& self, datatypes& ctors) const {
         if(auto t = ctors.find(self.name)) {
           return *t;
         }
@@ -1078,10 +1078,12 @@ namespace slip {
     };
 
 
+    
     struct kind_visitor {
       using value_type = kind;
-      
-      kind operator()(const ast::type_constructor& self, datatypes& ctors) const {
+
+      template<class UF>
+      kind operator()(const ast::type_constant& self, datatypes& ctors, UF& uf) const {
         if(auto t = ctors.find(self.name)) {
           return t->kind();
         }
@@ -1089,7 +1091,8 @@ namespace slip {
         throw unbound_variable(self.name);
       }
 
-      kind operator()(const ast::type_variable& self, datatypes& ctors) const {
+      template<class UF>
+      kind operator()(const ast::type_variable& self, datatypes& ctors, UF& uf) const {
 
         // try{ return db.at(self); }
         // catch( std::out_of_range ) {
@@ -1100,12 +1103,11 @@ namespace slip {
         // return res;
       }
 
+      template<class UF>
+      kind operator()(const ast::type_application& self, datatypes& ctor, UF& uf) const {
+        // const kind func = operator()(self.ctor.apply( kind_visitor(), ctor, uf);
 
-      kind operator()(const ast::type_application& self, datatypes& ctor) const {
-
-        // const kind func = self.ctor.apply( kind_visitor(), ctor );
-
-        // // build  kind
+        // build  kind
         // const kind result = kind_variable();
 
         // const kind call = foldr(result, self.args, [](const ast::type& lhs, const kind& rhs) -> kind {
@@ -1175,8 +1177,9 @@ namespace slip {
         datatypes sub(tc.ctor);        
         
         const kind init = terms();
-        
-        const kind k = foldr( init, self.type.args, [&](const ast::type& lhs, const kind& rhs) {
+
+        // 
+        const kind k = foldr(init, self.args, [&](const ast::type& lhs, const kind& rhs) {
             // TODO kind?
             const type a = variable(terms(), 0);
             if( !sub.locals.emplace(lhs.get<ast::type_variable>().name, a).second ) {
@@ -1187,7 +1190,7 @@ namespace slip {
           });
           
         // type constructor
-        const type ctor = constant(self.type.ctor.name, k);
+        const type ctor = constant(self.ctor.name, k);
         // TODO recursive definition?
  
         // typecheck rows and build unboxed type
@@ -1200,12 +1203,12 @@ namespace slip {
         const type unboxed = record_ctor(rows);
 
         // register type constructor
-        if(!tc.ctor->locals.emplace(self.type.ctor.name, ctor).second) {
+        if(!tc.ctor->locals.emplace(self.ctor.name, ctor).second) {
           throw type_error("module redefinition");
         }
 
         // module type (ctor applied to its variables)
-        const type module = foldl(ctor, self.type.args, [&](const type& lhs, const ast::type& rhs) {
+        const type module = foldl(ctor, self.args, [&](const type& lhs, const ast::type& rhs) {
             return lhs(sub.locals.at(rhs.get<ast::type_variable>().name));
           });
 
@@ -1222,7 +1225,7 @@ namespace slip {
         // data constructor
         data_constructor data = {source.forall, unbox};
         
-        tc.data_ctor->emplace(self.type.ctor.name, data);
+        tc.data_ctor->emplace(self.ctor.name, data);
 
         // TODO this should be io unit
         return {tc.generalize(module), self};

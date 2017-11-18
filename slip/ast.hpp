@@ -105,10 +105,23 @@ namespace slip {
     
     struct type;
 
-    struct type_constructor {
+    struct type_constant;
+    struct type_variable;
+    struct type_application;
+
+    // TODO exclude naked type_constructors? (= nullary applications)
+    struct type : variant< type_constant, type_variable, type_application > {
+      using type::variant::variant;
+
+      using list = slip::list<type>;
+    };
+    
+    sexpr repr(const type& self);    
+
+    struct type_constant {
       const symbol name;
     };
-
+    
     struct type_variable {
       const symbol name;
 
@@ -116,21 +129,11 @@ namespace slip {
         return name < other.name;
       }
     };
-
+    
     struct type_application {
-      const type_constructor ctor;
-      const list<ast::type> args;
+      const type ctor;
+      const list<type> args;
     };
-
-
-    // TODO exclude naked type_constructors? (= nullary applications)
-    struct type : variant< type_constructor, type_variable, type_application > {
-      using type::variant::variant;
-
-      using list = slip::list<type>;
-    };
-
-    sexpr repr(const type& self);    
     
     
     struct lambda {
@@ -187,7 +190,8 @@ namespace slip {
 
     // module definitions
     struct module {
-      type_application type;
+      const type_constant ctor;
+      const list<type_variable> args;
       
       struct row {
         const symbol name;
