@@ -1088,6 +1088,21 @@ namespace slip {
       }
 
     }
+
+    static void infer_module_arg_kinds(union_find<kind>& uf, kinds::environment& kenv,
+                                       const datatypes& ctors, const ast::module& self) {
+      // declare module args
+      for(const ast::type_variable& v : self.args) { 
+        fill_kind_visitor()(v, kenv, ctors);
+      }
+      
+      // process all types in rows to gather information on module args
+      for( const ast::module::row& r : self.rows ) {
+        kinds::environment ksub(kenv);
+        fill_infer(uf, ksub, r.type, ctors);
+      }
+      
+    }
     
 
     // toplevel visitor
@@ -1103,25 +1118,12 @@ namespace slip {
       // modules
       value_type operator()(const ast::module& self, state& tc) {
 
-        // infer kind for module arguments
+        // infer kinds for module arguments
         auto kenv = make_ref<kinds::environment>();
         union_find<kind> uf;
+
+        infer_module_arg_kinds(uf, *kenv, *tc.ctor, self);
         
-        // declare stuff
-        for(const ast::type_variable& v : self.args) { 
-          fill_kind_visitor()(v, *kenv, *tc.ctor);
-        }
-
-        {
-          // process all types to gather information
-          auto ksub = make_ref<kinds::environment>(kenv);
-          for( const ast::module::row& r : self.rows ) {
-            fill_infer(uf, *ksub, r.type, *tc.ctor);
-          }
-        }
-        // note: at this point we must have sufficent information for kinding
-        // module args
-
         // module type environment
         auto sub = make_ref<datatypes>(tc.ctor);        
         
