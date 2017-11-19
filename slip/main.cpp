@@ -164,6 +164,7 @@ static const auto compiler = [](bool dump_bytecode) {
 
   const type string_type = traits< ref<vm::string> >::type();
   const type unit_type = traits< vm::unit >::type();
+  const type boolean_type = traits< vm::boolean >::type();  
   
   {
     // print
@@ -193,6 +194,16 @@ static const auto compiler = [](bool dump_bytecode) {
           return head >>= tail.get< vm::value::list >();
         });
     }
+
+    {
+      type a = tc->fresh();
+      tc->def("nil?", tc->generalize(list_ctor(a) >>= boolean_type));
+      jit->def("nil?", +[](vm::stack* args) -> vm::value {
+          return !pop(args).get< vm::value::list >();
+        });
+    }
+
+    
   }
 
   
