@@ -85,7 +85,7 @@ class ref {
   ref_any impl;
 protected:
   ref(control_block<T>* block) : impl(block) { }
-  friend ref ref_any::cast<T>() const;
+  friend class ref_any;
 public:
     
   template<class ... Args>
