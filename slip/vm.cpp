@@ -329,16 +329,18 @@ namespace slip {
 
     ref<closure> make_closure(std::size_t argc, std::size_t addr,
                               const value* first, const value* last) {
-      return closure::create< closure >(last - first, argc, addr, first, last);
+      const ref_any res = new (last - first) control_block<closure>(argc, addr, first, last);
+      return res.cast<closure>();
     }
     
     ref<record> make_record(std::size_t magic, const value* first, const value* last) {
-      return record::create< record >(last - first, magic, first, last);
+      const ref_any res = new (last - first) control_block<record>(magic, first, last);
+      return res.cast<record>();
     }
-
-
+    
     ref<partial> make_partial(const value* first, const value* last) {
-      return partial::create< partial >(last - first, first, last);
+      const ref_any res = new (last - first) control_block<partial>(first, last);
+      return res.cast<partial>();
     }
     
 
@@ -608,6 +610,7 @@ namespace slip {
               call_stack.emplace_back( frame{fp, return_addr, f->argc, cont} );
               
               // jump to function address
+              assert(f->addr < code.size());
               ip = f->addr;
               continue;
             }

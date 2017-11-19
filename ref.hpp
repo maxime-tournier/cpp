@@ -1,175 +1,131 @@
-#ifndef REF_HPP
-#define REF_HPP
+#ifndef CPP_REF_HPP
+#define CPP_REF_HPP
 
+#include <stdexcept>
 #include <utility>
 #include <cassert>
 
-namespace detail {
-  
-  struct rc_base {
-    virtual ~rc_base() { }
-    std::size_t rc = 0;
 
-    friend void incref(rc_base* self) { self->rc++; }
-    friend void decref(rc_base* self) {
-      if(--self->rc == 0) delete self;
-    }
-  };
-
-
-  // TODO wrap integral types?
-  template<class T>
-  struct control_block : rc_base, T {
+struct ref_counted {
+  virtual ~ref_counted() { }
+  std::size_t rc = 0;
     
-    template<class ... Args>
-    control_block(Args&& ... args) :
-      T(std::forward<Args>(args)...) {
-      
-    }
-    
-  };
+  friend void incref(ref_counted* self) { self->rc++; }
+  friend void decref(ref_counted* self) { if(--self->rc == 0) delete self; }
+};
 
+template<class T> class ref;
 
-  // block_type must be derived from pointer_type, and implicitely convertible
-  // to T
-  template<class T, class = void >
-  struct ref_traits {
-    using block_type = control_block<T>;
-  };
-
-
-  // intrusive version
-  template<class T>
-  struct ref_traits< T, typename std::enable_if< std::is_base_of<rc_base, T>::value >::type > {
-    using block_type = T;
-  };
-  
-}
-
-// a simple non-intrusive ref-counting pointer
-template<class T>
-class ref {
-protected:
-
-  using traits = detail::ref_traits<T>;
-  using pointer_type = detail::rc_base; // typename traits::pointer_type;
-  
-private:
-  pointer_type* ptr;
+class ref_any {
+  using ptr_type = ref_counted*;
+  ptr_type ptr;
 public:
-
-  ref(pointer_type* ptr = nullptr) noexcept : ptr(ptr) {
+  ref_any() : ptr(nullptr) { }
+  
+  ref_any(ptr_type ptr) : ptr(ptr) {
     if(ptr) incref(ptr);
   }
-  
-  explicit operator bool() const { return ptr; }
+    
+  ptr_type get() const { return ptr; }
+    
+  ~ref_any() { if(ptr) decref(ptr); }
 
-  ~ref() { if(ptr) decref(ptr); }
-
-  // copy
-  ref(const ref& other) noexcept : ptr(other.ptr) {
+  ref_any(const ref_any& other) noexcept : ptr(other.ptr) {
     if(ptr) incref(ptr);
   }
 
-  template<class Derived, typename std::enable_if<std::is_base_of<T, Derived>::value, int>::type = 0>
-  ref(const ref<Derived>& other) noexcept : ptr( other.template cast<T>().ptr) { }
-  
-
-  ref& operator=(const ref& other) noexcept {
-    if(this == &other) return *this;
-    
-    if(ptr) {
-      decref(ptr);
-    }
-    
-    if((ptr = other.ptr)) {
-      incref(ptr);
-    }
-    
-    return *this;
-  }
-
-
-  // move
-  ref(ref&& other) noexcept : ptr(other.ptr) {
+  ref_any(ref_any&& other) noexcept : ptr(std::move(other.ptr)) {
     other.ptr = nullptr;
   }
-
-  template<class Derived, typename std::enable_if<std::is_base_of<T, Derived>::value, int>::type = 0>
-  ref(ref<Derived>&& other) noexcept : ptr( other.template cast<T>().ptr) {
-    other.template cast<T>().ptr = nullptr;
-  }
-  
-  
-  ref& operator=(ref&& other) noexcept {
+    
+  ref_any& operator=(const ref_any& other) noexcept {
     if(this == &other) return *this;
-    
-    if(ptr) {
-      decref(ptr);
-    }
-    
+
+    if(ptr) decref(ptr);
     ptr = other.ptr;
-    other.ptr = nullptr;
+    if(ptr) incref(ptr);
+      
     return *this;
-  }    
+  }
 
-  
-  template<class ... Args>
-  static inline ref make(Args&& ... args) {
-    using block_type = typename traits::block_type;
+  ref_any& operator=(ref_any&& other) noexcept{
+    if(this == &other) return *this;
+
+    if(ptr) decref(ptr);
+    ptr = std::move(other.ptr);
+    other.ptr = nullptr;
+      
+    return *this;
+  }
+
+  explicit operator bool() const { return ptr; }
+  bool operator==(const ref_any& other) const { return ptr == other.ptr; }
+  bool operator!=(const ref_any& other) const { return ptr != other.ptr; }
+  bool operator<(const ref_any& other) const { return ptr < other.ptr; }
+
+  std::size_t rc() const {
+    if(ptr) return ptr->rc;
+    throw std::invalid_argument("null pointer");
+  }
     
-    pointer_type* ptr = new block_type(std::forward<Args>(args)...);
-    return ref(ptr);
-  }
-  
-  T* get() const {
-    using block_type = typename traits::block_type;    
-    return static_cast< block_type* >(ptr);
-  }
+  // type recovery
+  template<class T> ref<T> cast() const;
+};
   
 
-  template<class Base>
-  const ref<Base>& cast() const {
-    T* derived = nullptr;
-    Base* check = derived;
-    (void) check;
-    return reinterpret_cast< const ref<Base>& >(*this);
-  }
-
-  template<class Base>
-  ref<Base>& cast() {
-    T* derived = nullptr;
-    Base* check = derived;
-    (void) check;
-    return reinterpret_cast<ref<Base>& >(*this);
-  }
-
-  
-  bool operator==(const ref& other) const {
-    return get() == other.get();
-  }
-
-  bool operator!=(const ref& other) const {
-    return get() != other.get();
-  }
-
-  
-  bool operator<(const ref& other) const {
-    return get() < other.get();
-  }
-
-  
-  T* operator->() const { return get(); }
-  T& operator*() const { return *get(); }
-  
+template<class T>
+struct control_block : ref_counted, T {
+  template<class ... Args>
+  control_block(Args&& ... args) : T(std::forward<Args>(args)...) { }
 };
 
 
-template<class T, class ... Args>
-static inline ref<T> make_ref(Args&& ... args) {
-  return ref<T>::make(std::forward<Args>(args)...);
+template<class T>
+class ref {
+  ref_any impl;
+protected:
+  ref(control_block<T>* block) : impl(block) { }
+  friend ref ref_any::cast<T>() const;
+public:
+    
+  template<class ... Args>
+  static ref make(Args&& ... args) {
+    return new control_block<T>(std::forward<Args>(args)...);
+  }
+    
+  T* get() const {
+    if(impl) return static_cast< control_block<T>* >(impl.get());
+    return nullptr;
+  }
+
+  T* operator->() const { return get(); }
+  T& operator*() const { return *get(); }
+
+  ref() = default;
+  ref(const ref& ) = default;
+  ref(ref&& ) = default;
+
+  ref& operator=(const ref& ) = default;
+  ref& operator=(ref&& ) = default;
+
+  // type erasure
+  ref_any any() const { return impl; }
+
+  explicit operator bool() const { return bool(impl); }
+  bool operator==(const ref& other) const { return impl == other.impl; }
+  bool operator!=(const ref& other) const { return impl != other.impl; }
+  bool operator<(const ref& other) const { return impl < other.impl; }
+  
+};
+
+template<class T>
+ref<T> ref_any::cast() const {
+  return static_cast<control_block<T>*>(ptr);
 }
 
+template<class T, class ... Args>
+static ref<T> make_ref(Args&& ... args) { return ref<T>::make(std::forward<Args>(args)...); }
+  
 
 
 #endif

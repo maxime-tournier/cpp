@@ -71,10 +71,10 @@ namespace slip {
     
 
 
-    struct closure_head : detail::rc_base {
+    struct closure_head {
       const std::size_t argc;
       const std::size_t addr;
-
+      
       closure_head(std::size_t argc, std::size_t addr)
         : argc(argc),
           addr(addr) {
@@ -83,9 +83,7 @@ namespace slip {
     };
     
     struct closure : closure_head, dynamic_sized<value> {
-      
 
-      // private:
       template<class Iterator>
       closure(std::size_t argc, // TODO do we actually need this?
               std::size_t addr,
@@ -104,7 +102,7 @@ namespace slip {
     
     // partial application
     // TODO use records instead?
-    struct partial : detail::rc_base, dynamic_sized<value> {
+    struct partial : dynamic_sized<value> {
       using partial::dynamic_sized::dynamic_sized;
     };
 
@@ -112,7 +110,7 @@ namespace slip {
     ref<partial> make_partial(const value* first, const value* last);
 
     
-    struct record_head : detail::rc_base {
+    struct record_head {
       std::size_t magic;
       record_head(std::size_t magic) : magic(magic) { }
     };

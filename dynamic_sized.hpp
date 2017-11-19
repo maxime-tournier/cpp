@@ -19,10 +19,9 @@
 
 template<class T>
 class dynamic_sized {
-  std::size_t count;
+  const std::size_t count;
   T data[0];
 public:
-
   std::size_t size() const { return count; }
   
   T& operator[](std::size_t i) {
@@ -40,42 +39,19 @@ public:
 
   const T* begin() const { return data; }
   const T* end() const { return data + size(); }  
-  
 
-  template<class Derived>
-  struct tag {
-    const std::size_t count;
-    tag(std::size_t count) : count(count) { }
-  };
-  
-  template<class Derived>
-  void* operator new( std::size_t size, tag<Derived> tag ) {
-    void* ptr = ::operator new(size + sizeof(T) * tag.count);
-    
-    // note: we need Derived here to upcast safely
-    // note: volatile needed or gcc skips setting count
-    volatile dynamic_sized* self = reinterpret_cast<Derived*>(ptr);
-    self->count = tag.count;
-    
-    return ptr;
+  void* operator new( std::size_t size, std::size_t count ) {
+    return ::operator new(size + sizeof(T) * count);
   }
-
-  template<class Derived, class ... Args>
-  static Derived* create(std::size_t count, Args&& ... args) {
-    return new(tag<Derived>(count)) Derived(std::forward<Args>(args)...);
-  }
-
   
   template<class Iterator>
-  dynamic_sized(Iterator first, Iterator last) {
-    assert( last - first == std::ptrdiff_t(count) );
+  dynamic_sized(Iterator first, Iterator last)
+    : count(last - first) {
     std::size_t i = 0;
     for(Iterator it = first; it != last; ++it) {
       new (data + i++) T(*it);
     }
   };
-  
-
   
   ~dynamic_sized() {
     for(T* it = data + count - 1, *last = data; it >= last; --it) {
@@ -84,14 +60,7 @@ public:
   }
 
 protected:
-  // TODO private?
-  dynamic_sized() {
-    for(T* it = data, *last = data + count; it != last; ++it) {
-      new (it) T;
-    }
-  }
-
-  
+  dynamic_sized() = delete;
   dynamic_sized(const dynamic_sized&) = delete;
   
 };
