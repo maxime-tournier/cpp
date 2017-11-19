@@ -7,17 +7,13 @@
         (map (-> ('f 'a) (-> (-> 'a 'b) ('f 'b)))))
 
 ;; export functor module
-(def f (export functor
-               (record
-                (map map))))
-f
-
-(def open (lambda ((functor f))
-            f))
-open
+(export functor
+        (record
+         (map map)))
 
 (def fmap (lambda ((functor f))
             (@map f)))
 fmap
+
 
                 
