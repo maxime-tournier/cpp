@@ -1,8 +1,10 @@
 // -*- compile-command: "c++ -g -Wall -std=c++11 nan_union.cpp -o nan_union" -*-
 
 #include "nan_union.hpp"
+#include "ref.hpp"
 
 #include <iostream>
+
 
 struct test {
   test() { std::clog << "test()" << std::endl; }
@@ -23,13 +25,11 @@ struct test {
 };
 
 
-
-
 int main(int, char**) {
-
-  nan_union<test, std::int32_t> u = test();
-
-  std::clog << u.get<test>() << std::endl;
+  nan_union<test, std::int32_t, ref<test> > u = test();
+  u = make_ref<test>();
+  
+  std::clog << u.get<ref<test>>().get() << std::endl;
   // u = 3.0;
 
   return 0;
