@@ -325,11 +325,25 @@ namespace slip {
       static const syntax_error error("(cond (`expr` `expr`)...)");
       
       try{
-        return condition{ map(items, [](const sexpr& e) {
-              const sexpr::list& lst = e.get<sexpr::list>();
-              if(size(lst) != 2) throw error;
-              return branch{check_expr(lst->head), check_expr(lst->tail->head)};
-            }) };
+        list<branch> branches = map(items, [](const sexpr& e) -> branch {
+            const sexpr::list& lst = e.get<sexpr::list>();
+            if(size(lst) != 2) throw error;
+            return branch{check_expr(lst->head), check_expr(lst->tail->head)};
+          });
+
+        // fixup missing else statement
+        branches = foldr(list<branch>(), branches, [&](const branch& lhs, const list<branch>& rhs) {
+
+            // final "else" case is missing
+            if(!rhs && (!lhs.test.is<literal<bool>>() || !lhs.test.get<literal<bool>>().value)) {
+              const branch fix = {literal<boolean>{true}, sequence{}};              
+              return lhs >>= fix >>= rhs;
+            }
+
+            return lhs >>= rhs;
+          });
+        
+        return condition{branches};
         
       } catch(std::bad_cast) {
         throw error;

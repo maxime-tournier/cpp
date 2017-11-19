@@ -147,7 +147,6 @@ static const auto compiler = [](bool dump_bytecode) {
         return pop(args);
       });
 
-
     const type builtins[] = { traits< unit >::type(),
                               traits< boolean >::type(),
                               traits< integer >::type(),
@@ -202,7 +201,6 @@ static const auto compiler = [](bool dump_bytecode) {
           return !pop(args).get< vm::value::list >();
         });
     }
-
     
   }
 
