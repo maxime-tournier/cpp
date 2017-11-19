@@ -1185,7 +1185,8 @@ namespace slip {
         tc.data_ctor->emplace(self.ctor.name, data);
 
         // TODO this should be io unit
-        return {tc.generalize(module), self};
+        return { tc.generalize( io_ctor(unit_type) ), ast::expr{ ast::sequence{} } };
+        // return {tc.generalize(module), self};
       }
       
       

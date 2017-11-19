@@ -415,12 +415,14 @@ namespace slip {
         res.push_back( vm::instruction(it->second) );
       }
 
-
+      void operator()(const ast::export_& self, vm::bytecode& res, ref<variables>& ctx) const {
+        compile(res, ctx, self.value);
+      }
       
       void operator()(const ast::expr& self, vm::bytecode& res, ref<variables>& ctx) const {
         std::stringstream ss;
         ss << repr(self);
-        throw error("compile: unimplemented: " + ss.str());
+        throw error("codegen unimplemented for: " + ss.str());
       }
     };
     
@@ -439,7 +441,8 @@ namespace slip {
       void operator()(const ast::module& self, vm::bytecode& res, ref<variables>& ctx) const {
         std::stringstream ss;
         ss << "not implemented: codegen for " << repr(self);
-        throw error(ss.str());
+        // throw error(ss.str());
+        std::clog << "warning: " << ss.str() << std::endl;
       }
       
     };
