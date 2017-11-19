@@ -76,7 +76,9 @@ namespace slip {
       }
       
       kind operator()(const variable& self, const uf_type& uf) const {
-        return uf.find(self);
+        const kind res = uf.find(self);
+        if(res == self) return res;
+        return res.apply( substitute_kind_visitor(), uf);
       }
 
       kind operator()(const constructor& self, const uf_type& uf) const {

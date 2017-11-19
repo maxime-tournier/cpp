@@ -10,7 +10,8 @@ namespace slip {
 
   namespace types {
     static std::ostream& operator<<(std::ostream& out, const type& self);
-
+    static type substitute(const type& t, const union_find<type>& uf);
+    
     ref<state::data_ctor_type> state::data_ctor = make_ref<data_ctor_type>();
     ref<state::ctor_type> state::ctor = make_ref<ctor_type>();    
 
@@ -662,10 +663,12 @@ namespace slip {
                 // inner type is instantiated at called level, unified with
                 // unbox application with outer type, and generalized
                 const type inner = sub.fresh();
-                tc.unify(sub.instantiate(dctor.unbox), outer >>= inner);
+                const type unbox = sub.instantiate(dctor.unbox);
+                
+                sub.unify(unbox, outer >>= inner);
                 sub.def(x.name(), sub.generalize(inner) );
               }
-              
+
               return outer;
             } else {
               const type a = tc.fresh();
@@ -687,13 +690,11 @@ namespace slip {
           args->head = unit_type;
         }
         
-        
-
         // infer body type in subcontext
         const inferred<type, ast::expr> body = infer(sub, self.body);
-
+        
         // return complete application type
-        const type res = foldr(body.type, args, [](const type& lhs, const type& rhs) {
+        const type res = foldr(body.type, args, [&](const type& lhs, const type& rhs) {
             return lhs >>= rhs;
           });
 
@@ -930,11 +931,13 @@ namespace slip {
       }
 
       type operator()(const variable& self, const uf_type& uf) const { 
-        return uf.find(self);
+        const type res = uf.find(self);
+        if( res == self ) return res;
+        return res.apply(substitute_visitor(), uf);
       }
       
       type operator()(const application& self, const uf_type& uf) const {
-        return map(self, [&](const type& c) {
+        return map(self, [&uf](const type& c) -> type {
             return c.apply(substitute_visitor(), uf);
           });
       }

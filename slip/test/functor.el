@@ -10,6 +10,11 @@
 (def f (export functor
                (record
                 (map map))))
+f
+
+(def open (lambda ((functor f))
+            f))
+open
 
 (def fmap (lambda ((functor f))
             (@map f)))
