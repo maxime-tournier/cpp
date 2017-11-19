@@ -137,7 +137,7 @@ namespace slip {
 
       sexpr operator()(const module& self) const {
         return kw::module >>= (repr(self.ctor) >>= map(self.args, repr_visitor()) )
-          >>= map(self.rows, [&](const module::row& row) -> sexpr {
+          >>= map(self.rows, [](const module::row& row) -> sexpr {
             return row.name >>= repr(row.type) >>= sexpr::list();
           });
       }
@@ -332,7 +332,7 @@ namespace slip {
           });
 
         // fixup missing else statement
-        branches = foldr(list<branch>(), branches, [&](const branch& lhs, const list<branch>& rhs) {
+        branches = foldr(list<branch>(), branches, [](const branch& lhs, const list<branch>& rhs) {
 
             // final "else" case is missing
             if(!rhs && (!lhs.test.is<literal<bool>>() || !lhs.test.get<literal<bool>>().value)) {
