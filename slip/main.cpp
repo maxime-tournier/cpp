@@ -201,6 +201,29 @@ static const auto compiler = [](bool dump_bytecode) {
           return !pop(args).get< vm::value::list >();
         });
     }
+
+
+    // TODO these should not even exist once pattern matching is implemented (or
+    // use maybe instead?)
+    {
+      type a = tc->fresh();
+      tc->def("head", tc->generalize(list_ctor(a) >>= a));
+      jit->def("head", +[](vm::stack* args) -> vm::value {
+          const vm::value::list arg = pop(args).get<vm::value::list>();
+          if(!arg) throw error("empty list");
+          return arg->head;
+        });
+    }
+
+    {
+      type a = tc->fresh();
+      tc->def("tail", tc->generalize(list_ctor(a) >>= list_ctor(a)));
+      jit->def("tail", +[](vm::stack* args) -> vm::value {
+          const vm::value::list arg = pop(args).get<vm::value::list>();
+          if(!arg) throw error("empty list");
+          return arg->tail;
+        });
+    }
     
   }
 
@@ -219,7 +242,7 @@ static const auto compiler = [](bool dump_bytecode) {
       
     } catch(...) {
       std::cout << " : " << p.type << std::endl;
-      // throw;
+      throw;
     }
 
     return parse::pure(s);
