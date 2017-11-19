@@ -521,10 +521,6 @@ namespace slip {
     }
 
     
-    std::ostream& operator<<(std::ostream& out, const toplevel& self) {
-      return out << self.get<expr>();
-    }
-
     sexpr repr(const toplevel& self) {
       return self.apply( repr_visitor() );
     }
