@@ -12,15 +12,25 @@ union ieee754 {
   std::uint64_t bits;
 };
 
+// basic nan-tagged storage facility
 class nan_storage {
   ieee754 storage;
 
+  // nan bits mask: all 11 exponent bits are set, which leaves us with 52
+  // mantissa bits + sign bit for storing stuff
   static constexpr std::uint64_t nan_mask = ((std::uint64_t(1) << 11) - 1) << 52;
+
+  // quiet bit mask: actually, only 51 mantissa bits since bit 51 signals a
+  // 'quiet nan'. that's a total 52 bits for storing information.
   static constexpr std::uint64_t quiet_mask = std::uint64_t(1) << 51;
 
+  // quiet nan bits mask
   static constexpr std::uint64_t quiet_nan_mask = nan_mask | quiet_mask;
-  
+
+  // sign bit mask
   static constexpr std::uint64_t sign_mask = std::uint64_t(1) << 63;
+
+  // remaining data mask
   static constexpr std::uint64_t data_mask = (std::uint64_t(1) << 51) - 1;
 public:
 
@@ -44,6 +54,7 @@ public:
   }
   
   void data(std::uint64_t x) {
+    assert( x <= data_mask );
     // clear data, keeping nan mask
     storage.bits &= quiet_nan_mask | ~data_mask;
     storage.bits |= (data_mask & x);
@@ -78,11 +89,13 @@ public:
 class nan_union {
   nan_storage storage;
 
+  // hide tag in 3 bits 48-50 as pointers only use 48bits addressing space
   static constexpr std::uint64_t tag_shift = 48;
   static constexpr std::uint64_t tag_width = 3;
   static constexpr std::uint64_t tag_max = (std::uint64_t(1) << tag_width) - 1;
   static constexpr std::uint64_t tag_mask = tag_max << tag_shift;
-  
+
+  // the remaining 48 bits hold the value
   static constexpr std::uint64_t value_mask = (std::uint64_t(1) << tag_shift ) - 1;
   
 public:
@@ -95,20 +108,13 @@ public:
   double& as_double() { return storage.as_double(); }
   const double& as_double() const { return storage.as_double(); }    
   
-  // tag
-  tag_type tag() const {
-    return storage.data() & tag_mask;
-  }
-
-  void tag(tag_type x) {
-    storage.data( value() | (value_type(x) << tag_shift) );
-  }
+  // get/set tag
+  tag_type tag() const { return storage.data() & tag_mask; }
+  void tag(tag_type x) { storage.data( value() | (value_type(x) << tag_shift) ); }
   
 
-  // value
-  value_type value() const {
-    return storage.data() & value_mask;
-  }
+  // get/set value
+  value_type value() const { return storage.data() & value_mask; }
 
   void value(value_type x) {
     assert( (~value_mask & x) == 0 );
