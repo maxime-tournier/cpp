@@ -25,23 +25,76 @@ struct test {
 };
 
 
+class derp {
+protected:
+  ieee754 data;
+  using payload_type = ieee754::payload_type;
+
+  void release() {
+    payload_type tmp = data.bits.payload;
+    reinterpret_cast<ref_any&>(tmp).~ref_any();
+  }
+
+public:
+  
+  template<class T>
+  void set(const T& value) {
+    static_assert( sizeof(T) <= sizeof(payload_type), "type too large");
+    if(data.bits.nan && data.bits.flag) release();
+
+    if(std::is_same<T, double>::value) {
+      data.value = reinterpret_cast<const double&>(value);
+    } else {
+      data.bits.flag = false;
+      data.bits.nan = ieee754::quiet_nan;
+      data.bits.payload = reinterpret_cast<const ieee754::payload_type&>(value);
+    }
+  }
+
+  void set(const ref_any& value) {
+    if(!data.bits.nan || !data.bits.flag) {
+      // turn the data into a null ptr if it wasnt a ptr
+      data.bits.flag = true;
+      data.bits.nan = ieee754::quiet_nan;
+      data.bits.payload = 0;
+    }
+
+    payload_type tmp = data.bits.payload;
+    reinterpret_cast<ref_any&>(tmp) = value;
+    data.bits.payload = tmp;    
+  }
+
+  void set(ref_any&& value) {
+    if(!data.bits.nan || !data.bits.flag) {
+      // turn the data into a null ptr if it wasnt a ptr
+      data.bits.flag = true;
+      data.bits.nan = ieee754::quiet_nan;
+      data.bits.payload = 0;
+    }
+
+    payload_type tmp = data.bits.payload;
+    reinterpret_cast<ref_any&>(tmp) = std::move(value);
+    data.bits.payload = tmp;
+  }
+  
+  ~derp() {
+    if(data.bits.nan && data.bits.flag) release();
+  }
+
+  
+};
+
 
 
 
 
 int main(int, char**) {
-  // nan_union<test, std::int32_t, ref<test> > u = test();
-  // u = make_ref<test>();
-  
-  // std::clog << u.get<ref<test>>().get() << std::endl;
-  // // u = 3.0;
 
-  ref<test> x = make_ref<test>();
-  ref<test> y = std::move(x);
+  derp x;
+  x.set(1.0);
 
-  ref_any z = y.any();
-  ref<test> w = z.cast<test>();
-  std::clog << z.rc() << std::endl;
-  
+  ref<test> y = make_ref<test>();
+  x.set(y.any());
+  x.set( make_ref<test>().any() );
   return 0;
 }

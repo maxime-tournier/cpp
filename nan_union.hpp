@@ -31,7 +31,7 @@ union ieee754 {
     payload_type payload : 48;
     unsigned char type : 3;
     unsigned int nan : 12;
-    unsigned char flag : 1;
+    bool flag : 1;
   } bits;
 
   static const unsigned int quiet_nan = (1 << 12) - 1;
