@@ -325,8 +325,6 @@ namespace slip {
     }  
 
 
-    
-
     ref<closure> make_closure(std::size_t argc, std::size_t addr,
                               const value* first, const value* last) {
       const ref_any res = new (last - first) control_block<closure>(argc, addr, first, last);
