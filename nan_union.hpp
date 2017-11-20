@@ -27,9 +27,11 @@ struct selector<size, H, T...> : selector<size, T...> {
 union ieee754 {
   double value;
   using payload_type = std::uint64_t;
+  using tag_type = unsigned char;
+  
   struct bits_type {
     payload_type payload : 48;
-    unsigned char type : 3;
+    tag_type tag : 3;
     unsigned int nan : 12;
     bool flag : 1;
   } bits;
@@ -58,7 +60,7 @@ public:
   void release() {
     using thunk_type = void (*) (payload_type);    
     static const thunk_type thunk[] = { destruct<T>... };
-    thunk[data.bits.type](data.bits.payload);
+    thunk[data.bits.tag](data.bits.payload);
   }
 
   template<class U, class ... Args, unsigned type = type_index<U>()>
@@ -67,7 +69,7 @@ public:
     using value_type = typename std::decay<U>::type;
     
     data.bits.nan = ieee754::quiet_nan;
-    data.bits.type = type;
+    data.bits.tag = type;
     data.bits.flag = !std::is_trivially_destructible< value_type >();
     
     payload_type tmp;
@@ -93,7 +95,7 @@ public:
   
   template<class U, int type = type_index<U>() >
   nan_union& operator=(U&& x) noexcept {
-    const bool same_type = data.bits.type == type;
+    const bool same_type = data.bits.tag == type;
 
     // need to release if assigning from different types and release
     // bit is set
@@ -155,7 +157,7 @@ public:
     if( std::is_same<U, double>::value && !data.bits.nan ) {
       return reinterpret_cast<const U&>(data.value);
     }
-    if( data.bits.nan && data.bits.type == type ) {
+    if( data.bits.nan && data.bits.tag == type ) {
       const payload_type payload = data.bits.payload;
       return reinterpret_cast<const U&>(payload);
     }
