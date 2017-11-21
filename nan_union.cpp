@@ -39,23 +39,23 @@ protected:
 public:  
   
   ieee754::tag_type tag() const {
-    if(!data.bits.nan) throw std::bad_cast();
+    if(data.bits.nan != ieee754::quiet_nan ) throw std::bad_cast();
     return data.bits.tag;
   }
 
 
   void tag(ieee754::tag_type tag) {
-    if(!data.bits.nan) throw std::bad_cast();
+    if(data.bits.nan != ieee754::quiet_nan) throw std::bad_cast();
     data.bits.tag = tag;
   }
   
-  bool is_ref() const { return data.bits.nan && data.bits.flag; }
-  bool is_double() const { return !data.bits.nan; }
-  bool is_value() const { return data.bits.nan && !data.bits.flag; }    
+  bool is_ref() const { return (data.bits.nan == ieee754::quiet_nan) && data.bits.flag; }
+  bool is_double() const { return data.bits.nan != ieee754::quiet_nan; }
+  bool is_value() const { return (data.bits.nan == ieee754::quiet_nan) && !data.bits.flag; }    
   
   template<class F>
   typename F::value_type visit(const F& f) const {
-    if(!data.bits.nan) {
+    if(data.bits.nan != ieee754::quiet_nan) {
       return f(data.value);
     } else if( data.bits.flag ) {
       const value_type tmp = data.bits.payload;
@@ -136,9 +136,23 @@ public:
     data.bits.tag = tag;
     data.bits.payload = value;
   }
-  
-};
 
+
+  // convenience
+  template<class T>
+  T value_cast() const {
+    static_assert(sizeof(T) <= sizeof(value_type), "type too large");
+    static_assert(!std::is_same<T, double>::value, "cannot value_cast as double");
+    
+    if(data.bits.nan == ieee754::quiet_nan && !data.bits.flag) {
+      value_type tmp = data.bits.payload;
+      return reinterpret_cast<T&>(tmp);
+    } else {
+      throw std::bad_cast();
+    }
+  }
+
+};
 
 
 
