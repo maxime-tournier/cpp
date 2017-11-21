@@ -585,6 +585,7 @@ namespace slip {
       
       template<class UF>
       friend void unify(pretty_printer& pp, UF& uf, const row_helper& lhs, const row_helper& rhs)  {
+        // TODO unification debug
         std::set<symbol> both;
         
         // unify intersection
