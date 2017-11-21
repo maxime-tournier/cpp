@@ -20,7 +20,7 @@ namespace slip {
 
 
   jit& jit::def(symbol name, const vm::value& value) {
-    ctx->add_var(name);
+    ctx->push_var(name);
     machine.data_stack.emplace_back( value );
     return *this;
   }

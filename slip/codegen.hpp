@@ -30,11 +30,11 @@ namespace slip {
       const symbol* defining = nullptr;
 
       // push anonymous local variable, return its index
-      integer add_var() { return size++; }
+      integer push_var() { return size++; }
       
       // push named (unique) local variable
-      integer add_var(symbol s) {
-        auto res = locals.insert( std::make_pair(s, add_var() ) );
+      integer push_var(symbol s) {
+        auto res = locals.insert( std::make_pair(s, push_var() ) );
         if(!res.second) {
           throw slip::error("duplicate variable");
         }
@@ -42,10 +42,12 @@ namespace slip {
         return res.first->second;
       }
 
+      // void pop_var(std::size_t n = 1) { size -= n; }
+      
       // declare anonymous/named function args, return its index (backwards) from stack top
-      integer add_arg() { return args++; }
-      integer add_arg(symbol s) {
-        auto res = locals.insert( std::make_pair(s, -add_arg() ) );
+      integer push_arg() { return args++; }
+      integer push_arg(symbol s) {
+        auto res = locals.insert( std::make_pair(s, -push_arg() ) );
         if(!res.second) throw std::runtime_error("duplicate variable");
         
         return res.first->second;

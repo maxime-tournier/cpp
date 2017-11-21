@@ -780,7 +780,7 @@ namespace slip {
 
 
       // monadic binding
-      inferred<type, ast::expr> operator()(const ref<ast::binding>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::binding& self, state& tc) const {
 
         const type forward = tc.fresh();
         
@@ -788,16 +788,16 @@ namespace slip {
         // note: monadic binding pushes a scope
         tc = tc.scope();
         
-        tc.def(self->id, tc.generalize(forward));
+        tc.def(self.id, tc.generalize(forward));
 
-        const inferred<type, ast::expr> value = infer(tc, self->value);
+        const inferred<type, ast::expr> value = infer(tc, self.value);
         
         tc.unify(io_ctor(forward), value.type);
 
-        tc.find(self->id);
+        tc.find(self.id);
 
         // TODO should we rewrite as a def?
-        const ast::binding node = {self->id, value.node};
+        const ast::binding node = {self.id, value.node};
         return {io_ctor(unit_type), node};
         
       }

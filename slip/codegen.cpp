@@ -156,7 +156,7 @@ namespace slip {
       void operator()(const ast::definition& self, vm::bytecode& res, ref<variables>& ctx) const {
 
         // 
-        ctx->add_var(self.id);
+        ctx->push_var(self.id);
       
         // save some space on the stack by pushing a dummy var
         res.push_back( opcode::PUSHU );
@@ -181,9 +181,9 @@ namespace slip {
 
         // populate sub with self arg
         if(ctx->defining) {
-          sub->add_arg(*ctx->defining);
+          sub->push_arg(*ctx->defining);
         } else {
-          sub->add_arg();
+          sub->push_arg();
         }
 
         // populate sub with args
@@ -192,9 +192,9 @@ namespace slip {
           const symbol s = arg.name();
             
           if(s == kw::wildcard) {
-            sub->add_arg();
+            sub->push_arg();
           } else {
-            sub->add_arg(s);
+            sub->push_arg(s);
           }
         }
 
@@ -341,9 +341,11 @@ namespace slip {
           compile(res, ctx, ast::literal<unit>());
           return;
         }
+
+        // backup TODO backup the whole context instead?
+        // const variables::locals_type locals = ctx->locals;
+        const variables backup = *ctx;
         
-        const variables::locals_type locals = ctx->locals;
-      
         bool first = true;
 
         // TODO with a fold instead?
@@ -356,21 +358,23 @@ namespace slip {
           compile(res, ctx, arg);
         }
 
-
-        const integer n = ctx->locals.size() - locals.size();
-        assert(n >= 0);
+        // check if local vars where defined
+        const integer defs = ctx->size - backup.size;
+        assert(defs >= 0);
       
-        if( n ) {
+        if( defs ) {
           // we need to clear scope
-
+          
           // TODO add an opcode for that
-          for(integer i = 0; i < n; ++i) {
+          for(integer i = 0; i < defs; ++i) {
             res.push_back(opcode::SWAP);
             res.push_back(opcode::POP);          
           }
 
-          ctx->locals = std::move(locals);
+          // restore vars
+          *ctx = std::move(backup);
         }
+
         
       }
 
