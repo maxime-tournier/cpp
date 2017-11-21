@@ -435,16 +435,13 @@ namespace slip {
 
 
     static expr check_binding(const sexpr::list& items) {
-      struct fail { };
-      
+      static const syntax_error error("(var `symbol` `expr`)");
       try {
         
-        if( size(items) != 2 ) throw fail();
-        if( !items->head.is<symbol>() ) throw fail();
-
+        if( size(items) != 2 ) throw error;
         return binding{items->head.get<symbol>(), check_expr(items->tail->head)};
-      } catch( fail& ) {
-        throw syntax_error("(var `symbol` `expr`)");
+      } catch( std::bad_cast ) {
+        throw error;
       }
     }
 
