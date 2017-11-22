@@ -9,8 +9,11 @@
 namespace slip {
 
   namespace types {
+    struct pretty_printer;
+    
     static std::ostream& operator<<(std::ostream& out, const type& self);
     static type substitute( const union_find<type>& uf, const type& t);
+    static void unify(pretty_printer& pp, union_find<type>& uf, type lhs, type rhs);
     
     ref<state::data_ctor_type> state::data_ctor = make_ref<data_ctor_type>();
     ref<state::ctor_type> state::ctor = make_ref<ctor_type>();    
@@ -360,20 +363,20 @@ namespace slip {
 
 
 
-    template<class UF>
     struct occurs_check {
       using value_type = bool;
+      using uf_type = union_find<type>;
       
-      bool operator()(const constant& self, const variable& var, UF& uf) const {
+      bool operator()(const constant& self, const variable& var, uf_type& uf) const {
         return false;
       }
 
-      bool operator()(const variable& self, const variable& var, UF& uf) const {
+      bool operator()(const variable& self, const variable& var, uf_type& uf) const {
         return self == var;
       }
 
 
-      bool operator()(const application& self, const variable& var, UF& uf) const {
+      bool operator()(const application& self, const variable& var, uf_type& uf) const {
 
         return
           uf.find(self.arg).apply(occurs_check(), var, uf) ||
@@ -434,22 +437,22 @@ namespace slip {
     };
     
     
-    template<class UF>
     struct unify_visitor {
 
-      pretty_printer& pp;
+      using uf_type = union_find<type>;
+      using pp_type = pretty_printer;
+      
       const bool try_reverse;
       
-      unify_visitor(pretty_printer& pp, bool try_reverse = true) 
-        : pp(pp),
-          try_reverse(try_reverse) { }
-
+      unify_visitor(bool try_reverse = true) 
+        : try_reverse(try_reverse) { }
+      
       // reverse dispatch
       template<class T>
-      void operator()(const T& self, const type& rhs, UF& uf) const {
+      void operator()(const T& self, const type& rhs, uf_type& uf, pp_type& pp) const {
         // double dispatch
         if( try_reverse ) {
-          return rhs.apply( unify_visitor(pp, false), self, uf);
+          return rhs.apply( unify_visitor(false), self, uf, pp);
         } else {
           throw unification_error(self, rhs);
         }
@@ -457,13 +460,13 @@ namespace slip {
 
 
       // variable / type
-      void operator()(const variable& self, const type& rhs, UF& uf) const {
+      void operator()(const variable& self, const type& rhs, uf_type& uf, pp_type& pp) const {
         const debug_unify debug(pp, self, rhs);
         
         assert( uf.find(self) == self );
         assert( uf.find(rhs) == rhs );        
         
-        if( type(self) != rhs && rhs.apply(occurs_check<UF>(), self, uf)) {
+        if( type(self) != rhs && rhs.apply(occurs_check(), self, uf)) {
           throw occurs_error{self, rhs.get<application>()};
         }
 
@@ -487,11 +490,10 @@ namespace slip {
         }
         
         uf.link(self, rhs);
-        
       }
 
 
-      void operator()(const constant& lhs, const constant& rhs, UF& uf) const {
+      void operator()(const constant& lhs, const constant& rhs, uf_type& uf, pp_type& pp) const {
         const debug_unify debug(pp, lhs, rhs);
         
         if(!(lhs == rhs )) {
@@ -502,17 +504,17 @@ namespace slip {
 
 
       // application / application
-      void operator()(const application& lhs, const application& rhs, UF& uf) const {
+      void operator()(const application& lhs, const application& rhs, uf_type& uf, pp_type& pp) const {
         const debug_unify debug(pp, lhs, rhs);
         
-        uf.find(lhs.func).apply( unify_visitor(pp), uf.find(rhs.func), uf);
+        uf.find(lhs.func).apply( unify_visitor(), uf.find(rhs.func), uf, pp);
 
         // dispatch on kind
         if(lhs.arg.kind() == rows) {
           unify_rows(pp, uf, lhs.arg, rhs.arg);
         } else {
           // standard unification
-          uf.find(lhs.arg).apply( unify_visitor(pp), uf.find(rhs.arg), uf);
+          uf.find(lhs.arg).apply( unify_visitor(), uf.find(rhs.arg), uf, pp);
         }
         
       }
@@ -520,17 +522,22 @@ namespace slip {
     };
 
 
-    void state::unify(const type& lhs, const type& rhs) {
-      pretty_printer pp(std::clog);
+    void unify(pretty_printer& pp, union_find<type>& uf, type lhs, type rhs) {
       const debug_unify debug(pp, lhs, rhs);
       
-      const type flhs = uf->find(lhs);
-      const type frhs = uf->find(rhs);
+      lhs = uf.find(lhs);
+      rhs = uf.find(rhs);
+      
+      lhs.apply( unify_visitor(), rhs, uf, pp);
 
-      flhs.apply( unify_visitor<uf_type>(pp), frhs, *uf);
-
-      pp << "lhs: " << substitute(*uf, lhs) << std::endl;
-      pp << "rhs: " << substitute(*uf, rhs) << std::endl;      
+      // pp << "lhs: " << substitute(*uf, lhs) << std::endl;
+      // pp << "rhs: " << substitute(*uf, rhs) << std::endl;      
+      
+    }
+    
+    void state::unify(const type& lhs, const type& rhs) {
+      pretty_printer pp(std::clog);
+      types::unify(pp, *uf, lhs, rhs);
     }
     
 
@@ -577,8 +584,8 @@ namespace slip {
           }
 
           const debug_unify debug(pp << "diff ", *tail, tmp);
+          unify(pp, uf, *tail, tmp);
           
-          uf.link(*tail, tmp);
         } else if(!diff.empty()) {
           std::stringstream ss;
           ss << "the following attributes cannot be matched:";
@@ -601,7 +608,7 @@ namespace slip {
                               std::inserter(both, both.begin()));
         
         for(symbol s : both) {
-          lhs.data.at(s).apply(unify_visitor<UF>(pp), rhs.data.at(s), uf);
+          lhs.data.at(s).apply(unify_visitor(), rhs.data.at(s), uf, pp);
         }
 
         lhs.unify_diff(pp, uf, rhs);
@@ -622,9 +629,14 @@ namespace slip {
     template<class UF>
     static void unify_rows(pretty_printer& pp, UF& uf, const type& lhs, const type& rhs) {
       // TODO debug here
+
       unify(pp, uf,
-            row_helper(substitute(uf, lhs)),
-            row_helper(substitute(uf, rhs)));
+            row_helper(lhs),
+            row_helper(rhs));
+      
+      // unify(pp, uf,
+      //       row_helper(substitute(uf, lhs)),
+      //       row_helper(substitute(uf, rhs)));
     };
 
 
