@@ -576,7 +576,7 @@ namespace slip {
             tmp = row_extension_ctor(s)(other.data.at(s))(tmp);
           }
 
-          const debug_unify debug(pp, *tail, tmp);
+          const debug_unify debug(pp << "diff ", *tail, tmp);
           
           uf.link(*tail, tmp);
         } else if(!diff.empty()) {
@@ -621,7 +621,10 @@ namespace slip {
     
     template<class UF>
     static void unify_rows(pretty_printer& pp, UF& uf, const type& lhs, const type& rhs) {
-      unify(pp, uf, row_helper(lhs), row_helper(rhs));
+      // TODO debug here
+      unify(pp, uf,
+            row_helper(substitute(uf, lhs)),
+            row_helper(substitute(uf, rhs)));
     };
 
 
