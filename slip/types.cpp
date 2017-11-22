@@ -10,7 +10,7 @@ namespace slip {
 
   namespace types {
     static std::ostream& operator<<(std::ostream& out, const type& self);
-    static type substitute(const type& t, const union_find<type>& uf);
+    static type substitute( const union_find<type>& uf, const type& t);
     
     ref<state::data_ctor_type> state::data_ctor = make_ref<data_ctor_type>();
     ref<state::ctor_type> state::ctor = make_ref<ctor_type>();    
@@ -410,21 +410,23 @@ namespace slip {
       std::size_t depth;
 
       template<class UF>
-      void operator()(const constant& self, UF& uf) const { }
+      void operator()(const constant& self, UF& uf, pretty_printer& pp) const { }
 
       template<class UF>
-      void operator()(const variable& self, UF& uf) const {
+      void operator()(const variable& self, UF& uf, pretty_printer& pp) const {
         if(self.depth > depth) {
-          uf.link(self, variable(self.kind, depth));
+          const type promoted = variable(self.kind, depth);
+          pp << "promoting: " << type(self) << " to: " << promoted << std::endl;
+          uf.link(self, promoted);
         }
       }
 
 
       template<class UF>
-      void operator()(const application& self, UF& uf) const {
+      void operator()(const application& self, UF& uf, pretty_printer& pp) const {
         
         iter(self, [&](const type& x) {
-            uf.find(x).apply(*this, uf);
+            uf.find(x).apply(*this, uf, pp);
           });
         
       }
@@ -480,7 +482,9 @@ namespace slip {
         const bool promote_rhs = rhs.is<application>() ||
           (rhs.is<variable>() && rhs.get<variable>().depth > self.depth);
 
-        if(promote_rhs) rhs.apply(promote_visitor{self.depth}, uf);
+        if(promote_rhs) {
+          rhs.apply(promote_visitor{self.depth}, uf, pp);
+        }
         
         uf.link(self, rhs);
         
@@ -524,7 +528,9 @@ namespace slip {
       const type frhs = uf->find(rhs);
 
       flhs.apply( unify_visitor<uf_type>(pp), frhs, *uf);
-     
+
+      pp << "lhs: " << substitute(*uf, lhs) << std::endl;
+      pp << "rhs: " << substitute(*uf, rhs) << std::endl;      
     }
     
 
@@ -558,7 +564,7 @@ namespace slip {
       }
 
       template<class UF>
-      void unify_diff(UF& uf, const row_helper& other) const {
+      void unify_diff(pretty_printer& pp, UF& uf, const row_helper& other) const {
 
         std::set<symbol> diff;
         std::set_difference(other.keys.begin(), other.keys.end(), keys.begin(), keys.end(), 
@@ -569,6 +575,8 @@ namespace slip {
           for(symbol s : diff) {
             tmp = row_extension_ctor(s)(other.data.at(s))(tmp);
           }
+
+          const debug_unify debug(pp, *tail, tmp);
           
           uf.link(*tail, tmp);
         } else if(!diff.empty()) {
@@ -596,8 +604,8 @@ namespace slip {
           lhs.data.at(s).apply(unify_visitor<UF>(pp), rhs.data.at(s), uf);
         }
 
-        lhs.unify_diff(uf, rhs);
-        rhs.unify_diff(uf, lhs);
+        lhs.unify_diff(pp, uf, rhs);
+        rhs.unify_diff(pp, uf, lhs);
       }
       
       
@@ -946,7 +954,7 @@ namespace slip {
     };
 
 
-    static type substitute(const type& t, const union_find<type>& uf) {
+    static type substitute(const union_find<type>& uf, const type& t) {
       return uf.find(t).apply( substitute_visitor(), uf );
     }
 
@@ -983,7 +991,7 @@ namespace slip {
 
     // generalization
     scheme state::generalize(const type& mono) const {
-      scheme res( substitute(mono, *uf) );
+      scheme res( substitute(*uf, mono) );
 
       const vars_visitor::result_type all = vars(res.body);
     
@@ -1086,7 +1094,7 @@ namespace slip {
                                std::size_t depth) {
       for(auto& it : kenv.locals) {
         if(it.second.is<kinds::variable>()) {
-          const kind k = substitute(it.second, uf);
+          const kind k = substitute(uf, it.second);
           ctors.locals.emplace(it.first, variable(k, depth)); // TODO hardcode
         }
       }
@@ -1133,7 +1141,7 @@ namespace slip {
         
         // declare type variables for module args and build constructor kind
         const kind k = foldr(terms, self.args, [&](const ast::type_variable& lhs, const kind& rhs) {
-            const kind ki = substitute(*kenv->find(lhs.name), uf);
+            const kind ki = substitute(uf, *kenv->find(lhs.name));
             
             if(ki.is<kinds::variable>()) {
               throw kind_error("could not infer kind for " + lhs.name.str());

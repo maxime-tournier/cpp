@@ -71,7 +71,7 @@ namespace slip {
     std::ostream& operator<<(std::ostream& out, const kind& self);
 
     // kind substitution
-    kind substitute(const kind& self, const union_find<kind>& uf);
+    kind substitute(const union_find<kind>& uf, const kind& self);
 
 
     // kind environment

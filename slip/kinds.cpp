@@ -90,7 +90,7 @@ namespace slip {
     };
 
     
-    kind substitute(const kind& k, const union_find<kind>& uf) {
+    kind substitute(const union_find<kind>& uf, const kind& k) {
       return uf.find(k).apply(substitute_kind_visitor(), uf);
     }
 
