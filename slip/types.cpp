@@ -62,6 +62,7 @@ namespace slip {
         variable orig;
 
         friend std::ostream& operator<<(std::ostream& out, const var& self) {
+          if(self.orig.kind == kinds::rows) return out << "...";
           if( self.quantified ) out << "'";
           else out << "!";
           return out << char('a' + self.index)
@@ -419,7 +420,7 @@ namespace slip {
       void operator()(const variable& self, UF& uf, pretty_printer& pp) const {
         if(self.depth > depth) {
           const type promoted = variable(self.kind, depth);
-          pp << "promoting: " << type(self) << " to: " << promoted << std::endl;
+          // pp << "promoting: " << type(self) << " to: " << promoted << std::endl;
           uf.link(self, promoted);
         }
       }
@@ -583,7 +584,7 @@ namespace slip {
             tmp = row_extension_ctor(s)(other.data.at(s))(tmp);
           }
 
-          const debug_unify debug(pp << "diff ", *tail, tmp);
+          const debug_unify debug(pp, *tail, tmp);
           unify(pp, uf, *tail, tmp);
           
         } else if(!diff.empty()) {
