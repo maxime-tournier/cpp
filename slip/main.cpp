@@ -224,6 +224,19 @@ static const auto compiler = [](bool dump_bytecode) {
           return arg->tail;
         });
     }
+
+    {
+      variable a = tc->fresh();
+      type num = types::constant("num", kinds::terms >>= kinds::terms);
+      types::scheme p(a >>= a >>= a);
+      p.constraints.insert( num(a) );
+      p.forall.insert(a);
+      
+      tc->def("add", p);
+      jit->def("add", +[](vm::stack* args) -> vm::value {
+          throw error("derp");
+        });
+    }
     
   }
 
@@ -232,7 +245,7 @@ static const auto compiler = [](bool dump_bytecode) {
 
     const ast::toplevel node = ast::check_toplevel(s);
 
-    const types::inferred<types::scheme, ast::toplevel> p = infer(*tc, node);
+    const types::inferred<types::scheme, ast::toplevel> p = infer_toplevel(*tc, node);
 
     try {
       const vm::value v = jit->eval(p.node, dump_bytecode);

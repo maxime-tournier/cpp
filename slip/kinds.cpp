@@ -132,7 +132,7 @@ namespace slip {
     };
     
     
-    struct infer_visitor {
+    struct infer_kind_visitor {
       using value_type = kind;
       using uf_type = union_find<kind>;
       using db_type = environment;
@@ -148,12 +148,12 @@ namespace slip {
 
       kind operator()(const ast::type_application& self, const db_type& db, uf_type& uf) const {
 
-        const kind func = self.ctor.apply( infer_visitor(), db, uf);
+        const kind func = self.ctor.apply( infer_kind_visitor(), db, uf);
         const kind result = variable();
 
         const kind call =
           foldr(result, self.args, [&](const ast::type& lhs, const kind& rhs) {
-              const kind result = lhs.apply(infer_visitor(), db, uf) >>= rhs;
+              const kind result = lhs.apply(infer_kind_visitor(), db, uf) >>= rhs;
               return result;
             });
         
@@ -167,8 +167,8 @@ namespace slip {
 
     
 
-    kind infer(union_find<kind>& uf, const ast::type& node, const environment& env) {
-      return node.apply(infer_visitor(), env, uf);
+    kind infer_kind(union_find<kind>& uf, const ast::type& node, const environment& env) {
+      return node.apply(infer_kind_visitor(), env, uf);
     }
     
     

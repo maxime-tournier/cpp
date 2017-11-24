@@ -82,7 +82,7 @@ namespace slip {
 
 
     // infer kinds for an ast node under current substitution/context
-    kind infer(union_find<kind>& uf, const ast::type& node, const environment& env);
+    kind infer_kind(union_find<kind>& uf, const ast::type& node, const environment& env);
     
   }
   

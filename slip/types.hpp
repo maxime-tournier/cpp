@@ -115,7 +115,9 @@ namespace slip {
       const type body;
 
       explicit scheme(const type& body);
-      
+
+      using constraints_type = std::set<type>;
+      constraints_type constraints;
     };
 
     std::ostream& operator<<(std::ostream& out, const scheme& self);
@@ -191,9 +193,15 @@ namespace slip {
       state(ref<env_type> env = make_ref<env_type>(),
             ref<uf_type> uf = make_ref<uf_type>());
       
-      scheme generalize(const type& t) const;
-      type instantiate(const scheme& p) const;
+      scheme generalize(const type& t, const scheme::constraints_type& constraints = {}) const;
 
+      struct instantiate_type {
+        const struct type type;
+        const scheme::constraints_type constraints;
+      };
+      
+      instantiate_type instantiate(const scheme& p) const;
+      
       void unify(const type& lhs, const type& rhs);    
     
       state scope() const;
@@ -206,6 +214,7 @@ namespace slip {
 
     };
 
+    
 
     template<class Type, class Node>
     struct inferred {
@@ -213,11 +222,12 @@ namespace slip {
       Node node;
     };
 
-    
-    inferred<scheme, ast::toplevel> infer(state& self, const ast::toplevel& node);    
+
+    // TODO change return type?
+    inferred<scheme, ast::toplevel> infer_toplevel(state& self, const ast::toplevel& node);    
     
 
-    // some traits
+    // some traits for builtin types
     template<class T>
     struct traits {
       static struct type type();

@@ -329,15 +329,22 @@ namespace slip {
     
 
 
-    type state::instantiate(const scheme& p) const {
+    state::instantiate_type state::instantiate(const scheme& p) const {
       instantiate_visitor::map_type map;
 
       // associate each bound variable to a fresh one
       for(const variable& v : p.forall) {
         map.emplace(v, fresh(v.kind));
       }
+
+      type res = p.body.apply(instantiate_visitor(), map);
+      scheme::constraints_type constraints;
+
+      for(const type& c : p.constraints) {
+        constraints.insert(c.apply(instantiate_visitor(), map));
+      }
       
-      return p.body.apply(instantiate_visitor(), map);
+      return {res, constraints};
     }
 
 
@@ -382,7 +389,7 @@ namespace slip {
           uf.find(self.arg).apply(occurs_check(), var, uf) ||
           uf.find(self.func).apply(occurs_check(), var, uf);
       }
-      
+
     };
 
 
@@ -494,7 +501,7 @@ namespace slip {
       }
 
 
-      void operator()(const constant& lhs, const constant& rhs, uf_type& uf, pp_type& pp) const {
+      void operator()(const constant& lhs, const constant& rhs, uf_type&, pp_type& pp) const {
         const debug_unify debug(pp, lhs, rhs);
         
         if(!(lhs == rhs )) {
@@ -641,34 +648,40 @@ namespace slip {
     };
 
 
-    
 
-    static inferred<type, ast::expr> infer(state& self, const ast::expr& node);
-    static type infer(datatypes& self, const ast::type& node);    
+    struct infer_expr_type {
+      const struct type type;
+      const scheme::constraints_type constraints;
+      const ast::expr expr;
+    };
+
     
+    static infer_expr_type infer_expr(state& self, const ast::expr& node);
+    static type infer_type(datatypes& self, const ast::type& node);    
 
 
     // expression switch
     struct expr_visitor {
-      using value_type = inferred<type, ast::expr>;
+      using value_type = infer_expr_type;
 
       // literals
       template<class T>
-      inferred<type, ast::expr> operator()(const ast::literal<T>& self, state&) const {
-        return {traits<T>::type(), self};
+      infer_expr_type operator()(const ast::literal<T>& self, state&) const {
+        return {traits<T>::type(), {}, self};
       }
 
       
       // variables
-      inferred<type, ast::expr> operator()(const ast::variable& self, state& tc) const {
+      infer_expr_type operator()(const ast::variable& self, state& tc) const {
         const scheme& p = tc.find(self.name);
-        const type res = tc.instantiate(p);
-        return {res, self};
+        const state::instantiate_type res = tc.instantiate(p);
+        
+        return {res.type, res.constraints, self};
       }
 
 
       // lambdas
-      inferred<type, ast::expr> operator()(const ast::lambda& self, state& tc) const {
+      infer_expr_type operator()(const ast::lambda& self, state& tc) const {
 
         state sub = tc.scope();
 
@@ -688,7 +701,7 @@ namespace slip {
                 // inner type is instantiated at called level, unified with
                 // unbox application with outer type, and generalized
                 const type inner = sub.fresh();
-                const type unbox = sub.instantiate(dctor.unbox);
+                const type unbox = sub.instantiate(dctor.unbox).type;
                 
                 sub.unify(unbox, outer >>= inner);
                 sub.def(x.name(), sub.generalize(inner) );
@@ -716,7 +729,7 @@ namespace slip {
         }
         
         // infer body type in subcontext
-        const inferred<type, ast::expr> body = infer(sub, self.body);
+        const infer_expr_type body = infer_expr(sub, self.body);
         
         // return complete application type
         const type res = foldr(body.type, args, [&](const type& lhs, const type& rhs) {
@@ -724,29 +737,30 @@ namespace slip {
           });
 
         // and rewritten lambda body
-        const ast::expr node = ast::lambda(self.args, body.node);
-        
-        return {res, node};
+        const ast::expr node = ast::lambda(self.args, body.expr);
+
+        // TODO 
+        return {res, {}, node};
       }
 
 
 
       // applications
-      inferred<type, ast::expr> operator()(const ast::application& self, state& tc) const {
+      infer_expr_type operator()(const ast::application& self, state& tc) const {
 
         // TODO currying 
-        const inferred<type, ast::expr> func = infer(tc, self.func);
+        const infer_expr_type func = infer_expr(tc, self.func);
 
         // infer arg types
-        list< inferred<type, ast::expr> > args = map(self.args, [&](const ast::expr& e) {
-            return infer(tc, e);
+        list< infer_expr_type > args = map(self.args, [&](const ast::expr& e) {
+            return infer_expr(tc, e);
           });
 
 
         // construct function type
         const type result = tc.fresh();
         
-        const type sig = foldr(result, args, [&](const inferred<type, ast::expr>& lhs, const type& rhs) {
+        const type sig = foldr(result, args, [&](const infer_expr_type& lhs, const type& rhs) {
             return lhs.type >>= rhs;
           });
 
@@ -757,34 +771,35 @@ namespace slip {
         }
 
         // rewrite ast node
-        const ast::application node = {func.node, map(args, [](const inferred<type, ast::expr>& e) {
-              return e.node;
+        const ast::application expr = {func.expr, map(args, [](const infer_expr_type& i) {
+              return i.expr;
             })};
-        
-        return {result, node};
+
+        // TODO here
+        return {result, {}, expr};
       }
 
 
       // conditions
-      inferred<type, ast::expr> operator()(const ast::condition& self, state& tc) const {
+      infer_expr_type operator()(const ast::condition& self, state& tc) const {
         const type result = tc.fresh();
 
-        const ast::condition node = { map(self.branches, [&](const ast::branch& b) {
-              const inferred<type, ast::expr> test = infer(tc, b.test);
+        const ast::condition expr = { map(self.branches, [&](const ast::branch& b) {
+              const infer_expr_type test = infer_expr(tc, b.test);
               tc.unify(boolean_type, test.type);
               
-              const inferred<type, ast::expr> value = infer(tc, b.value);
+              const infer_expr_type value = infer_expr(tc, b.value);
               tc.unify(value.type, result);
               
-              return ast::branch{test.node, value.node};
+              return ast::branch{test.expr, value.expr};
             })} ;
         
-        return {result, node};
+        return {result, {}, expr};
       }
 
 
       // let-binding
-      inferred<type, ast::expr> operator()(const ast::definition& self, state& tc) const {
+      infer_expr_type operator()(const ast::definition& self, state& tc) const {
 
         const type forward = tc.fresh();
         
@@ -793,19 +808,19 @@ namespace slip {
         // note: value is bound in sub-context (monomorphic)
         sub.def(self.id, sub.generalize(forward));
 
-        const inferred<type, ast::expr> value = infer(sub, self.value);       
+        const infer_expr_type value = infer_expr(sub, self.value);       
         tc.unify(forward, value.type);
 
         tc.def(self.id, tc.generalize(value.type));
 
-        const ast::definition node = {self.id, value.node};
+        const ast::definition expr = {self.id, value.expr};
 
-        return {io_ctor(unit_type), node};
+        return {io_ctor(unit_type), {}, expr};
       }
 
 
       // monadic binding
-      inferred<type, ast::expr> operator()(const ast::binding& self, state& tc) const {
+      infer_expr_type operator()(const ast::binding& self, state& tc) const {
 
         const type forward = tc.fresh();
         
@@ -815,60 +830,60 @@ namespace slip {
         
         tc.def(self.id, tc.generalize(forward));
 
-        const inferred<type, ast::expr> value = infer(tc, self.value);
+        const infer_expr_type value = infer_expr(tc, self.value);
         
         tc.unify(io_ctor(forward), value.type);
 
         tc.find(self.id);
 
         // TODO should we rewrite as a def?
-        const ast::binding node = {self.id, value.node};
-        return {io_ctor(unit_type), node};
+        const ast::binding expr = {self.id, value.expr};
+        return {io_ctor(unit_type), {}, expr};
         
       }
       
 
       // sequences
-      inferred<type, ast::expr> operator()(const ast::sequence& self, state& tc) const {
+      infer_expr_type operator()(const ast::sequence& self, state& tc) const {
         type res = io_ctor(unit_type);
         state sub = tc.scope();
         
-        const ast::expr node = ast::sequence{ map(self.items, [&](const ast::expr& e) {
+        const ast::expr expr = ast::sequence{ map(self.items, [&](const ast::expr& e) {
               res = io_ctor(tc.fresh()) ;
               
-              const inferred<type, ast::expr> item = infer(sub, e);
+              const infer_expr_type item = infer_expr(sub, e);
               tc.unify(res, item.type);
               
-              return item.node;
+              return item.expr;
             })};
         
-        return {res, node};
+        return {res, {}, expr};
       }
 
 
 
       // record literals
-      inferred<type, ast::expr> operator()(const ast::record& self, state& tc) const {
+      infer_expr_type operator()(const ast::record& self, state& tc) const {
         // TODO rewrite value terms
         const type row = foldr( empty_row_ctor, self.rows, [&tc](const ast::record::row& lhs, const type& rhs) {
-            return row_extension_ctor(lhs.label)( infer(tc, lhs.value).type )( rhs );
+            return row_extension_ctor(lhs.label)( infer_expr(tc, lhs.value).type )( rhs );
           });
         
-        return {record_ctor(row), self};
+        return {record_ctor(row), {}, self};
       }
 
-      inferred<type, ast::expr> operator()(const ast::selection& self, state& tc) const {
+      infer_expr_type operator()(const ast::selection& self, state& tc) const {
         const type alpha = tc.fresh();
         const type rho = tc.fresh( rows );
         const type row = row_extension_ctor(self.label)(alpha)(rho);
         
-        return {record_ctor(row) >>= alpha, self};
+        return {record_ctor(row) >>= alpha, {}, self};
       }
       
 
       // module exports
-      inferred<type, ast::expr> operator()(const ast::export_& self, state& tc) const {
-        const inferred<type, ast::expr> value = infer(tc, self.value);
+      infer_expr_type operator()(const ast::export_& self, state& tc) const {
+        const infer_expr_type value = infer_expr(tc, self.value);
         
         try {
           // fetch associated data constructor
@@ -909,7 +924,7 @@ namespace slip {
             }
           }
 
-          return {target, value.node};
+          return {target, {}, value.expr};
           
         } catch( std::out_of_range ) {
           throw type_error("unknown module: " + self.name.str());
@@ -921,7 +936,7 @@ namespace slip {
       
 
       // fallback case
-      inferred<type, ast::expr> operator()(const ast::expr& self, state&) const {
+      infer_expr_type operator()(const ast::expr& self, state&) const {
         std::stringstream ss;
         ss << "type inference unimplemented for " << repr(self);
         throw error(ss.str());
@@ -930,7 +945,7 @@ namespace slip {
     };
 
 
-    static inferred<type, ast::expr> infer(state& self, const ast::expr& node) {
+    static infer_expr_type infer_expr(state& self, const ast::expr& node) {
       try{
         return node.apply(expr_visitor(), self);
       } catch( unification_error& e )  {
@@ -1006,7 +1021,7 @@ namespace slip {
 
 
     // generalization
-    scheme state::generalize(const type& mono) const {
+    scheme state::generalize(const type& mono, const scheme::constraints_type& constraints) const {
       scheme res( substitute(*uf, mono) );
 
       const vars_visitor::result_type all = vars(res.body);
@@ -1027,7 +1042,7 @@ namespace slip {
 
 
     // type inference for type nodes   
-    struct type_visitor {
+    struct infer_type_visitor {
       using value_type = type;
 
       // variables/constants: lookup
@@ -1042,17 +1057,17 @@ namespace slip {
 
       // applications
       type operator()(const ast::type_application& self, datatypes& ctors) const {
-        return foldl(infer(ctors, self.ctor), self.args, [&ctors](const type& lhs, const ast::type& rhs) {
-            return lhs(infer(ctors, rhs));
+        return foldl(infer_type(ctors, self.ctor), self.args, [&ctors](const type& lhs, const ast::type& rhs) {
+            return lhs(infer_type(ctors, rhs));
           });
       }
       
     };
 
 
-    static type infer(datatypes& ctors, const ast::type& self) {
+    static type infer_type(datatypes& ctors, const ast::type& self) {
       try {
-        return self.apply(type_visitor(), ctors);
+        return self.apply(infer_type_visitor(), ctors);
       } catch( error& e ) {
         std::cerr << "...when inferring type for: " << repr(self) << std::endl;
         ctors.debug( std::clog );
@@ -1099,10 +1114,10 @@ namespace slip {
     
 
     // fill kenv with kind variables and infer kinds
-    static void fill_infer(union_find<kind>& uf, kinds::environment& kenv, 
-                           const ast::type& node, const datatypes& ctors) {
+    static void fill_infer_kind(union_find<kind>& uf, kinds::environment& kenv, 
+                                const ast::type& node, const datatypes& ctors) {
       node.apply(fill_kind_visitor(), kenv, ctors);
-      infer(uf, node, kenv);
+      infer_kind(uf, node, kenv);
     }
 
 
@@ -1127,7 +1142,7 @@ namespace slip {
       // process all types in rows to gather information on module args
       for( const ast::module::row& r : self.rows ) {
         kinds::environment ksub(kenv);
-        fill_infer(uf, ksub, r.type, ctors);
+        fill_infer_kind(uf, ksub, r.type, ctors);
       }
       
     }
@@ -1138,7 +1153,7 @@ namespace slip {
       using value_type = inferred<scheme, ast::toplevel>;
 
       value_type operator()(const ast::expr& self, state& tc) {
-        const inferred<type, ast::expr> res = infer(tc, self);        
+        const infer_expr_type res = infer_expr(tc, self);        
         return {tc.generalize(res.type), self};
       }
 
@@ -1178,12 +1193,12 @@ namespace slip {
         const type rows = foldr(empty_row_ctor, self.rows, [&](const ast::module::row& lhs, const type& rhs) {
             // (re) infer kinds TODO don't do it twice
             kinds::environment ksub(kenv);
-            fill_infer(uf, ksub, lhs.type, *tc.ctor);
+            fill_infer_kind(uf, ksub, lhs.type, *tc.ctor);
             
             // declare type variables in ssub based on inferred kinds
             datatypes ssub(sub);
             fill_variables(ssub, ksub, uf, 1); // TODO hardcoded depth
-            return row_extension_ctor(lhs.name)( infer(ssub, lhs.type) ) (rhs);
+            return row_extension_ctor(lhs.name)( infer_type(ssub, lhs.type) ) (rhs);
           });
         
         const type unboxed = record_ctor(rows);
@@ -1221,13 +1236,11 @@ namespace slip {
     };
     
   
-    inferred<scheme, ast::toplevel> infer(state& tc, const ast::toplevel& node) {
+    inferred<scheme, ast::toplevel> infer_toplevel(state& tc, const ast::toplevel& node) {
       return node.apply(toplevel_visitor(), tc);
     }
 
 
-    
-    
 
 
 
@@ -1245,6 +1258,14 @@ namespace slip {
       
       for(const variable& var : self.forall) {
         pp.osm.emplace( std::make_pair(var, pretty_printer::var{pp.osm.size(), true, var} ) );
+      }
+
+      if(!self.constraints.empty()) {
+        for(const type& c : self.constraints) {
+          pp << c << " ";
+        }
+
+        pp << "=> ";
       }
       
       pp << self.body;
