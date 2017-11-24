@@ -227,13 +227,13 @@ static const auto compiler = [](bool dump_bytecode) {
 
     {
       variable a = tc->fresh();
-      type num = types::constant("num", kinds::terms >>= kinds::terms);
-      types::scheme p(a >>= a >>= a);
+      type num = types::constant("show", kinds::terms >>= kinds::terms);
+      types::scheme p(a >>= string_type);
       p.constraints.insert( num(a) );
       p.forall.insert(a);
       
-      tc->def("add", p);
-      jit->def("add", +[](vm::stack* args) -> vm::value {
+      tc->def("show", p);
+      jit->def("show", +[](vm::stack* args) -> vm::value {
           throw error("derp");
         });
     }
