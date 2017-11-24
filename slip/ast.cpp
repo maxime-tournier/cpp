@@ -144,7 +144,7 @@ namespace slip {
       
       
       template<class T>
-      sexpr operator()(const T& self) const {
+      sexpr operator()(const T& ) const {
         throw error(std::string("repr unimplemented for: ") + typeid(T).name() );
       }
       
@@ -461,7 +461,7 @@ namespace slip {
           
           value_type operator()(const type_application& self) const { return self; }
           value_type operator()(const type_constant& self) const { return {self, {}};}
-          value_type operator()(const type_variable& self) const { throw error; }
+          value_type operator()(const type_variable& ) const { throw error; }
           
         };
         

@@ -40,7 +40,7 @@ namespace slip {
     
 
 
-    static const std::size_t opcode_argc(opcode op) {
+    static std::size_t opcode_argc(opcode op) {
 
       static constexpr std::size_t n = std::size_t(opcode::OPCODE_COUNT);
 
@@ -157,7 +157,7 @@ namespace slip {
       }
 
 
-      void operator()(const unit& self, std::ostream& out) const {
+      void operator()(const unit& , std::ostream& out) const {
         out << "unit";
       }
       
@@ -167,7 +167,7 @@ namespace slip {
       }
       
       
-      void operator()(const builtin& self, std::ostream& out) const {
+      void operator()(const builtin& , std::ostream& out) const {
         out << "#<builtin>";
       }
 
@@ -175,7 +175,7 @@ namespace slip {
         out << "#<closure: @" << self->addr << ">";
       }
 
-      void operator()(const ref<partial>& self, std::ostream& out) const {
+      void operator()(const ref<partial>& , std::ostream& out) const {
         out << "#<partial>";
       }
 

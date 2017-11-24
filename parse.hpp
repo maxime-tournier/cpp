@@ -146,7 +146,7 @@ namespace parse {
   struct pure_type {
     const T value;
   
-    maybe<T> operator()(std::istream& in) const {
+    maybe<T> operator()(std::istream& ) const {
       return value;
     }
   
@@ -170,7 +170,7 @@ namespace parse {
     
     error(const char* what = "parse error") : what(what) { } 
 
-    maybe<T> operator()(std::istream& in) const {
+    maybe<T> operator()(std::istream&) const {
       throw Error(what);
     }
     

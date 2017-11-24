@@ -246,7 +246,7 @@ namespace slip {
 
     // a few helpers
     template<class F, class Ret, class ... Args, std::size_t ... I>
-    static value wrap(const F& f, Ret (*)(Args... args), indices<I...> indices) {
+    static value wrap(const F& f, Ret (*)(Args... args), indices<I...>) {
       static Ret(*ptr)(Args...) = f;
       
       return +[](vm::stack* args) -> value {

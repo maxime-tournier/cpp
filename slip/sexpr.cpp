@@ -26,7 +26,7 @@ namespace slip {
     }
 
 
-    void operator()(const unit& self, std::ostream& out) const {
+    void operator()(const unit& , std::ostream& out) const {
       out << "unit";
     }
 

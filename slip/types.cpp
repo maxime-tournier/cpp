@@ -23,7 +23,7 @@ namespace slip {
     struct vars_visitor {
       using result_type = std::set< variable >;
     
-      void operator()(const constant&, result_type& res) const { }
+      void operator()(const constant&, result_type& ) const { }
       
       void operator()(const variable& self, result_type& res) const {
         res.insert(self);
@@ -140,8 +140,7 @@ namespace slip {
 
       }
       
-      void operator()(const constant& self, std::ostream& out, 
-                      ostream_map& osm) const {
+      void operator()(const constant& self, std::ostream& out, ostream_map&) const {
         out << self.name;
       }
       
@@ -310,7 +309,7 @@ namespace slip {
       
       using map_type = std::map< variable, variable >;
       
-      type operator()(const constant& self, const map_type& m) const {
+      type operator()(const constant& self, const map_type& ) const {
         return self;
       }
 
@@ -368,17 +367,17 @@ namespace slip {
       using value_type = bool;
       using uf_type = union_find<type>;
       
-      bool operator()(const constant& self, const variable& var, uf_type& uf) const {
+      bool operator()(const constant&, const variable&, uf_type&) const {
         return false;
       }
 
-      bool operator()(const variable& self, const variable& var, uf_type& uf) const {
+      bool operator()(const variable& self, const variable& var, uf_type&) const {
         return self == var;
       }
 
 
       bool operator()(const application& self, const variable& var, uf_type& uf) const {
-
+        // TODO union find in variables only + recursive call (like susbstitute?)
         return
           uf.find(self.arg).apply(occurs_check(), var, uf) ||
           uf.find(self.func).apply(occurs_check(), var, uf);
@@ -414,10 +413,11 @@ namespace slip {
       std::size_t depth;
 
       template<class UF>
-      void operator()(const constant& self, UF& uf, pretty_printer& pp) const { }
+      void operator()(const constant&, UF&, pretty_printer&) const { }
 
       template<class UF>
       void operator()(const variable& self, UF& uf, pretty_printer& pp) const {
+        (void) pp;
         if(self.depth > depth) {
           const type promoted = variable(self.kind, depth);
           // pp << "promoting: " << type(self) << " to: " << promoted << std::endl;
@@ -654,7 +654,7 @@ namespace slip {
 
       // literals
       template<class T>
-      inferred<type, ast::expr> operator()(const ast::literal<T>& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::literal<T>& self, state&) const {
         return {traits<T>::type(), self};
       }
 
@@ -921,7 +921,7 @@ namespace slip {
       
 
       // fallback case
-      inferred<type, ast::expr> operator()(const ast::expr& self, state& tc) const {
+      inferred<type, ast::expr> operator()(const ast::expr& self, state&) const {
         std::stringstream ss;
         ss << "type inference unimplemented for " << repr(self);
         throw error(ss.str());
@@ -951,7 +951,7 @@ namespace slip {
       using value_type = type;
       using uf_type = union_find<type>;
       
-      type operator()(const constant& self, const uf_type& uf) const {
+      type operator()(const constant& self, const uf_type&) const {
         return self;
       }
 
@@ -1074,7 +1074,7 @@ namespace slip {
 
       using db_type = kinds::environment;
       
-      void operator()(const ast::type_variable& self, db_type& db, const datatypes& ctors) const {
+      void operator()(const ast::type_variable& self, db_type& db, const datatypes&) const {
         if( db.find(self.name) ) { }
         else db.locals.emplace(self.name, kinds::variable());
       }

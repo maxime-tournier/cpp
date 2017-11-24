@@ -68,13 +68,15 @@ namespace slip {
 
 
     static void pure(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
+      throw error("pure codegen not implemented");
       // return compile(res, ctx, args->head);
     }
 
     
     static void set(bytecode& res, ref<variables>& ctx, const sexpr::list& args) {
+      throw error("set codegen broken lol");
       const symbol& name = args->head.get<symbol>();
-      const sexpr& value = args->tail->head;
+      // const sexpr& value = args->tail->head;
       
       if( auto index = ctx->find(name) ) {
 
@@ -101,26 +103,26 @@ namespace slip {
 
     struct compile_expr {
 
-      void operator()(const ast::literal<unit>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::literal<unit>&, vm::bytecode& res, ref<variables>& ) const {
         res.push_back(opcode::PUSHU);
       }
 
-      void operator()(const ast::literal<boolean>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::literal<boolean>& self, vm::bytecode& res, ref<variables>& ) const {
         res.push_back(opcode::PUSHB);
         res.push_back( vm::instruction(self.value) );
       }
 
-      void operator()(const ast::literal<integer>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::literal<integer>& self, vm::bytecode& res, ref<variables>& ) const {
         res.push_back(opcode::PUSHI);
         res.push_back( vm::instruction(self.value) );
       }
 
-      void operator()(const ast::literal<real>& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::literal<real>& self, vm::bytecode& res, ref<variables>& ) const {
         res.push_back(opcode::PUSHR);
         res.push_back( vm::instruction(self.value) );
       }
       
-      void operator()(const ast::literal< ref<string> >& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::literal< ref<string> >& self, vm::bytecode& res, ref<variables>& ) const {
         res.push_back(opcode::PUSHS);
         res.push_back( vm::instruction(self.value->c_str() ));        
       };
@@ -247,7 +249,7 @@ namespace slip {
       }
 
 
-      void select(const ast::selection& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void select(const ast::selection& self, vm::bytecode& res, ref<variables>& ) const {
         const std::size_t hash = prime_hash(self.label);
 
         res.push_back( opcode::GETATTR );
@@ -423,7 +425,7 @@ namespace slip {
         compile(res, ctx, self.value);
       }
       
-      void operator()(const ast::expr& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::expr& self, vm::bytecode& , ref<variables>& ) const {
         std::stringstream ss;
         ss << repr(self);
         throw error("codegen unimplemented for: " + ss.str());
@@ -442,7 +444,7 @@ namespace slip {
         compile(res, ctx, self);
       }
 
-      void operator()(const ast::module& self, vm::bytecode& res, ref<variables>& ctx) const {
+      void operator()(const ast::module& self, vm::bytecode& , ref<variables>& ) const {
         std::stringstream ss;
         ss << "not implemented: codegen for " << repr(self);
         // throw error(ss.str());

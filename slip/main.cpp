@@ -93,7 +93,7 @@ struct binder {
 
 
   template<class Ret, class ... Args>
-  static slip::types::type signature( Ret(*f)(Args...) ) {
+  static slip::types::type signature( Ret(*)(Args...) ) {
     using namespace slip;
     using namespace types;    
     

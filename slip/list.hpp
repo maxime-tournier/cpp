@@ -57,7 +57,7 @@ namespace slip {
   static inline typename cell<Head>::iterator begin(const list<Head>& self) { return { self.get() }; }
 
   template<class Head>
-  static inline typename cell<Head>::iterator end(const list<Head>& self) { return { nullptr }; }
+  static inline typename cell<Head>::iterator end(const list<Head>& ) { return { nullptr }; }
 
 
   template<class Head>

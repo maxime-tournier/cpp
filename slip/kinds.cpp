@@ -50,7 +50,7 @@ namespace slip {
         out << self.name;
       }
 
-      void operator()(const variable& self, std::ostream& out) const {
+      void operator()(const variable& , std::ostream& out) const {
         out << "?";
       }
 
@@ -71,7 +71,7 @@ namespace slip {
       using value_type = kind;
       using uf_type = union_find<kind>;
       
-      kind operator()(const constant& self, const uf_type& uf) const { 
+      kind operator()(const constant& self, const uf_type& ) const { 
         return self;
       }
       
@@ -138,7 +138,7 @@ namespace slip {
       using db_type = environment;
       
       template<class T>
-      kind operator()(const T& self, const db_type& db, uf_type& uf) const {
+      kind operator()(const T& self, const db_type& db, uf_type& ) const {
         if(auto* k = db.find(self.name)) {
           return *k;
         }
