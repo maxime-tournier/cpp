@@ -737,7 +737,7 @@ namespace slip {
           });
 
         // and rewritten lambda body
-        const ast::expr expr = ast::lambda(self.args, body.expr);
+        const ast::lambda expr = {self.args, body.expr};
 
         // return constraints yielded by body inference
         return {res, body.constraints, expr};
@@ -1163,6 +1163,63 @@ namespace slip {
       }
       
     }
+
+
+
+    static infer_expr_type resolve_instance(const state& tc, const type& s) {
+      
+
+    }
+    
+
+    // context reduction
+    static infer_expr_type reduce_context(state& tc, const infer_expr_type& src) {
+
+      scheme::constraints_type reduced;
+
+      try {
+        
+        for(const type& c : src.constraints) {
+          // 1. substitute constraint type
+          const type s = substitute(*tc.uf, c);
+
+          // 2. obtain type class and instance type
+          if(auto app = s.get_if<application>()) {
+
+            // TODO expand multi parameters
+            const constant tyclass = app->func.get<constant>();
+            const type arg = app->arg;
+
+            // 3. process constrained argument
+            if(arg.is<variable>()) {
+              // no further info on constrained type: just add it to the reduced
+              // context
+              reduced.insert(s);
+            } else {
+              // constant/application: we need to check an instance is available
+              const infer_expr_type instance = resolve_instance(tc, s);
+              
+              // TODO use instance resolution to rewrite src.expr with
+              // dictionary passing
+              
+              // TODO deal with constraint entailment if instance has constraints
+              if( !instance.constraints.empty() ) {
+                throw type_error("unimplemented: constraint entailment");
+              }
+              
+            }          
+          
+          } else throw std::logic_error("constraint types must be applications");
+        
+        }
+      
+        return src;
+      } catch( std::bad_cast ) {
+        throw type_error("unimplemented: multi-parameter type classes");
+      }
+    };
+
+
     
 
     // toplevel visitor
@@ -1170,8 +1227,10 @@ namespace slip {
       using value_type = inferred<scheme, ast::toplevel>;
 
       value_type operator()(const ast::expr& self, state& tc) {
-        const infer_expr_type res = infer_expr(tc, self);        
-        return {tc.generalize(res.type, res.constraints), self};
+        const infer_expr_type res = infer_expr(tc, self);
+        const infer_expr_type reduced = reduce_context(tc, res);
+
+        return {tc.generalize(reduced.type, reduced.constraints), reduced.expr};
       }
 
 

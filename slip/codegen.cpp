@@ -19,8 +19,7 @@ namespace slip {
 
     // TODO much smaller actually :-/
     static constexpr std::size_t max_record_size = 256;
-
-
+    
     
     std::size_t variables::capture(symbol s) {
       if(!parent) throw std::runtime_error("unbound variable: " + s.str());
@@ -36,10 +35,12 @@ namespace slip {
       static const auto make_gen = [] {
         prime_enumerator<std::size_t> res;
         
-        for(unsigned i = 0; i < max_record_size; ++i) {
-          res();
-        }
-
+        // for(unsigned i = 0; i < max_record_size; ++i) {
+        //   res();
+        // }
+        
+        while(res() < max_record_size);
+        
         return res;
       };
       
