@@ -191,7 +191,7 @@ namespace slip {
       const char* as_string;
     };
 
-    static_assert(sizeof(instruction) == sizeof(void*), "instruction size error");
+    // static_assert(sizeof(instruction) == sizeof(void*), "instruction size error");
     
     // TODO you can only ever push to it, this should be more like a stream
     class bytecode : public std::vector<instruction> {
