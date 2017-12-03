@@ -9,7 +9,7 @@ first: all
 $(BUILD_PATH):
 	meson $(BUILD_PATH)
 
-$(BUILD_PATH)/$(TARGET): $(BUILD_PATH)
+$(BUILD_PATH)/$(TARGET): $(BUILD_PATH) FORCE
 	cd $(BUILD_PATH); ninja
 
 target: $(BUILD_PATH)/$(TARGET)
@@ -20,3 +20,4 @@ clean: $(BUILD_PATH)
 	cd $(BUILD_PATH); ninja clean
 
 
+FORCE:
