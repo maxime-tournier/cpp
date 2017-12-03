@@ -95,78 +95,48 @@ static void bezout(U a, U b, T* s, T* t) {
 }
 
 
-
-template<class U>
-static U modular_inverse(U x, U n) {
-  // note: x and n must be coprime
-  U t_prev = 0, t = 1;
-  
-  U a = n, b = x;
-  while(true) {
-    const U q = a / b;
-    const U r = a - b * q;
-    if(!r) {
-      assert(b == 1 && "arguments must be coprime");
-      assert((x * t) % n == 1);
-      return t;
-    }
-    
-    // keep the modular inverse modulo n
-    const U t_next = (t_prev + t * (n - q)) % n;
-    
-    t_prev = t;
-    t = t_next;
-
-    a = b;
-    b = r;
-  }
-  
-}
-
-
 template<class U>
 static U chinese_remainders(const U* a, const U* n, std::size_t size) {
 
   // let's be cautious
   using uint = unsigned long;
   using sint = long;
+  
+  static const auto modular_inverse = [] (uint a, uint b) {
+    // return a * v, where 0 <= v = inv(a) mod b
+    
+    const uint prod = a * b;
+    sint e_prev = a, e = 0;
+    
+    while(uint r = a % b) {
+      const uint q = a / b;
+      
+      // TODO fix case when < 0?
+      const sint e_next = e_prev - q * e;
+      
+      e_prev = e;
+      e = e_next;
+    
+      a = b;
+      b = r;
+    }
 
-  // 
+    if(e < 0) e += prod;
+    assert(e >= 0);
+    return e;
+  };
+
+  
   const uint prod = std::accumulate(n, n + size, uint(1), std::multiplies<uint>());
   
   uint x = 0;
 
   for(std::size_t i = 0; i < size; ++i) {
     assert(a[i] < n[i]);
-
-    // TODO assemble m modulo n[i] to avoid overflowing
     const uint m = prod / n[i];
-    const uint ei = m * modular_inverse<uint>(m % n[i], n[i]);
-    
-    x += a[i] * ei;
-    x %= prod;
+    x += a[i] * modular_inverse(m, n[i]);
   }
 
-  // for(std::size_t i = 0; i < size; ++i) {
-  //   assert( x % n[i] == a[i] );
-  // }
-
-  // for(std::size_t j = 0; j < prod; ++j) {
-  //   uint y = x + j * size;
-    
-  //   std::clog << "j: " << j << " prod: " << prod << " y: " << y << std::endl;
-    
-  //   for(std::size_t i = 0; i < size; ++i) {
-  //     uint q = j % n[i];
-  //     std::clog << "  qi: " << q << std::endl;
-  //     std::clog << "  test: " << ((a[i] + size * q) < n[i]) << std::endl;
-  //     std::clog << "  test2: " << ((size * q) < n[i]) << std::endl;            
-  //     assert( (y % n[i]) % size == a[i] );
-  //   }
-
-  // }
-  
-  
   return x;
 }
 
