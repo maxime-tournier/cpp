@@ -337,7 +337,7 @@ namespace slip {
         map.emplace(v, fresh(v.kind));
       }
 
-      const type res = p.body.apply(instantiate_visitor(), map);
+      type res = p.body.apply(instantiate_visitor(), map);
       scheme::constraints_type constraints;
 
       for(const type& c : p.constraints) {
@@ -806,13 +806,11 @@ namespace slip {
         state sub = tc.scope();
 
         // note: value is bound in sub-context (monomorphic)
-        // TODO constraints?
         sub.def(self.id, sub.generalize(forward));
 
         const infer_expr_type value = infer_expr(sub, self.value);       
         tc.unify(forward, value.type);
 
-        // TODO constraints
         tc.def(self.id, tc.generalize(value.type));
 
         const ast::definition expr = {self.id, value.expr};
@@ -829,8 +827,7 @@ namespace slip {
         // note: value is bound in sub-context (monomorphic)
         // note: monadic binding pushes a scope
         tc = tc.scope();
-
-        // TODO constraints
+        
         tc.def(self.id, tc.generalize(forward));
 
         const infer_expr_type value = infer_expr(tc, self.value);
@@ -912,7 +909,6 @@ namespace slip {
           tc.unify(value.type, source);
 
           // generalize source
-          // TODO constraints
           const scheme p = tc.generalize(source);
           // std::clog << "source: " << p << std::endl;
           
@@ -1039,11 +1035,6 @@ namespace slip {
           return v.depth >= depth;
         });
 
-      // insert (substituted) constraints
-      for(const type& c : constraints) {
-        res.constraints.insert( substitute(*uf, c) );
-      }
-      
       return res;
     }
 
@@ -1158,12 +1149,12 @@ namespace slip {
     
 
     // toplevel visitor
-    struct infer_toplevel_visitor {
+    struct toplevel_visitor {
       using value_type = inferred<scheme, ast::toplevel>;
 
       value_type operator()(const ast::expr& self, state& tc) {
         const infer_expr_type res = infer_expr(tc, self);        
-        return {tc.generalize(res.type, res.constraints), self};
+        return {tc.generalize(res.type), self};
       }
 
 
@@ -1246,7 +1237,7 @@ namespace slip {
     
   
     inferred<scheme, ast::toplevel> infer_toplevel(state& tc, const ast::toplevel& node) {
-      return node.apply(infer_toplevel_visitor(), tc);
+      return node.apply(toplevel_visitor(), tc);
     }
 
 
