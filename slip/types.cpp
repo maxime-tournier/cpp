@@ -737,10 +737,10 @@ namespace slip {
           });
 
         // and rewritten lambda body
-        const ast::expr expr = ast::lambda(self.args, body.expr);
+        const ast::expr node = ast::lambda(self.args, body.expr);
 
-        // return constraints yielded by body inference
-        return {res, body.constraints, expr};
+        // TODO 
+        return {res, {}, node};
       }
 
 
@@ -775,16 +775,8 @@ namespace slip {
               return i.expr;
             })};
 
-
-        // merge constraints TODO substitute constraints here?
-        scheme::constraints_type constraints = func.constraints;
-        for(const infer_expr_type& i : args) {
-          for(const type& c : i.constraints) {
-            constraints.insert(c);
-          }
-        }
-
-        return {result, constraints, expr};
+        // TODO here
+        return {result, {}, expr};
       }
 
 
