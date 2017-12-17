@@ -5,73 +5,77 @@
 
 #include <iostream>
 
-struct spam {
+template<class T>
+using ptr = std::shared_ptr<T>;
+
+struct base {
   PyObject* self = nullptr;
   
-public:
-
-  spam(PyObject* self)
-	: self(self) {
-	Py_XINCREF(self);
-	std::clog << "> spam() c++: " << this << " / py: " << self << std::endl;
+  base(PyObject* self) : self(self) {
+    // the c++ object keeps the python object alive, which will keep the c++
+    // object alive. only python gc can detect/break the cycle (see
+    // tp_traverse/tp_clear).
+    Py_XINCREF(self);
+    std::clog << "base()" << std::endl;    
   }
-
   
-  ~spam() {
-	std::clog << "< ~spam() c++: " << this << " / py: " << self << std::endl;
-	Py_XDECREF(self);
+  virtual ~base() {
+    // the c++ object is expected to live as long as the python object, with
+    // python controlling the release. the only legal way this object can be
+    // freed is after tp_clear is called on the python object, which clears
+    // 'self' for this object. hence: 'self' must be null.
+    assert( !self && "python object outliving its c++ counterpart");
+    std::clog << "~base()" << std::endl;
   }
 
-  
-  using ref = std::shared_ptr<spam>;
+  // python object
+  struct object {
+    PyObject_HEAD;
+    ptr<base> obj;
+  };
 
-  std::string bacon() const {
-    PyObject* obj = PyObject_CallMethod(self, "bacon", NULL);
-    std::string res = PyString_AsString(obj);
-    Py_XDECREF(obj);
-    return res;
+  // python methods
+  static int tp_traverse(PyObject *self, visitproc visit, void *arg) {
+    std::clog << "tp_traverse" << std::endl;
+                                  
+    // py_visit will notify python gc about the c++/python/c++ cycle: this is as
+    // if this python objects acts like a container object containing
+    // itself. when the python object is detected unreachable, tp_clear will be
+    // called
+
+    // we only allow python gc to collect this object when it becomes
+    // unreachable from the c++ side too
+    object* cast = reinterpret_cast<object*>(self);
+    if(cast->obj.unique()) {
+      Py_VISIT(self);
+    }
+    return 0;
   }
 
+  static int tp_clear(PyObject *self) {
+    std::clog << "tp_clear" << std::endl;
+    
+    object* cast = reinterpret_cast<object*>(self);
+    // the python object became unreachable from the python side: it will be
+    // collected. we notify the c++ object accordingly.
+    cast->obj->self = nullptr;
+
+    // we expect the c++ object to be released after this point, otherwise it
+    // will outlive its python counterpart.
+    assert( cast->obj.unique() && "c++ object outliving its python counterpart");
+    cast->obj.reset();
+    return 0;
+  }
+
+  // python type
+  static PyTypeObject type;
   
 };
 
-static const struct sentinel {
-  sentinel() { std::clog << "sentinel" << std::endl; }
-  ~sentinel() { std::clog << "~sentinel" << std::endl; }  
-} instance;
-
-
-
-
-struct py_spam {
-  PyObject_HEAD;
-  spam::ref obj;
-
-  static int tp_traverse(py_spam *self, visitproc visit, void *arg);
-  static int tp_clear(py_spam *self);
-  static PyObject* tp_new(PyTypeObject* cls, PyObject* args, PyObject* kwargs);
-
-  static PyObject* bacon(PyObject* self, PyObject* args, PyObject* kwargs) {
-    return PyString_FromString("standard bacon");
-  }
-  
-  static PyMethodDef tp_methods[];
-};
-
-PyMethodDef py_spam::tp_methods[] = {
-  {"bacon", (PyCFunction)bacon,  METH_KEYWORDS, "give the user some bacon"},
-  {NULL}
-};
-
-static PyMethodDef module_methods[] = {
-  {NULL}
-};
-
-
-static PyTypeObject spam_type = {
+PyTypeObject base::type = {
   PyVarObject_HEAD_INIT(NULL, 0)
-  "spam.spam",             /* tp_name */
-  sizeof(py_spam), /* tp_basicsize */
+  "base",             /* tp_name */
+  sizeof(object), /* tp_basicsize */
   0,                         /* tp_itemsize */
   0,                         /* tp_dealloc */
   0,                         /* tp_print */
@@ -89,6 +93,85 @@ static PyTypeObject spam_type = {
   0,                         /* tp_setattro */
   0,                         /* tp_as_buffer */
   Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,        /* tp_flags */
+  "base class for collectable objects",           /* tp_doc */
+  tp_traverse,
+  tp_clear,
+};
+
+
+
+
+struct spam : base {
+  using base::base;
+  
+  std::string bacon() const {
+    PyObject* obj = PyObject_CallMethod(self, (char*) "bacon", NULL);
+    std::string res = PyString_AsString(obj);
+    Py_XDECREF(obj);
+    return res;
+  }
+  
+  static PyObject* tp_new(PyTypeObject* cls, PyObject* args, PyObject* kwargs) {
+    std::clog << "tp_new" << std::endl;
+    PyObject* self = PyType_GenericAlloc(cls, 1);
+
+    // allocate c++ object
+    base::object* cast = reinterpret_cast<base::object*>(self);
+    cast->obj = std::make_shared<spam>(self);
+
+    // keep a handle on c++ objects
+    static std::vector<ptr<base> > instances;
+  
+    return self;
+  }
+
+  static PyObject* py_bacon(PyObject* cls, PyObject* args, PyObject* kwargs) {
+    return PyString_FromString("standard bacon");
+  }
+  
+  static PyMethodDef tp_methods[];
+};
+
+PyMethodDef spam::tp_methods[] = {
+  {"bacon", (PyCFunction)py_bacon,  METH_KEYWORDS, "give the user some bacon"},
+  {NULL}
+};
+
+
+static const struct sentinel {
+  sentinel() { std::clog << "sentinel" << std::endl; }
+  ~sentinel() { std::clog << "~sentinel" << std::endl; }  
+} instance;
+
+
+
+
+static PyMethodDef module_methods[] = {
+  {NULL}
+};
+
+
+static PyTypeObject spam_type = {
+  PyVarObject_HEAD_INIT(NULL, 0)
+  "spam",             /* tp_name */
+  sizeof(base::object), /* tp_basicsize */
+  0,                         /* tp_itemsize */
+  0,                         /* tp_dealloc */
+  0,                         /* tp_print */
+  0,                         /* tp_getattr */
+  0,                         /* tp_setattr */
+  0,                         /* tp_compare */
+  0,                         /* tp_repr */
+  0,                         /* tp_as_number */
+  0,                         /* tp_as_sequence */
+  0,                         /* tp_as_mapping */
+  0,                         /* tp_hash */
+  0,                         /* tp_call */
+  0,                         /* tp_str */
+  0,                         /* tp_getattro */
+  0,                         /* tp_setattro */
+  0,                         /* tp_as_buffer */
+  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,        /* tp_flags */
   "spam bacon and spam",           /* tp_doc */
 };
 
@@ -106,54 +189,27 @@ static long& gc_refs(PyObject* self) {
 //   _PyGCHead_SET_REFS(gc, _PyGC_REFS_TENTATIVELY_UNREACHABLE);  
 // }
 
-int py_spam::tp_traverse(py_spam *self, visitproc visit, void *arg) {
-  std::clog << "tp_traverse py: " << self << " / c++: " << self->obj << std::endl;
-  std::clog << "  c++ use_count: " << self->obj.use_count() << std::endl;
-  std::clog << "  py: gc_refs: " << gc_refs((PyObject*) self) << std::endl;  
-  
-  // std::clog << std::hex << gc_refs((PyObject*) self)  << std::endl;
-  std::clog << "before" << std::endl;
-  Py_VISIT(self);
-  std::clog << "after" << std::endl;
-  
-  return 0;
-}
-
-int py_spam::tp_clear(py_spam *self) {
-  std::clog << "tp_clear py: " << self << " / c++: " << self->obj << std::endl;
-  self->obj.reset();
-  return 0;
-}
-
-PyObject* py_spam::tp_new(PyTypeObject* cls, PyObject* args, PyObject* kwargs) {
-  std::clog << "tp_new" << std::endl;
-  PyObject* self = PyType_GenericAlloc(cls, 1);
-
-  // allocate c++ object
-  py_spam* ptr = reinterpret_cast<py_spam*>(self);
-  ptr->obj = std::make_shared<spam>(self);
-
-  return self;
-}
-
-
 
 
 
 PyMODINIT_FUNC initspam(void) {
-  spam_type.tp_traverse = (traverseproc) py_spam::tp_traverse;
-  spam_type.tp_clear = (inquiry) py_spam::tp_clear;  
-  spam_type.tp_new = py_spam::tp_new;
+  if (PyType_Ready(&base::type) < 0) return;
+  Py_INCREF(&base::type);
   
-  spam_type.tp_methods = py_spam::tp_methods;
+  // spam_type.tp_traverse = (traverseproc) py_spam::tp_traverse;
+  // spam_type.tp_clear = (inquiry) py_spam::tp_clear;  
+
+  spam_type.tp_new = spam::tp_new;
+  spam_type.tp_methods = spam::tp_methods;
+  spam_type.tp_base = &base::type;  
   
   // noddy_NoddyType.tp_new = PyType_GenericNew;
   if (PyType_Ready(&spam_type) < 0) return;
 
   PyObject* module = Py_InitModule3("spam", module_methods, 
                                     "Example module that creates an extension type.");
-
   
   Py_INCREF(&spam_type);
+
   PyModule_AddObject(module, "spam", (PyObject *)&spam_type);
 }

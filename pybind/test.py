@@ -5,19 +5,19 @@ import gc
 
 def func():
     s = spam.spam()
-    print(s.bacon())
+    print('func', s.bacon())
     
 func()
 
 
 class SuperSpam(spam.spam):
 
-    def bacon(self): print('super bacon')
+    def bacon(self): return 'super bacon'
 
 
 def func2():
     s = SuperSpam()
-    print(s.bacon())
+    print('func2', s.bacon())
 
 
 func2()
