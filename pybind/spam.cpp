@@ -8,22 +8,26 @@
 template<class T>
 using ptr = std::shared_ptr<T>;
 
+// a base class for a c++ object that has a python counterpart: the two objects
+// will live exactly for the same duration, with python detecting and collecting
+// garbage.
 struct base {
   PyObject* self = nullptr;
   
   base(PyObject* self) : self(self) {
-    // the c++ object keeps the python object alive, which will keep the c++
-    // object alive. only python gc can detect/break the cycle (see
+    // the c++ object keeps the python object alive, which in turn keeps the c++
+    // object alive. only the python gc can detect/break the cycle (see
     // tp_traverse/tp_clear).
     Py_XINCREF(self);
+    // precondition: self is a 'freshly' instantiated python object
     std::clog << "base()" << std::endl;    
   }
   
   virtual ~base() {
     // the c++ object is expected to live as long as the python object, with
     // python controlling the release. the only legal way this object can be
-    // freed is after tp_clear is called on the python object, which clears
-    // 'self' for this object. hence: 'self' must be null.
+    // destroyed is after tp_clear is called on the python object, which clears
+    // 'self' for this object. henceforth, 'self' must be null.
     assert( !self && "python object outliving its c++ counterpart");
     std::clog << "~base()" << std::endl;
   }
@@ -36,43 +40,54 @@ struct base {
 
   // python methods
   static int tp_traverse(PyObject *self, visitproc visit, void *arg) {
-    std::clog << "tp_traverse" << std::endl;
+    // std::clog << "tp_traverse" << std::endl;
                                   
-    // py_visit will notify python gc about the c++/python/c++ cycle: this is as
-    // if this python objects acts like a container object containing
-    // itself. when the python object is detected unreachable, tp_clear will be
-    // called
+    // Py_VISIT notifies python gc about the c++/python/c++ cycle: to python,
+    // this object acts like a container containing itself. when python detects
+    // this object is unreachable, tp_clear will be called and the python object
+    // will be collected.
 
-    // we only allow python gc to collect this object when it becomes
+    // note: we only allow python gc to collect this object when it becomes
     // unreachable from the c++ side too
     object* cast = reinterpret_cast<object*>(self);
     if(cast->obj.unique()) {
       Py_VISIT(self);
     }
+    
     return 0;
   }
 
   static int tp_clear(PyObject *self) {
-    std::clog << "tp_clear" << std::endl;
+    // std::clog << "tp_clear" << std::endl;
     
     object* cast = reinterpret_cast<object*>(self);
-    // the python object became unreachable from the python side: it will be
-    // collected. we notify the c++ object accordingly.
+    // the python object became unreachable: it will be collected. we notify the
+    // c++ object accordingly.
     cast->obj->self = nullptr;
 
-    // we expect the c++ object to be released after this point, otherwise it
-    // will outlive its python counterpart.
+    // c++ object must be released after this point, otherwise it will outlive
+    // its python counterpart.
     assert( cast->obj.unique() && "c++ object outliving its python counterpart");
     cast->obj.reset();
     return 0;
   }
 
-  // python type
-  static PyTypeObject type;
+  // python type object
+  static PyTypeObject pto;
+
+
+  // convenience
+  template<class Derived>
+  static Derived* as(PyObject* self) {
+    // TODO check python types
+    object* cast = reinterpret_cast<object*>(self);
+    return static_cast<Derived*>(cast->obj.get());
+  }
+  
   
 };
 
-PyTypeObject base::type = {
+PyTypeObject base::pto = {
   PyVarObject_HEAD_INIT(NULL, 0)
   "base",             /* tp_name */
   sizeof(object), /* tp_basicsize */
@@ -100,9 +115,10 @@ PyTypeObject base::type = {
 
 
 
-
+// a user class 
 struct spam : base {
   using base::base;
+
   
   std::string bacon() const {
     PyObject* obj = PyObject_CallMethod(self, (char*) "bacon", NULL);
@@ -125,8 +141,8 @@ struct spam : base {
     return self;
   }
 
-  static PyObject* py_bacon(PyObject* cls, PyObject* args, PyObject* kwargs) {
-    return PyString_FromString("standard bacon");
+  static PyObject* py_bacon(PyObject* self, PyObject* args, PyObject* kwargs) {
+    return PyString_FromString("default bacon");
   }
   
   static PyMethodDef tp_methods[];
@@ -193,15 +209,15 @@ static long& gc_refs(PyObject* self) {
 
 
 PyMODINIT_FUNC initspam(void) {
-  if (PyType_Ready(&base::type) < 0) return;
-  Py_INCREF(&base::type);
+  if (PyType_Ready(&base::pto) < 0) return;
+  Py_INCREF(&base::pto);
   
   // spam_type.tp_traverse = (traverseproc) py_spam::tp_traverse;
   // spam_type.tp_clear = (inquiry) py_spam::tp_clear;  
 
   spam_type.tp_new = spam::tp_new;
   spam_type.tp_methods = spam::tp_methods;
-  spam_type.tp_base = &base::type;  
+  spam_type.tp_base = &base::pto;  
   
   // noddy_NoddyType.tp_new = PyType_GenericNew;
   if (PyType_Ready(&spam_type) < 0) return;
