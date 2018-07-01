@@ -4,6 +4,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <thread>
+#include <atomic>
 
 #include <deque>
 #include <vector>
@@ -22,16 +23,16 @@ class queue {
   std::deque<task_type> tasks;
   mutex_type mutex;
   std::condition_variable cv;
-  bool done = false;
+  bool stop = false;
 
   lock_type lock() { return lock_type(mutex); }
   
 public:
 
-  void finish() {
+  void done() {
     {
       const auto lock = this->lock();
-      done = true;
+      stop = true;
     }
 
     cv.notify_all();
@@ -40,7 +41,7 @@ public:
   bool pop(task_type& out) {
     auto lock = this->lock();
 
-    cv.wait(lock, [this]  { return tasks.size() || done; });
+    cv.wait(lock, [this]  { return tasks.size() || stop; });
     if(tasks.empty()) return false;
     
     out = std::move(tasks.front());
@@ -62,19 +63,25 @@ public:
 
 
 class pool {
+  std::atomic<int> last;
+  std::vector<queue> queues;
   std::vector<std::thread> threads;
-  queue q;
   
   void run(std::size_t i) {
     task_type task;
       
-    while(q.pop(task)) {
+    while(queues[i].pop(task)) {
       task();
     }
   }
 
 public:
-  pool(std::size_t n = std::thread::hardware_concurrency()) {
+  std::size_t size() const { return threads.size(); }
+  
+  pool(std::size_t n = std::thread::hardware_concurrency())
+    : last(0),
+      queues(n) {
+    
     for(std::size_t i = 0; i < n; ++i) {
       threads.emplace_back([this, i] {
           run(i);
@@ -84,7 +91,9 @@ public:
 
 
   ~pool() {
-    q.finish();
+    for(auto& q : queues) {
+      q.done();
+    }
     
     for(auto& t : threads) {
       t.join();
@@ -93,7 +102,8 @@ public:
 
 
   void async(task_type task) {
-    q.push(std::move(task));
+    const int next = last++;
+    queues[next % size()].push(std::move(task));
   }
   
 };
