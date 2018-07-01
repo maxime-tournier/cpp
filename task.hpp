@@ -29,8 +29,6 @@ class queue {
 public:
 
   void finish() {
-    std::clog << "finishing" << std::endl;
-    
     {
       const auto lock = this->lock();
       done = true;
@@ -41,7 +39,8 @@ public:
   
   bool pop(task_type& out) {
     auto lock = this->lock();
-    cv.wait(lock, [this] { return tasks.size() && !done; });
+
+    cv.wait(lock, [this]  { return tasks.size() || done; });
     if(tasks.empty()) return false;
     
     out = std::move(tasks.front());
@@ -67,8 +66,6 @@ class pool {
   queue q;
   
   void run(std::size_t i) {
-    std::clog << "thread " << i << " started" << std::endl;
-
     task_type task;
       
     while(q.pop(task)) {
@@ -79,7 +76,9 @@ class pool {
 public:
   pool(std::size_t n = std::thread::hardware_concurrency()) {
     for(std::size_t i = 0; i < n; ++i) {
-      threads.emplace_back([this, i] { run(i); });
+      threads.emplace_back([this, i] {
+          run(i);
+        });
     }
   }
 
