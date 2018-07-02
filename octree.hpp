@@ -57,30 +57,30 @@ struct cell {
 
   template<class Func>
   void neighbors(std::size_t level, Func&& func) const {
-    const T low = 1 << level;
-    const T up = 1 << (max_level - level);
-    
-    const T mask = ~(low - 1);
+
+    const T max = 1 << (max_level - level);
     
     static constexpr int delta [] = {-1, 0, 1};
     
     decode([&](coord x, coord y, coord z) {
-        const T cx = x.to_ulong() & mask;
-        const T cy = y.to_ulong() & mask;
-        const T cz = z.to_ulong() & mask;
-
+        const T cx = x.to_ulong() >> level;
+        const T cy = y.to_ulong() >> level;
+        const T cz = z.to_ulong() >> level;
+        
         for(int dx : delta) {
-          if(cx < low && dx < 0) continue;
-          if(cx > up && dx > 0) continue;
+          if(!cx && dx < 0) continue;
+          if(cx == max && dx > 0) continue;
           for(int dy : delta) {
-            if(cy < low && dy < 0) continue;
-            if(cy > up && dy > 0) continue;            
+            if(!cy && dy < 0) continue;
+            if(cy == max && dy > 0) continue;            
             for(int dz : delta) {
-              if(cz < low && dz < 0) continue;
-              if(cz > up && dz > 0) continue;
+              if(!cz && dz < 0) continue;
+              if(cz == max && dz > 0) continue;
               
               if(std::abs(dx) + std::abs(dy) + std::abs(dz)) {
-                func(cx + dx * low, cy + dy * low, cz + dz * low);
+                func((cx + dx) << level,
+                     (cy + dy) << level,
+                     (cz + dz) << level);
               }
             }
           }
