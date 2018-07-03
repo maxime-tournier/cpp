@@ -144,7 +144,6 @@ struct cell {
     iterator end() const { return {origin + (incr << 3), incr}; }    
   };
 
-
   explicit cell(const T& value) : bits(value) {  }
   
   cell next(std::size_t level) const {
@@ -187,7 +186,7 @@ struct debug {
 
 // brute force
 template<class Distance, class Iterator>
-static Iterator find_nearest(const Distance& distance, real& best, Iterator first, Iterator last) {
+static Iterator find_nearest(const Distance& distance, real& best, Iterator first, Iterator last) noexcept {
   Iterator res = last;
 
   for(Iterator it = first; it != last; ++it) {
@@ -205,7 +204,7 @@ static Iterator find_nearest(const Distance& distance, real& best, Iterator firs
 // octree based
 template<class Distance, class Iterator, class T>
 static Iterator find_nearest(const Distance& distance, real& best, Iterator first, Iterator last,
-                             const cell<T>& origin, std::size_t level = cell<T>::max_level) {
+                             const cell<T>& origin, std::size_t level = cell<T>::max_level) noexcept {
   // debug dbg;
   const std::size_t size = last - first;
   
@@ -354,22 +353,20 @@ struct octree<T>::distance {
   }
 
   vec3 project(const cell<T>& c, std::size_t level) const {
-    ++box_count;
-
+    // compute scaled_query - proj(scaled_query) onto cell c at given level
     vec3 res;
     c.decode([&](coord<T> sx, coord<T> sy, coord<T> sz) {
         const vec3 low{sx.to_ulong(), sy.to_ulong(), sz.to_ulong()};
-        const vec3 size = vec3::Constant(1ul << level);
-        
-        res = low + (scaled_query - low).cwiseMin(size).cwiseMax(vec3::Zero());
+        const vec3 local = scaled_query - low;
+        res = local.array() - local.array().min(1ul << level).max(0);
       });
-
     return res;
   }
   
   // distance to cell
   real operator()(const cell<T>& c, std::size_t level) const {
-    return (project(c, level) - scaled_query).squaredNorm() / (cell<T>::resolution() * cell<T>::resolution());
+    ++box_count;
+    return project(c, level).squaredNorm() / (cell<T>::resolution() * cell<T>::resolution());
   }
 };
 

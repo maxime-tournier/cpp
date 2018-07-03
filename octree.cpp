@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -g -O3 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
+// -*- compile-command: "c++ -g -O2 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
 
 #include "octree.hpp"
 
@@ -29,7 +29,7 @@ namespace gl {
 
     // back
     glBegin(mode);    
-    glVertex3f(0.0f, 0.0f, 1.0f);
+    glVertex3f(0.0f, 0.0f, 1.0f); 
     glVertex3f(1.0f, 0.0f, 1.0f);
     glVertex3f(1.0f, 1.0f, 1.0f);
     glVertex3f(0.0f, 1.0f, 1.0f);
@@ -127,40 +127,11 @@ namespace gl {
 int main(int argc, char** argv) {
 
   using ucell = cell<unsigned long>;
-  
-  ucell test(2, 2, 2);
-
-
-  const auto write = [](std::ostream& out) {
-    std::size_t count = 0;
-    return [&out, count](ucell::coord x, ucell::coord y, ucell::coord z) mutable {
-      out << count++ << ": " << x.to_ulong() << " " << y.to_ulong() << " " << z.to_ulong() << std::endl;
-    };
-  };
-
-  ucell(1, 1, 1).neighbors(0, write(std::clog));  
-  std::clog << "end" << std::endl;
-  
-  ucell(0, 1, 1).neighbors(0, write(std::clog));  
-  std::clog << "end" << std::endl;  
-
-  ucell(0, 0, 1).neighbors(0, write(std::clog));  
-  std::clog << "end" << std::endl;  
- 
-  ucell(0, 0, 0).neighbors(0, write(std::clog));  
-  std::clog << "end" << std::endl;  
-
-  ucell(2, 2, 2).neighbors(1, write(std::clog));  
-  std::clog << "end" << std::endl;
-  
-  // test.decode([](ucell::coord x, ucell::coord y, ucell::coord z) {
-  //     std::clog << x.to_ulong() << " " << y.to_ulong() << " " << z.to_ulong() << std::endl;
-  //   });
 
   octree<unsigned long> tree;
 
   double duration = timer( [&] {
-      const std::size_t n = 10000000;
+      const std::size_t n = 5000000;
       tree.reserve(n);
       for(std::size_t i = 0; i < n; ++i) {
         const vec3 p = vec3::Random().array().abs();
@@ -216,7 +187,6 @@ int main(int argc, char** argv) {
       // std::clog << "c: " << c.bits << std::endl;
       // std::clog << "p: " << p.bits << std::endl;
       // std::clog << "p: " << p << std::endl;      
-
       
       const real size = real(1ul << i) / ucell::resolution();
       const vec3 lower = tree.origin(p);
