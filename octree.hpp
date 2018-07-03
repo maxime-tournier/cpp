@@ -252,17 +252,18 @@ class octree {
   data_type data;
 
   struct distance;
-
   
  public:
-  void push(const vec3& p) {
+
+  static cell<T> hash(const vec3& p) {
     auto s = (p * cell<T>::resolution()).template cast<T>();
-    cell<T> c(s.x(), s.y(), s.z());
-
-    // std::clog << "p: " << p.transpose() << " c: " << c << std::endl;
-    data.emplace_back(c, p);
+    return cell<T>(s.x(), s.y(), s.z());
   }
-
+  
+  void push(const vec3& p) {
+    data.emplace_back(hash(p), p);
+  }
+  
 
   void sort() { std::sort(data.begin(), data.end()); }
 
@@ -305,6 +306,10 @@ struct octree<T>::item {
     return self.c.bits.to_ulong() < c.bits.to_ulong();
   }
 
+  friend bool operator<(const item& lhs, const item& rhs) {
+    return lhs.c.bits.to_ulong() < rhs.c.bits.to_ulong();
+  }
+  
   
 };
 

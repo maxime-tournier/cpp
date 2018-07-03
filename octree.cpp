@@ -16,7 +16,6 @@ auto quadric = gluNewQuadric();
 
 namespace gl {
   
-
   static void draw_cube(GLenum mode) {
     // front
     glBegin(mode);
@@ -74,16 +73,37 @@ namespace gl {
       glMatrixMode(mode);
       glPushMatrix();
     }
+    
     ~context() {
       glMatrixMode(mode);
       glPopMatrix();
     }
   };
 
+  struct begin {
+    begin(GLenum mode) {
+      glBegin(mode);
+    }
+    
+    ~begin() {
+      glEnd();
+    }
+  };
+
+  
   void translate(const vec3& t) {
     glTranslated(t.x(), t.y(), t.z());
   }
 
+  void color(const vec3& c) {
+    glColor3d(c.x(), c.y(), c.z());
+  }
+
+  void vertex(const vec3& c) {
+    glVertex3d(c.x(), c.y(), c.z());
+  }
+  
+  
   void scale(const vec3& s) {
     glScaled(s.x(), s.y(), s.z());
   }
@@ -149,7 +169,8 @@ int main(int argc, char** argv) {
       std::clog << "error!" << std::endl;
     }
   };
-  
+
+  tree.sort();
   results(tree.nearest(query));
   results(tree.brute_force(query));  
 
@@ -157,7 +178,23 @@ int main(int argc, char** argv) {
 
   w.draw = [&] {
     glDisable(GL_LIGHTING);
+
+    gl::color(vec3::Ones());
+
+    for(std::size_t i = 0; i <= ucell::max_level; ++i) {
+      
+    }
+    
     gl::draw_cell(vec3::Zero(), vec3::Ones());
+
+    gl::color({1, 0, 0});
+    glPointSize(4);
+
+    {
+      auto ctx = gl::begin(GL_POINTS);
+      gl::vertex(query);
+    }
+    
   };
 
   return w.run(argc, argv);
