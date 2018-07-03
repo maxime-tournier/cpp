@@ -15,8 +15,10 @@ class kdtree {
   };
 
   std::vector<node> tree;
-
-  using storage_type = std::vector<std::pair<real, index_type>>;
+  index_type root;
+  
+  using distance_type = std::pair<real, index_type>;
+  using storage_type = std::vector<distance_type>;
   
   template<class Iterator>
   index_type build_impl(Iterator first, Iterator last, dir_type dir, const vec3* positions, storage_type& storage) {
@@ -76,34 +78,32 @@ class kdtree {
   }
 
 
-  void closest_impl(const vec3& query, index_type index, const vec3* positions) const {
+  void closest_impl(distance_type& res, const vec3& query, index_type index, const vec3* positions) const {
     assert(index < tree.size());
     const auto& node = tree[index];
     
-    const unsigned splitdir = node.splitdir;
-    assert(splitdir < x.size());
+    const dir_type split_dir = node.splitdir;
+    assert(split_dir < x.size());
     
     // current node support point
     assert(index < positions.size());
-    const Coord& pos = positions[index];
+    const vec3& pos = positions[index];
     
-    using Real = typename Coord::value_type;
-
     // coordinates along split plane normal
-    const Real cx = x[splitdir], cpos = pos[splitdir];
+    const real cx = x[split_dir], cpos = pos[split_dir];
 
-    const Real diff = cpos - cx;
-    const Real diff2 = diff * diff;
-
+    const real diff = cpos - cx;
+    const real diff2 = diff * diff;
+    
     // our best squared distance so far
-    const Real Dmin2 = res.first;
+    const real Dmin2 = res.first;
 
     bool visit_left = false, visit_right = false;
     
     // B(x, Dmin) intersect split plane
     if(diff2 <= Dmin2) {
         // update our best guess
-        const Real d = (x - pos).norm2();
+        const real d = (x - pos).norm2();
         if(d < Dmin2) {
             res.first = d;
             res.second = index;
@@ -118,9 +118,13 @@ class kdtree {
         visit_right = diff < 0;
     }
 
-    if(visit_left && (node.left != index)) closest_impl(res, x, node.left, positions, tree);
-    if(visit_right && (node.right != index)) closest_impl(res, x, node.right, positions, tree);
-
+    if(visit_left && (node.left != index)) {
+      closest_impl(res, x, node.left, positions);
+    }
+    
+    if(visit_right && (node.right != index)) {
+      closest_impl(res, x, node.right, positions);
+    }
 
   }
   
@@ -141,15 +145,19 @@ public:
     storage_type storage;
     storage.reserve(size);
     
-    build_impl(source.begin(), source.end(), 0, &(*first), storage);
+    root = build_impl(source.begin(), source.end(), 0, &(*first), storage);
   }
 
 
   template<class Iterator>
   index_type closest(const vec3& query, Iterator first, Iterator last) const {
-    
-  }
+    assert(tree.size());
 
+    distance_type res(std::numeric_limits<real>::max(), root);
+    closest_impl(res, query, root, &*first);
+    return res.second;
+  }
+  
 
 };
 
