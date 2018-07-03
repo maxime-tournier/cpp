@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
   octree<unsigned long> tree;
 
   double duration = timer( [&] {
-      const std::size_t n = 5000000;
+      const std::size_t n = 10000000;
       tree.reserve(n);
       for(std::size_t i = 0; i < n; ++i) {
         const vec3 p = vec3::Random().array().abs();

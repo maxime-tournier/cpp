@@ -14,6 +14,9 @@
 
 template<class T>
 struct cell {
+
+  static constexpr std::size_t brute_force_threshold = 128;
+  
   static constexpr std::size_t max_level = (8 * sizeof(T)) / 3;
   using coord = std::bitset<max_level>;
   
@@ -187,7 +190,7 @@ template<class Distance, class Iterator>
 static Iterator find_nearest(const Distance& distance, real& best, Iterator first, Iterator last) {
   Iterator res = last;
 
-  for(auto it = first; it != last; ++it) {
+  for(Iterator it = first; it != last; ++it) {
     const real d = distance(*it);
     if(d < best) {
       best = d;
@@ -207,7 +210,7 @@ static Iterator find_nearest(const Distance& distance, real& best, Iterator firs
   const std::size_t size = last - first;
   
   // base case
-  if( (level == 0) || size == 1) {
+  if( (level == 0) || size <= cell<T>::brute_force_threshold) {
     return find_nearest(distance, best, first, last);
   }
 
@@ -222,10 +225,9 @@ static Iterator find_nearest(const Distance& distance, real& best, Iterator firs
     // note: we want upper bound since we may have duplicate cells in the
     // range (e.g. many points in same leafs)
     Iterator end = std::lower_bound(begin, last, c.next(level - 1));
-
     
     // don't go down the octree unless it's worth it
-    if( distance(c, level - 1) < best) {
+    if(distance(c, level - 1) < best) {
       const real old_best = best;
       Iterator sub = find_nearest(distance, best, begin, end, c, level - 1);
 
@@ -266,7 +268,7 @@ class octree {
     c.decode([&](coord<T> x, coord<T> y, coord<T> z) {
         res = {x.to_ulong(), y.to_ulong(), z.to_ulong()};
       });
-    // std::clog << "decoded: " << res.transpose() << std::endl;
+
     return res / cell<T>::resolution();
   }
   
@@ -293,6 +295,7 @@ class octree {
 
   const vec3* brute_force(const vec3& query) const {
     if(data.empty()) return nullptr;
+    
     real best = std::numeric_limits<real>::max();
     auto it = find_nearest(distance{query}, best, data.begin(), data.end());
     assert(it != data.end());
@@ -328,21 +331,37 @@ struct octree<T>::item {
 template<class T>
 struct octree<T>::distance {
   const vec3 query;
+  const vec3 scaled_query;
 
+  mutable std::size_t point_count = 0, box_count = 0;
+
+  ~distance() {
+    std::clog << " point distances: " << point_count
+              << " box distances: " << box_count << std::endl;
+  }
+
+  
+  distance(const vec3& query)
+    : query(query),
+      scaled_query(query * cell<T>::resolution() ) { }
+
+
+  
   // distance to point
   real operator()(const item& i) const {
-    // std::clog << "\tdistance to: " << i.p.transpose() << std::endl;
-    return (query - i.p).norm(); // TODO optimize with squaredNorm();
+    ++point_count;
+    return (query - i.p).squaredNorm(); // TODO optimize with squaredNorm();
   }
 
   vec3 project(const cell<T>& c, std::size_t level) const {
+    ++box_count;
+
     vec3 res;
-    
     c.decode([&](coord<T> sx, coord<T> sy, coord<T> sz) {
-        const vec3 low = vec3(sx.to_ulong(), sy.to_ulong(), sz.to_ulong()) / cell<T>::resolution();
-        const vec3 size = vec3::Ones() * real(1ul << level) / cell<T>::resolution();
+        const vec3 low{sx.to_ulong(), sy.to_ulong(), sz.to_ulong()};
+        const vec3 size = vec3::Constant(1ul << level);
         
-        res = low + (query - low).cwiseMin(size).cwiseMax(vec3::Zero());
+        res = low + (scaled_query - low).cwiseMin(size).cwiseMax(vec3::Zero());
       });
 
     return res;
@@ -350,7 +369,7 @@ struct octree<T>::distance {
   
   // distance to cell
   real operator()(const cell<T>& c, std::size_t level) const {
-    return (project(c, level) - query).norm();
+    return (project(c, level) - scaled_query).squaredNorm() / (cell<T>::resolution() * cell<T>::resolution());
   }
 };
 
