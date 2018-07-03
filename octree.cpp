@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -g -O3 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
+// -*- compile-command: "c++ -g -O2 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
 
 #include "octree.hpp"
 
@@ -11,6 +11,8 @@
 #include <GL/glu.h>
 
 #include "timer.hpp"
+#include "kdtree.hpp"
+
 
 using vec3 = Eigen::Matrix<real, 3, 1>;
 
@@ -126,35 +128,21 @@ namespace gl {
 
 int main(int argc, char** argv) {
 
-  std::srand(std::time(NULL));
-  
   using ucell = cell<unsigned long>;
+
+  // source data
 
   std::vector<vec3> data;
 
-  const real generate = timer( [&] {
+  real duration = timer([&] {
       const std::size_t n = 5000000;
       data.reserve(n);
       for(std::size_t i = 0; i < n; ++i) {
         data.emplace_back(vec3::Random().array().abs());
       }
     });
-
-  std::clog << "generate: " << generate << std::endl;
+  std::clog << "generate: " << duration << std::endl;
   
-  octree<unsigned long> tree;
-
-  const real octree_build = timer([&] {
-      tree.reserve(data.size());
-      
-      for(const vec3& p : data)  {
-        tree.push(&p);
-      }
-      
-      tree.sort();
-    });
-  
-  std::clog << "octree build: " << octree_build << std::endl;
   
   const vec3 query = vec3::Random().array().abs();
 
@@ -164,35 +152,64 @@ int main(int argc, char** argv) {
     } else {
       std::clog << "error!" << std::endl;
     }
+
   };
 
+  
   const vec3* res;
+
+  
+  octree<unsigned long> tree;
+
+  const real octree_prepare = timer( [&] {
+      tree.reserve(data.size());
+
+      for(const vec3& p : data) {
+        tree.push(p);
+      }
+
+      tree.sort();      
+    });
   
   const real octree_find = timer([&] {
       res = tree.nearest(query);
     });
-  
-  results(res);
-  std::clog << "octree find: " << octree_find << std::endl;
-  
-  const real brute_force = timer([&] {
-      real best = std::numeric_limits<real>::max();
-      auto it = find_nearest(octree<unsigned long>::distance{query}, best, data.begin(), data.end());
 
-      if(it == data.end()) res = nullptr;
-      else res =  &*it;
+  std::clog << "octree:" << std::endl;  
+  results(res);
+  std::clog << "octree prepare: " << octree_prepare << std::endl;
+  std::clog << "octree find: " << octree_find << std::endl;;
+  std::clog << "octree total: " << octree_find + octree_prepare << std::endl;;  
+  
+  
+  kdtree kd;
+
+  const real kdtree_prepare = timer([&] {
+      kd.build(data.begin(), data.end());
+    });
+
+  const real kdtree_find = timer([&] {
+      auto index = kd.closest(query, data.begin(), data.end());
+      res = &data[index];
+    });
+
+  std::clog << "kdtree:" << std::endl;  
+  results(res);
+  std::clog << "kdtree prepare: " << kdtree_prepare << std::endl;
+  std::clog << "kdtree find: " << kdtree_find << std::endl;;
+  std::clog << "kdtree total: " << kdtree_find + kdtree_prepare << std::endl;;  
+
+  std::clog << "brute force:" << std::endl;
+  const real brute_force = timer([&] {
+      res = tree.brute_force(query);
     });
   
   results(res);
-  std::clog << "brute force: " << brute_force << std::endl;
-
-
-  return 0;
-
+  std::clog << "brute force find: " << brute_force << std::endl;
 
 
   
-  // debug stuff
+  
   viewer w;
 
 

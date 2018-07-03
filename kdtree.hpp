@@ -19,6 +19,8 @@ class kdtree {
   
   using distance_type = std::pair<real, index_type>;
   using storage_type = std::vector<distance_type>;
+
+  static constexpr std::size_t dim = 3;
   
   template<class Iterator>
   index_type build_impl(Iterator first, Iterator last, dir_type dir, const vec3* positions, storage_type& storage) {
@@ -28,16 +30,16 @@ class kdtree {
       const index_type index = *first;
       tree[index].left = index;
       tree[index].right = index;
-      tree[index].splitdir = direction;
+      tree[index].dir = dir;
       return index;
     }
 
     // map of position[i][direction] -> i
     storage.clear();
 
-    for(iterator_type it = first; it != last; ++it) {
+    for(Iterator it = first; it != last; ++it) {
       // TODO optimize cache miss here by storing positions in the roi order
-      storage.emplace_back(positions[*it][direction], *it);
+      storage.emplace_back(positions[*it][dir], *it);
     }
 
     std::sort(storage.begin(), storage.end());
@@ -54,12 +56,12 @@ class kdtree {
     // add node for split point
     const index_type index = *it;
     
-    tree[index].splitdir = direction;
+    tree[index].dir = dir;
     tree[index].left = index;
     tree[index].right = index;
     
     // split children recursively along next direction
-    dir_type new_dir = direction + 1; 
+    dir_type new_dir = dir + 1; 
     if(new_dir == dim) new_dir = 0; // modulo dim
     
     // left subtree
@@ -82,15 +84,15 @@ class kdtree {
     assert(index < tree.size());
     const auto& node = tree[index];
     
-    const dir_type split_dir = node.splitdir;
-    assert(split_dir < x.size());
+    const dir_type split_dir = node.dir;
+    assert(split_dir < query.size());
     
     // current node support point
-    assert(index < positions.size());
+    // assert(index < positions.size());
     const vec3& pos = positions[index];
     
     // coordinates along split plane normal
-    const real cx = x[split_dir], cpos = pos[split_dir];
+    const real cx = query[split_dir], cpos = pos[split_dir];
 
     const real diff = cpos - cx;
     const real diff2 = diff * diff;
@@ -103,7 +105,7 @@ class kdtree {
     // B(x, Dmin) intersect split plane
     if(diff2 <= Dmin2) {
         // update our best guess
-        const real d = (x - pos).norm2();
+        const real d = (query - pos).squaredNorm();
         if(d < Dmin2) {
             res.first = d;
             res.second = index;
@@ -119,11 +121,11 @@ class kdtree {
     }
 
     if(visit_left && (node.left != index)) {
-      closest_impl(res, x, node.left, positions);
+      closest_impl(res, query, node.left, positions);
     }
     
     if(visit_right && (node.right != index)) {
-      closest_impl(res, x, node.right, positions);
+      closest_impl(res, query, node.right, positions);
     }
 
   }
