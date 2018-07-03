@@ -185,10 +185,9 @@ struct debug {
 
 // brute force
 template<class Distance, class Iterator>
-static Iterator find_nearest(const Distance& distance, Iterator first, Iterator last) {
-  Iterator res;
+static Iterator find_nearest(const Distance& distance, real& best, Iterator first, Iterator last) {
+  Iterator res = last;
 
-  real best = std::numeric_limits<real>::max();
   for(auto it = first; it != last; ++it) {
     const real d = distance(*it);
     if(d < best) {
@@ -206,22 +205,11 @@ template<class Distance, class Iterator, class T>
 static Iterator find_nearest(const Distance& distance, real& best, Iterator first, Iterator last,
                              const cell<T>& origin, std::size_t level = cell<T>::max_level) {
   // debug dbg;
-
+  const std::size_t size = last - first;
+  
   // base case
-  if( (level == 0) || (last - first) == 1) {
-    
-    // linear search
-    Iterator result = last;
-
-    for(Iterator it = first; it != last; ++it) {
-      const real d = distance(*it);
-      if(d < best) {
-        result = it;
-        best = d;
-      }
-    }
-    
-    return result;
+  if( (level == 0) || size == 1) {
+    return find_nearest(distance, best, first, last);
   }
 
   // recursive case: split cell
@@ -293,10 +281,10 @@ class octree {
 
   const vec3* brute_force(const vec3& query) const {
     if(data.empty()) return nullptr;
-
-    auto it = find_nearest(distance{query}, data.begin(), data.end());
+    real best = std::numeric_limits<real>::max();
+    auto it = find_nearest(distance{query}, best, data.begin(), data.end());
     assert(it != data.end());
-
+    
     return &it->p;
   }
   
@@ -324,28 +312,25 @@ struct octree<T>::item {
 template<class T>
 struct octree<T>::distance {
   const vec3 query;
+
+  // distance to point
   real operator()(const item& i) const {
+    std::clog << "\tdistance to: " << i.p.transpose() << std::endl;
     return (query - i.p).norm(); // TODO optimize with squaredNorm();
   }
 
+  // distance to cell
   real operator()(const cell<T>& c, std::size_t level) const {
     real res;
     c.decode([&](coord<T> sx, coord<T> sy, coord<T> sz) {
-        const vec3 low(sx.to_ulong() / cell<T>::resolution(),
-                       sy.to_ulong() / cell<T>::resolution(),
-                       sz.to_ulong() / cell<T>::resolution());
+        const vec3 low(real(sx.to_ulong()) / cell<T>::resolution(),
+                       real(sy.to_ulong()) / cell<T>::resolution(),
+                       real(sz.to_ulong()) / cell<T>::resolution());
           
-        c.next(level).decode([&](coord<T> ex, coord<T> ey, coord<T> ez) {
-              
-            const vec3 up(ex.to_ulong() / cell<T>::resolution(),
-                          ey.to_ulong() / cell<T>::resolution(),
-                          ez.to_ulong() / cell<T>::resolution());
-              
-            const vec3 size = up - low;
-              
-            const vec3 proj = low + (query - low).cwiseMin(size).cwiseMax(vec3::Zero());
-            res = (query - proj).norm();
-          });
+        const vec3 size = vec3::Ones() * real(1ul << level) / cell<T>::resolution();
+        
+        const vec3 proj = low + (query - low).cwiseMin(size).cwiseMax(vec3::Zero());
+        res = (query - proj).norm();
       });
 
     return res;

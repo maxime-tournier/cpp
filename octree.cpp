@@ -9,8 +9,6 @@
 using vec3 = Eigen::Matrix<real, 3, 1>;
 
 
-
-
 int main(int, char** ) {
 
   using ucell = cell<unsigned long>;
@@ -48,22 +46,22 @@ int main(int, char** ) {
 
   const std::size_t n = 10;
   for(std::size_t i = 0; i < n; ++i) {
-    tree.push(vec3::Random());
+    const vec3 p = vec3::Random().array().abs();
+    tree.push(p);
   }
 
   const vec3 query = vec3::Random();
-  
-  if(auto* p = tree.nearest(query)) {
-    std::clog << "nearest: " << p->transpose() << std::endl;
-  } else {
-    std::clog << "error!" << std::endl;
-  }
 
-  if(auto* p = tree.brute_force(query)) {
-    std::clog << "reference: " << p->transpose() << std::endl;
-  } else {
-    std::clog << "error!" << std::endl;
-  }
+  const auto results = [&](const vec3* p) {
+    if(p) {
+      std::clog << "nearest: " << p->transpose() << ", distance: " << (query - *p).norm() << std::endl;
+    } else {
+      std::clog << "error!" << std::endl;
+    }
+  };
+  
+  results(tree.nearest(query));
+  results(tree.brute_force(query));  
   
   return 0;
 }
