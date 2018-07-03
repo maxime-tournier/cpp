@@ -19,3 +19,6 @@ build
 /stl
 /create_object
 /dependency
+/Makefile.viewer
+*.so*
+/.qglviewer.xml

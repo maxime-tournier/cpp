@@ -1,15 +1,15 @@
-// -*- compile-command: "c++ -o octree octree.cpp -Wall -g -lstdc++ `pkg-config --cflags eigen3`" -*-
+// -*- compile-command: "c++ -o octree octree.cpp -Wall -g -L. -lviewer -lstdc++ `pkg-config --cflags eigen3`" -*-
 
 #include "octree.hpp"
 
 
 #include <iostream>
-
+#include "viewer.hpp"
 
 using vec3 = Eigen::Matrix<real, 3, 1>;
 
 
-int main(int, char** ) {
+int main(int argc, char** argv) {
 
   using ucell = cell<unsigned long>;
   
@@ -62,8 +62,11 @@ int main(int, char** ) {
   
   results(tree.nearest(query));
   results(tree.brute_force(query));  
+
+  viewer w;
   
-  return 0;
+
+  return w.run(argc, argv);
 }
 
 
