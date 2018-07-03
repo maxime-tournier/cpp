@@ -31,11 +31,9 @@ struct cell {
 
     auto value = bits.to_ulong();
     for(std::size_t i = 0; i < max_level; ++i) {
-      const std::size_t j = max_level - 1 - i;
-      
-      x[j] = value & 4;
-      y[j] = value & 2;
-      z[j] = value & 1;
+      x[i] = value & 4;
+      y[i] = value & 2;
+      z[i] = value & 1;
 
       value >>= 3;
     }
@@ -46,9 +44,10 @@ struct cell {
   static bits_type encode(const coord& x, const coord& y, const coord& z) {
     T value = 0;
     for(std::size_t i = 0; i < max_level; ++i) {
+      const std::size_t j = max_level - 1 - i;
       value <<= 3;
 
-      value |= x[i] * 4 + y[i] * 2 + z[i] * 1;
+      value |= x[j] * 4 + y[j] * 2 + z[j] * 1;
     }
 
     return value;
@@ -255,10 +254,22 @@ class octree {
   
  public:
 
+  void reserve(std::size_t count) { data.reserve(count); }
+  
   static cell<T> hash(const vec3& p) {
     auto s = (p * cell<T>::resolution()).template cast<T>();
     return cell<T>(s.x(), s.y(), s.z());
   }
+
+  static vec3 origin(const cell<T>& c) {
+    vec3 res;
+    c.decode([&](coord<T> x, coord<T> y, coord<T> z) {
+        res = {x.to_ulong(), y.to_ulong(), z.to_ulong()};
+      });
+    // std::clog << "decoded: " << res.transpose() << std::endl;
+    return res / cell<T>::resolution();
+  }
+  
   
   void push(const vec3& p) {
     data.emplace_back(hash(p), p);
@@ -320,25 +331,26 @@ struct octree<T>::distance {
 
   // distance to point
   real operator()(const item& i) const {
-    std::clog << "\tdistance to: " << i.p.transpose() << std::endl;
+    // std::clog << "\tdistance to: " << i.p.transpose() << std::endl;
     return (query - i.p).norm(); // TODO optimize with squaredNorm();
   }
 
-  // distance to cell
-  real operator()(const cell<T>& c, std::size_t level) const {
-    real res;
+  vec3 project(const cell<T>& c, std::size_t level) const {
+    vec3 res;
+    
     c.decode([&](coord<T> sx, coord<T> sy, coord<T> sz) {
-        const vec3 low(real(sx.to_ulong()) / cell<T>::resolution(),
-                       real(sy.to_ulong()) / cell<T>::resolution(),
-                       real(sz.to_ulong()) / cell<T>::resolution());
-          
+        const vec3 low = vec3(sx.to_ulong(), sy.to_ulong(), sz.to_ulong()) / cell<T>::resolution();
         const vec3 size = vec3::Ones() * real(1ul << level) / cell<T>::resolution();
         
-        const vec3 proj = low + (query - low).cwiseMin(size).cwiseMax(vec3::Zero());
-        res = (query - proj).norm();
+        res = low + (query - low).cwiseMin(size).cwiseMax(vec3::Zero());
       });
 
     return res;
+  }
+  
+  // distance to cell
+  real operator()(const cell<T>& c, std::size_t level) const {
+    return (project(c, level) - query).norm();
   }
 };
 

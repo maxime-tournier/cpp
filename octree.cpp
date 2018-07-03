@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -o octree octree.cpp -Wall -g -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
+// -*- compile-command: "c++ -g -O3 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
 
 #include "octree.hpp"
 
@@ -9,6 +9,8 @@
 
 #include <GL/gl.h>
 #include <GL/glu.h>
+
+#include "timer.hpp"
 
 using vec3 = Eigen::Matrix<real, 3, 1>;
 
@@ -108,14 +110,17 @@ namespace gl {
     glScaled(s.x(), s.y(), s.z());
   }
   
-  static void draw_cell(vec3 start, vec3 end) {
+  static void draw_aabb(vec3 lower, vec3 upper) {
     const auto ctx = context();
-    translate(start);
-    scale(end - start);
+    translate(lower);
+    scale(upper - lower);
     draw_cube(GL_LINE_LOOP);
   }
 
 }
+
+
+
 
   
 
@@ -154,16 +159,21 @@ int main(int argc, char** argv) {
 
   octree<unsigned long> tree;
 
-  const std::size_t n = 10;
-  for(std::size_t i = 0; i < n; ++i) {
-    const vec3 p = vec3::Random().array().abs();
-    tree.push(p);
-  }
+  double duration = timer( [&] {
+      const std::size_t n = 5000000;
+      tree.reserve(n);
+      for(std::size_t i = 0; i < n; ++i) {
+        const vec3 p = vec3::Random().array().abs();
+        tree.push(p);
+      }
+    });
+  std::clog << "filling: " << duration << std::endl;
+  
+  const vec3 query = vec3::Random().array().abs();
 
-  const vec3 query = vec3::Random();
-
-  const auto results = [&](const vec3* p) {
+  const auto results = [&](const vec3* p, real duration) {
     if(p) {
+      std::clog << "duration: " << duration << std::endl;
       std::clog << "nearest: " << p->transpose() << ", distance: " << (query - *p).norm() << std::endl;
     } else {
       std::clog << "error!" << std::endl;
@@ -171,21 +181,56 @@ int main(int argc, char** argv) {
   };
 
   tree.sort();
-  results(tree.nearest(query));
-  results(tree.brute_force(query));  
+
+  
+  const vec3* res;
+  
+  duration = timer([&] {
+      res = tree.nearest(query);
+    });
+  
+  results(res, duration);
+
+  duration = timer([&] {
+      res = tree.brute_force(query);
+    });
+  
+  results(res, duration);
 
   viewer w;
+
 
   w.draw = [&] {
     glDisable(GL_LIGHTING);
 
     gl::color(vec3::Ones());
 
-    for(std::size_t i = 0; i <= ucell::max_level; ++i) {
-      
-    }
+    ucell c = tree.hash(query);
     
-    gl::draw_cell(vec3::Zero(), vec3::Ones());
+    for(std::size_t i = 0; i <= ucell::max_level; ++i) {
+      unsigned long mask = ~((1ul << (3 * i)) - 1ul);
+
+      // std::clog << "i: " << i << " mask: " << ucell(mask).bits << std::endl;
+      
+      ucell p(c.bits.to_ulong() & mask);
+      // std::clog << "c: " << c.bits << std::endl;
+      // std::clog << "p: " << p.bits << std::endl;
+      // std::clog << "p: " << p << std::endl;      
+
+      
+      const real size = real(1ul << i) / ucell::resolution();
+      const vec3 lower = tree.origin(p);
+      const vec3 upper = lower + size * vec3::Ones();
+
+      // std::clog << "lower: " << lower.transpose() << std::endl;
+      // std::clog << "upper: " << upper.transpose() << std::endl;      
+      
+      gl::draw_aabb(lower, upper);
+    }
+
+    const vec3 p = tree.origin(c);
+    // gl::draw_aabb(p - 0.1 * vec3::Ones(), p + 0.1 * vec3::Ones());
+    // gl::draw_aabb(vec3::Zero(), vec3::Ones());
 
     gl::color({1, 0, 0});
     glPointSize(4);
@@ -197,7 +242,7 @@ int main(int argc, char** argv) {
     
   };
 
-  return w.run(argc, argv);
+  return 0; // w.run(argc, argv);
 }
 
 
