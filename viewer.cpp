@@ -13,15 +13,15 @@ namespace {
     }
     
     void draw() {
-      if(owner->on_draw) owner->on_draw();
+      if(owner->draw) owner->draw();
     }
 
     void init() {
-      if(owner->on_init) owner->on_init();
+      if(owner->init) owner->init();
     }
 
     void animate() {
-      if(owner->on_animate) owner->on_animate();
+      if(owner->animate) owner->animate();
     }
     
   };

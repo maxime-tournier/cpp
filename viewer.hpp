@@ -6,7 +6,7 @@
 struct viewer {
 
   using callback_type = std::function< void() >;
-  callback_type on_animate, on_draw, on_init;
+  callback_type animate, draw, init;
 
   int run(int argc, char** argv);
 };
