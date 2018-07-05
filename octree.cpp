@@ -126,6 +126,8 @@ namespace gl {
 
 int main(int argc, char** argv) {
 
+  std::srand(std::time(NULL));
+  
   using ucell = cell<unsigned long>;
 
   std::vector<vec3> data;

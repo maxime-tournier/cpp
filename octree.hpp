@@ -157,7 +157,10 @@ struct cell {
       });
     return out;
   }
-  
+
+
+  // debug
+  cell() { }
 };
 
 
@@ -216,26 +219,72 @@ static Iterator find_nearest(const Distance& distance, real& best, Iterator firs
   // recursive case: split cell
   Iterator result = last;
 
-  // TODO start with cell containing query point if possible?
-  for(cell<T> c : typename cell<T>::children(origin, level - 1)) {
-    Iterator begin = std::lower_bound(first, last, c);
-    if(begin == last) continue; // no point found in subcell
+  const std::size_t next_level = level - 1;
+  
+  static constexpr bool sort = true;
 
-    // note: we want upper bound since we may have duplicate cells in the
-    // range (e.g. many points in same leafs)
-    Iterator end = std::lower_bound(begin, last, c.next(level - 1));
+  if(sort) { 
+    struct chunk_type {
+      real d;
+      cell<T> c;
+      Iterator begin, end;
     
-    // don't go down the octree unless it's worth it
-    if(distance(c, level - 1) < best) {
-      const real old_best = best;
-      Iterator sub = find_nearest(distance, best, begin, end, c, level - 1);
+      bool operator<(const chunk_type& other) const { return d < other.d; }
+    };
 
-      if(best < old_best) {
-        result = sub;
+    chunk_type chunks[8];
+    std::size_t count = 0;
+
+    for(cell<T> c : typename cell<T>::children(origin, next_level)) {
+      const Iterator begin = std::lower_bound(first, last, c);
+      if(begin == last) continue; // no point found in subcell
+
+      // note: we want upper bound since we may have duplicate cells in the
+      // range (e.g. many points in same leafs)
+      const Iterator end = std::lower_bound(begin, last, c.next(next_level));
+    
+      chunks[count] = {distance(c, next_level), c, begin, end};
+      ++count; 
+    }
+
+    assert(count <= 8);
+
+    std::sort(chunks, chunks + count);
+
+    for(auto it = chunks, end = chunks + count; it != end; ++it) {
+      if(it->d < best) {
+        const real old_best = best;
+        const Iterator sub = find_nearest(distance, best, it->begin, it->end, it->c, next_level);
+        
+        if(best < old_best) {
+          result = sub;
+        }
+
+      }
+    }
+  } else {
+   
+    // TODO start with cell containing query point if possible?
+    for(cell<T> c : typename cell<T>::children(origin, next_level)) {
+      const Iterator begin = std::lower_bound(first, last, c);
+      if(begin == last) continue; // no point found in subcell
+
+      // note: we want upper bound since we may have duplicate cells in the
+      // range (e.g. many points in same leafs)
+      const Iterator end = std::lower_bound(begin, last, c.next(next_level));
+    
+      // don't go down the octree unless it's worth it
+      if(distance(c, next_level) < best) {
+        const real old_best = best;
+        const Iterator sub = find_nearest(distance, best, begin, end, c, next_level);
+        
+        if(best < old_best) {
+          result = sub;
+        }
       }
     }
   }
-
+  
   return result;
 };
 
@@ -264,7 +313,7 @@ class octree {
 
   static vec3 origin(const cell<T>& c) {
     vec3 res;
-    c.decode([&](coord<T> x, coord<T> y, coord<T> z) {
+    c.decode([&](const coord<T>& x, const coord<T>& y, const coord<T>& z) {
         res = {x.to_ulong(), y.to_ulong(), z.to_ulong()};
       });
 
