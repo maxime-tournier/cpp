@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -g -O2 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
+// -*- compile-command: "c++ -g -O3 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
 
 #include "octree.hpp"
 
@@ -128,46 +128,69 @@ int main(int argc, char** argv) {
 
   using ucell = cell<unsigned long>;
 
-  octree<unsigned long> tree;
+  std::vector<vec3> data;
 
-  double duration = timer( [&] {
+  const real generate = timer( [&] {
       const std::size_t n = 5000000;
-      tree.reserve(n);
+      data.reserve(n);
       for(std::size_t i = 0; i < n; ++i) {
-        const vec3 p = vec3::Random().array().abs();
-        tree.push(p);
+        data.emplace_back(vec3::Random().array().abs());
       }
     });
-  std::clog << "filling: " << duration << std::endl;
+
+  std::clog << "generate: " << generate << std::endl;
+  
+  octree<unsigned long> tree;
+
+  const real octree_build = timer([&] {
+      tree.reserve(data.size());
+      
+      for(const vec3& p : data)  {
+        tree.push(&p);
+      }
+      
+      tree.sort();
+    });
+  
+  std::clog << "octree build: " << octree_build << std::endl;
   
   const vec3 query = vec3::Random().array().abs();
 
-  const auto results = [&](const vec3* p, real duration) {
+  const auto results = [&](const vec3* p) {
     if(p) {
-      std::clog << "duration: " << duration << std::endl;
       std::clog << "nearest: " << p->transpose() << ", distance: " << (query - *p).norm() << std::endl;
     } else {
       std::clog << "error!" << std::endl;
     }
   };
 
-  tree.sort();
-
-  
   const vec3* res;
   
-  duration = timer([&] {
+  const real octree_find = timer([&] {
       res = tree.nearest(query);
     });
   
-  results(res, duration);
+  results(res);
+  std::clog << "octree find: " << octree_find << std::endl;
+  
+  const real brute_force = timer([&] {
+      real best = std::numeric_limits<real>::max();
+      auto it = find_nearest(octree<unsigned long>::distance{query}, best, data.begin(), data.end());
 
-  duration = timer([&] {
-      res = tree.brute_force(query);
+      if(it == data.end()) res = nullptr;
+      else res =  &*it;
     });
   
-  results(res, duration);
+  results(res);
+  std::clog << "brute force: " << brute_force << std::endl;
 
+
+  return 0;
+
+
+
+  
+  // debug stuff
   viewer w;
 
 

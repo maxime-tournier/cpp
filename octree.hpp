@@ -247,14 +247,14 @@ static Iterator find_nearest(const Distance& distance, real& best, Iterator firs
 template<class T>
 class octree {
   struct item; 
-  using data_type = std::vector< item >;
-  
-  data_type data;
 
-  struct distance;
+  using data_type = std::vector< item >;
+  data_type data;
   
  public:
 
+  struct distance;
+  
   void reserve(std::size_t count) { data.reserve(count); }
   
   static cell<T> hash(const vec3& p) {
@@ -272,8 +272,8 @@ class octree {
   }
   
   
-  void push(const vec3& p) {
-    data.emplace_back(hash(p), p);
+  void push(const vec3* p) {
+    data.emplace_back(hash(*p), p);
   }
   
 
@@ -288,18 +288,7 @@ class octree {
     auto it = find_nearest(distance{query}, best, data.begin(), data.end(), cell<T>(0));
     assert(it != data.end());
     
-    return &it->p;
-  }
-
-
-  const vec3* brute_force(const vec3& query) const {
-    if(data.empty()) return nullptr;
-    
-    real best = std::numeric_limits<real>::max();
-    auto it = find_nearest(distance{query}, best, data.begin(), data.end());
-    assert(it != data.end());
-    
-    return &it->p;
+    return it->p;
   }
   
 };
@@ -307,10 +296,10 @@ class octree {
 template<class T>
 struct octree<T>::item {
   cell<T> c;
-  vec3 p;
+  const vec3* p;
 
-  item(const cell<T>& c, const vec3& p) : c(c), p(p) { }
-
+  item(const cell<T>& c, const vec3* p) : c(c), p(p) { }
+  
   friend bool operator<(const cell<T>& c, const item& self) {
     return c.bits.to_ulong() < self.c.bits.to_ulong();
   }
@@ -332,12 +321,12 @@ struct octree<T>::distance {
   const vec3 query;
   const vec3 scaled_query;
 
-  mutable std::size_t point_count = 0, box_count = 0;
+  // mutable std::size_t point_count = 0, box_count = 0;
 
-  ~distance() {
-    std::clog << " point distances: " << point_count
-              << " box distances: " << box_count << std::endl;
-  }
+  // ~distance() {
+  //   std::clog << " point distances: " << point_count
+  //             << " box distances: " << box_count << std::endl;
+  // }
 
   
   distance(const vec3& query)
@@ -345,13 +334,20 @@ struct octree<T>::distance {
       scaled_query(query * cell<T>::resolution() ) { }
 
 
-  
   // distance to point
-  real operator()(const item& i) const {
-    ++point_count;
-    return (query - i.p).squaredNorm(); // TODO optimize with squaredNorm();
+  real operator()(const vec3& p) const {
+    // ++point_count;
+    return (query - p).squaredNorm();
   }
 
+  real operator()(const item& i) const {
+    // ++point_count;
+    return operator()(*i.p);
+  }
+
+
+  
+  
   vec3 project(const cell<T>& c, std::size_t level) const {
     // compute scaled_query - proj(scaled_query) onto cell c at given level
     vec3 res;
@@ -365,7 +361,7 @@ struct octree<T>::distance {
   
   // distance to cell
   real operator()(const cell<T>& c, std::size_t level) const {
-    ++box_count;
+    // ++box_count;
     return project(c, level).squaredNorm() / (cell<T>::resolution() * cell<T>::resolution());
   }
 };
