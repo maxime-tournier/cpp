@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -g -O2 -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
+// -*- compile-command: "c++ -g -O3 -DNDEBUG -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
 
 #include "octree.hpp"
 
@@ -240,7 +240,7 @@ int main(int argc, char** argv) {
       gl::draw_aabb(lower, upper);
     }
 
-    const vec3 p = tree.origin(c);
+    // const vec3 p = tree.origin(c);
     // gl::draw_aabb(p - 0.1 * vec3::Ones(), p + 0.1 * vec3::Ones());
     // gl::draw_aabb(vec3::Zero(), vec3::Ones());
 
