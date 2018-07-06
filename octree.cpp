@@ -131,24 +131,27 @@ int main(int argc, char** argv) {
   using ucell = cell<unsigned long>;
 
   // source data
-
-  std::vector<vec3> data;
-
+  std::vector<vec3> target, source;
+  const std::size_t m = 500000;
+  const std::size_t n = 500000;
+  
   real duration = timer([&] {
-      const std::size_t n = 5000000;
-      data.reserve(n);
+      target.reserve(m);
+      for(std::size_t i = 0; i < m; ++i) {
+        target.emplace_back(vec3::Random().array().abs());
+      }
+
+      source.reserve(n);
       for(std::size_t i = 0; i < n; ++i) {
-        data.emplace_back(vec3::Random().array().abs());
+        source.emplace_back(vec3::Random().array().abs());
       }
     });
   std::clog << "generate: " << duration << std::endl;
   
   
-  const vec3 query = vec3::Random().array().abs();
-
   const auto results = [&](const vec3* p) {
     if(p) {
-      std::clog << "nearest: " << p->transpose() << ", distance: " << (query - *p).norm() << std::endl;
+      std::clog << "nearest: " << p->transpose() << ", distance: " << (source.back() - *p).norm() << std::endl;
     } else {
       std::clog << "error!" << std::endl;
     }
@@ -156,27 +159,31 @@ int main(int argc, char** argv) {
   };
 
   
-  const vec3* res;
-
+  std::vector<const vec3*> closest;
   
   octree<unsigned long> tree;
 
   const real octree_prepare = timer( [&] {
-      tree.reserve(data.size());
+      tree.reserve(target.size());
 
-      for(const vec3& p : data) {
-        tree.push(p);
+      for(const vec3& p : target) {
+        tree.push(&p);
       }
-
+      
       tree.sort();      
     });
-  
+
+
   const real octree_find = timer([&] {
-      res = tree.nearest(query);
+      closest.clear();
+      closest.reserve(source.size());
+      for(const vec3& query : source) {
+        closest.push_back(tree.nearest(query));
+      }
     });
 
   std::clog << "octree:" << std::endl;  
-  results(res);
+  results(closest.back());
   std::clog << "octree prepare: " << octree_prepare << std::endl;
   std::clog << "octree find: " << octree_find << std::endl;;
   std::clog << "octree total: " << octree_find + octree_prepare << std::endl;;  
@@ -185,74 +192,78 @@ int main(int argc, char** argv) {
   kdtree kd;
 
   const real kdtree_prepare = timer([&] {
-      kd.build(data.begin(), data.end());
+      kd.build(target.begin(), target.end());
     });
 
   const real kdtree_find = timer([&] {
-      auto index = kd.closest(query, data.begin(), data.end());
-      res = &data[index];
+      for(const vec3& query : source) {
+        closest.clear();
+        closest.reserve(source.size());
+
+        auto index = kd.closest(query, target.begin(), target.end());
+        closest.push_back(&target[index]);
+      }
     });
 
   std::clog << "kdtree:" << std::endl;  
-  results(res);
+  results(closest.back());
   std::clog << "kdtree prepare: " << kdtree_prepare << std::endl;
   std::clog << "kdtree find: " << kdtree_find << std::endl;;
   std::clog << "kdtree total: " << kdtree_find + kdtree_prepare << std::endl;;  
 
-  std::clog << "brute force:" << std::endl;
-  const real brute_force = timer([&] {
-      res = tree.brute_force(query);
-    });
+  // std::clog << "brute force:" << std::endl;
+  // const real brute_force = timer([&] {
+  //     res = tree.brute_force(query);
+  //   });
   
-  results(res);
-  std::clog << "brute force find: " << brute_force << std::endl;
-
-
+  // results(res);
+  // std::clog << "brute force find: " << brute_force << std::endl;
+  return 0;
   
   
   viewer w;
 
 
-  w.draw = [&] {
-    glDisable(GL_LIGHTING);
+  // w.draw = [&] {
+  //   glDisable(GL_LIGHTING);
 
-    gl::color(vec3::Ones());
+  //   gl::color(vec3::Ones());
 
-    ucell c = tree.hash(query);
+  //   ucell c = tree.hash(query);
     
-    for(std::size_t i = 0; i <= ucell::max_level; ++i) {
-      unsigned long mask = ~((1ul << (3 * i)) - 1ul);
+  //   for(std::size_t i = 0; i <= ucell::max_level; ++i) {
+  //     unsigned long mask = ~((1ul << (3 * i)) - 1ul);
 
-      // std::clog << "i: " << i << " mask: " << ucell(mask).bits << std::endl;
+  //     // std::clog << "i: " << i << " mask: " << ucell(mask).bits << std::endl;
       
-      ucell p(c.bits.to_ulong() & mask);
-      // std::clog << "c: " << c.bits << std::endl;
-      // std::clog << "p: " << p.bits << std::endl;
-      // std::clog << "p: " << p << std::endl;      
+  //     ucell p(c.bits.to_ulong() & mask);
+  //     // std::clog << "c: " << c.bits << std::endl;
+  //     // std::clog << "p: " << p.bits << std::endl;
+  //     // std::clog << "p: " << p << std::endl;      
       
-      const real size = real(1ul << i) / ucell::resolution();
-      const vec3 lower = tree.origin(p);
-      const vec3 upper = lower + size * vec3::Ones();
+  //     const real size = real(1ul << i) / ucell::resolution();
+  //     const vec3 lower = tree.origin(p);
+  //     const vec3 upper = lower + size * vec3::Ones();
 
-      // std::clog << "lower: " << lower.transpose() << std::endl;
-      // std::clog << "upper: " << upper.transpose() << std::endl;      
+  //     // std::clog << "lower: " << lower.transpose() << std::endl;
+  //     // std::clog << "upper: " << upper.transpose() << std::endl;      
       
-      gl::draw_aabb(lower, upper);
-    }
+  //     gl::draw_aabb(lower, upper);
+  //   }
 
-    // const vec3 p = tree.origin(c);
-    // gl::draw_aabb(p - 0.1 * vec3::Ones(), p + 0.1 * vec3::Ones());
-    // gl::draw_aabb(vec3::Zero(), vec3::Ones());
+  //   // const vec3 p = tree.origin(c);
+  //   // gl::draw_aabb(p - 0.1 * vec3::Ones(), p + 0.1 * vec3::Ones());
+  //   // gl::draw_aabb(vec3::Zero(), vec3::Ones());
 
-    gl::color({1, 0, 0});
-    glPointSize(4);
+  //   gl::color({1, 0, 0});
+  //   glPointSize(4);
 
-    {
-      auto ctx = gl::begin(GL_POINTS);
-      gl::vertex(query);
-    }
+  //   {
+  //     auto ctx = gl::begin(GL_POINTS);
+  //     gl::vertex(query);
+  //   }
     
-  };
+  // };
 
   return 0; // w.run(argc, argv);
 }
