@@ -1,7 +1,7 @@
-// -*- compile-command: "c++ -g -O3 -DNDEBUG -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3`" -*-
+// -*- compile-command: "c++ -g -O3 -DNDEBUG -o octree octree.cpp -Wall -L. -lviewer -lGL -lGLU -lstdc++ `pkg-config --cflags eigen3` -fno-omit-frame-pointer" -*-
 
 #include "octree.hpp"
-
+#include "kdtree.hpp"
 
 #include <iostream>
 
@@ -11,7 +11,6 @@
 #include <GL/glu.h>
 
 #include "timer.hpp"
-#include "kdtree.hpp"
 
 
 using vec3 = Eigen::Matrix<real, 3, 1>;
@@ -130,8 +129,8 @@ int main(int argc, char** argv) {
 
   // source data
   std::vector<vec3> target, source;
-  const std::size_t m = 100000;
-  const std::size_t n = 100000;
+  const std::size_t m = 500000;
+  const std::size_t n = 500000;
   
   real duration = timer([&] {
       target.reserve(m);
@@ -186,29 +185,30 @@ int main(int argc, char** argv) {
   std::clog << "octree find: " << octree_find << std::endl;;
   std::clog << "octree total: " << octree_find + octree_prepare << std::endl;;  
   
-  
-  kdtree kd;
+  if(false) {
+    kdtree kd;
 
-  const real kdtree_prepare = timer([&] {
-      kd.build(target.begin(), target.end());
-    });
+    const real kdtree_prepare = timer([&] {
+        kd.build(target.begin(), target.end());
+      });
 
-  const real kdtree_find = timer([&] {
-      closest.clear();
-      closest.reserve(source.size());
+    const real kdtree_find = timer([&] {
+        closest.clear();
+        closest.reserve(source.size());
       
-      for(const vec3& query : source) {
-        auto index = kd.closest(query, target.begin(), target.end());
-        closest.push_back(&target[index]);
-      }
-    });
+        for(const vec3& query : source) {
+          auto index = kd.closest(query, target.begin(), target.end());
+          closest.push_back(&target[index]);
+        }
+      });
 
-  std::clog << "kdtree:" << std::endl;  
-  results(closest.back());
-  std::clog << "kdtree prepare: " << kdtree_prepare << std::endl;
-  std::clog << "kdtree find: " << kdtree_find << std::endl;;
-  std::clog << "kdtree total: " << kdtree_find + kdtree_prepare << std::endl;;  
-
+    std::clog << "kdtree:" << std::endl;  
+    results(closest.back());
+    std::clog << "kdtree prepare: " << kdtree_prepare << std::endl;
+    std::clog << "kdtree find: " << kdtree_find << std::endl;;
+    std::clog << "kdtree total: " << kdtree_find + kdtree_prepare << std::endl;;  
+  }
+  
   // std::clog << "brute force:" << std::endl;
   // const real brute_force = timer([&] {
   //     res = tree.brute_force(query);

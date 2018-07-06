@@ -11,314 +11,313 @@
 #include <Eigen/Core>
 
 namespace detail {
+  // a fast linear (morton) octree
+  template<class T>
+  struct cell {
+
+    static constexpr std::size_t brute_force_threshold = 256;
   
-// a fast linear (morton) octree
-template<class T>
-struct cell {
-
-  static constexpr std::size_t brute_force_threshold = 256;
+    static constexpr std::size_t max_level = (8 * sizeof(T)) / 3;
+    using coord = std::bitset<max_level>;
   
-  static constexpr std::size_t max_level = (8 * sizeof(T)) / 3;
-  using coord = std::bitset<max_level>;
-  
-  static constexpr T resolution() { return 1ul << max_level; }
+    static constexpr T resolution() { return 1ul << max_level; }
 
-  static constexpr std::size_t size = 3 * max_level;
-  using bits_type = std::bitset<size>;
-  bits_type bits;
+    static constexpr std::size_t size = 3 * max_level;
+    using bits_type = std::bitset<size>;
+    bits_type bits;
 
-  explicit cell(const bits_type& bits={}) noexcept : bits(bits) { }
+    explicit cell(const bits_type& bits={}) noexcept : bits(bits) { }
     
-  // decode a cell code as individual coordinate codes
-  template<class Func>
-  void decode(Func&& func) const {
-    coord x, y, z;
+    // decode a cell code as individual coordinate codes
+    template<class Func>
+    void decode(Func&& func) const {
+      coord x, y, z;
 
-    auto value = bits.to_ulong();
-    for(std::size_t i = 0; i < max_level; ++i) {
-      x[i] = value & 4;
-      y[i] = value & 2;
-      z[i] = value & 1;
+      auto value = bits.to_ulong();
+      for(std::size_t i = 0; i < max_level; ++i) {
+        x[i] = value & 4;
+        y[i] = value & 2;
+        z[i] = value & 1;
 
-      value >>= 3;
-    }
-
-    func(x, y, z);
-  }
-
-  // encode cell from x y z codes
-  static cell encode(const coord& x, const coord& y, const coord& z) {
-    T value = 0;
-    for(std::size_t i = 0; i < max_level; ++i) {
-      const std::size_t j = max_level - 1 - i;
-      value <<= 3;
-
-      value |= x[j] * 4 + y[j] * 2 + z[j] * 1;
-    }
-
-    return cell(value);
-  }
-
-
-  // encode a cell at a given level
-  static cell encode(bool x, bool y, bool z, std::size_t level) {
-    bits_type result = 0;
-    result[2] = x;
-    result[1] = y;
-    result[0] = z;
-    
-    return cell(result << (3 * level));
-  }
-  
-
-  // generate possible delta (-1, 0, 1) for a cell given maximum value
-  template<class Func>
-  static void iter_delta(T c, T max, const Func& func) {
-    if(c) func(-1);
-    func(0);
-    if(c < max) func(1);
-  }
-  
-
-  // iterate cell neighbors at given level (cell must be admissible at this
-  // level i.e. zero lower-order bits)
-  template<class Func>
-  void neighbors(std::size_t level, Func&& func) const {
-    const T max = 1ul << (max_level - level);
-    
-    decode([&](coord x, coord y, coord z) {
-        const auto cx = (x >> level).to_ulong();
-        const auto cy = (y >> level).to_ulong();
-        const auto cz = (z >> level).to_ulong();
-
-        iter_delta(cx, max, [&](int dx) {
-            const auto rx = (cx + dx) << level;
-            const auto ax = std::abs(dx);
-                        
-            iter_delta(cy, max, [&](int dy) {
-                const auto ry = (cy + dy) << level;
-                const auto ay = std::abs(dy);
-                                
-                iter_delta(cz, max, [&](int dz) {
-                    const auto rz = (cz + dz) << level;
-                    const auto az = std::abs(dz);
-                    if(ax + ay + az) {
-                      func(rx, ry, rz);
-                    }
-                  });
-              });
-          });
-      });
-  }
-
-
-  template<class Func>
-  void children(std::size_t level, const Func& func) const noexcept {
-    const T first = bits.to_ulong();
-    const T incr = 1ul << (3 * level);
-    const T last = first + (incr << 3);
-
-    for(T value = first, next; value != last; value = next) {
-      next = value + incr;
-      func(cell(value), cell(next));
-    }
-  }
-    
-  // debugging
-  friend std::ostream& operator<<(std::ostream& out, const cell& self) {
-    self.decode([&](coord x, coord y, coord z) {
-        out << "(" << x << ", " << y << ", " << z << ")";
-      });
-    return out;
-  }
-    
-};
-
-
-template<class T>
-using coord = typename cell<T>::coord;
-
-// a fixed-size (dynamically chosen) sorted array
-template<class Key, class Value>
-class sorted_array {
-    
-  struct item_type {
-    Key key;
-    Value value;
-    
-    bool operator<(const item_type& other) const { return key < other.key; }
-    
-    friend bool operator<(const item_type& self, const Key& key) { return self.key < key; }
-    friend bool operator<(const Key& key, const item_type& self) { return key < self.key; }    
-  };
-  
-  std::vector<item_type> items;
-public:
-  sorted_array(std::size_t size, const Key& key = {}, const Value& value = {})
-    : items(size, item_type{key, value}) { };
-
-  std::size_t size() const { return items.size(); }
-  
-  void insert(const Key& key, const Value& value) {
-    items.pop_back();
-
-    auto it = std::upper_bound(items.begin(), items.end(), key);
-    items.emplace(it, key, value);
-  }
-
-  auto begin() const -> decltype(items.begin()) { return items.begin(); }
-  auto end() const -> decltype(items.begin()) { return items.begin(); }
-
-  auto back() const -> decltype(items.back()) { return items.back(); }    
-};
-
-
-// brute force 1-nn
-template<class Real, class Distance, class Iterator>
-static Iterator find_nearest(const Distance& distance, Real& best, Iterator first, Iterator last) noexcept {
-  Iterator res = last;
-
-  for(Iterator it = first; it != last; ++it) {
-    const Real d = distance(*it);
-    if(d < best) {
-      best = d;
-      res = it;
-    }
-  }
-    
-  return res;
-}
-
-
-// brute force k-nn
-template<class Real, class Distance, class Iterator>
-static void find_nearest(sorted_array<Real, Iterator>& result, const Distance& distance,
-                         Iterator first, Iterator last) noexcept {
-  for(Iterator it = first; it != last; ++it) {
-    const Real d = distance(*it);
-    if(d < result.back().key) {
-      result.insert(d, it);
-    }
-  }
-}
-
-
-
-// octree based 1-nn
-template<class Real, class Distance, class Iterator, class T>
-static Iterator find_nearest(const Distance& distance, Real& best, Iterator first, Iterator last,
-                             const cell<T>& origin, std::size_t level = cell<T>::max_level) noexcept {
-  const std::size_t size = last - first;
-  
-  // base case
-  if(size <= cell<T>::brute_force_threshold || !level) {
-    return find_nearest(distance, best, first, last);
-  }
-
-  // recursive case: split cell
-
-  const std::size_t next_level = level - 1;
-  
-  struct chunk_type {
-    Real d;
-    cell<T> c;
-    Iterator begin, end;
-    
-    inline bool operator<(const chunk_type& other) const { return d < other.d; }
-  };
-
-  chunk_type chunks[8];
-  std::size_t count = 0;
-
-  origin.children(next_level, [&](cell<T> curr, cell<T> next) noexcept {
-      const Iterator begin = std::lower_bound(first, last, curr);
-      if(begin == last) return; // no point found in subcell
-            
-      // note: we want upper bound since we may have duplicate cells in the
-      // range (e.g. many points in same leafs)
-      const Iterator end = std::lower_bound(begin, last, next);
-            
-      // const cell<T> child{curr};
-      chunks[count++] = {distance(curr, next_level), curr, begin, end};
-    });
-    
-  assert(count <= 8);
-
-  std::sort(chunks, chunks + count);
-
-  Iterator result = last;
-    
-  for(auto it = chunks, end = chunks + count; it != end; ++it) {
-    if(it->d < best) {
-      const Real old_best = best;
-      const Iterator sub = find_nearest(distance, best, it->begin, it->end, it->c, next_level);
-        
-      if(best < old_best) {
-        result = sub;
+        value >>= 3;
       }
 
+      func(x, y, z);
     }
-  }
 
-  return result;
-};
+    // encode cell from x y z codes
+    static cell encode(const coord& x, const coord& y, const coord& z) {
+      T value = 0;
+      for(std::size_t i = 0; i < max_level; ++i) {
+        const std::size_t j = max_level - 1 - i;
+        value <<= 3;
+
+        value |= x[j] * 4 + y[j] * 2 + z[j] * 1;
+      }
+
+      return cell(value);
+    }
 
 
-// octree based k-nn
-template<class Real, class Distance, class Iterator, class T>
-static void find_nearest(sorted_array<Real, Iterator>& result, const Distance& distance,
-                         Iterator first, Iterator last,
-                         const cell<T>& origin, std::size_t level = cell<T>::max_level) noexcept {
-  // range size
-  const std::size_t size = last - first;
-  
-  // base case
-  if( (level == 0) || size <= cell<T>::brute_force_threshold) {
-    find_nearest(result, distance, first, last);
-  }
-  
-  // recursive case: split cell
-  const std::size_t next_level = level - 1;
-
-  // subcell info TODO rename
-  struct chunk_type {
-    Real d;
-    cell<T> c;
-    Iterator begin, end;
+    // encode a cell at a given level
+    static cell encode(bool x, bool y, bool z, std::size_t level) {
+      bits_type result = 0;
+      result[2] = x;
+      result[1] = y;
+      result[0] = z;
     
-    bool operator<(const chunk_type& other) const { return d < other.d; }
+      return cell(result << (3 * level));
+    }
+  
+
+    // generate possible delta (-1, 0, 1) for a cell given maximum value
+    template<class Func>
+    static void iter_delta(T c, T max, const Func& func) {
+      if(c) func(-1);
+      func(0);
+      if(c < max) func(1);
+    }
+  
+
+    // iterate cell neighbors at given level (cell must be admissible at this
+    // level i.e. zero lower-order bits)
+    template<class Func>
+    void neighbors(std::size_t level, Func&& func) const {
+      const T max = 1ul << (max_level - level);
+    
+      decode([&](coord x, coord y, coord z) {
+          const auto cx = (x >> level).to_ulong();
+          const auto cy = (y >> level).to_ulong();
+          const auto cz = (z >> level).to_ulong();
+
+          iter_delta(cx, max, [&](int dx) {
+              const auto rx = (cx + dx) << level;
+              const auto ax = std::abs(dx);
+                        
+              iter_delta(cy, max, [&](int dy) {
+                  const auto ry = (cy + dy) << level;
+                  const auto ay = std::abs(dy);
+                                
+                  iter_delta(cz, max, [&](int dz) {
+                      const auto rz = (cz + dz) << level;
+                      const auto az = std::abs(dz);
+                      if(ax + ay + az) {
+                        func(rx, ry, rz);
+                      }
+                    });
+                });
+            });
+        });
+    }
+
+
+    template<class Func>
+    void children(std::size_t level, const Func& func) const noexcept {
+      const T first = bits.to_ulong();
+      const T incr = 1ul << (3 * level);
+      const T last = first + (incr << 3);
+
+      for(T value = first, next; value != last; value = next) {
+        next = value + incr;
+        func(cell(value), cell(next));
+      }
+    }
+    
+    // debugging
+    friend std::ostream& operator<<(std::ostream& out, const cell& self) {
+      self.decode([&](coord x, coord y, coord z) {
+          out << "(" << x << ", " << y << ", " << z << ")";
+        });
+      return out;
+    }
+    
   };
 
-  chunk_type chunks[8];
-  std::size_t count = 0;
 
-  // obtain subcell info, skip if empty
-  for(cell<T> c : typename cell<T>::children(origin, next_level)) {
-    const Iterator begin = std::lower_bound(first, last, c);
-    if(begin == last) continue; // no point found in subcell
+  template<class T>
+  using coord = typename cell<T>::coord;
 
-    // note: we want upper bound since we may have duplicate cells in the
-    // range (e.g. many points in same leafs)
-    const Iterator end = std::lower_bound(begin, last, c.next(next_level));
+  // a fixed-size (dynamically chosen) sorted array
+  template<class Key, class Value>
+  class sorted_array {
     
-    chunks[count] = {distance(c, next_level), c, begin, end};
-    ++count; 
+    struct item_type {
+      Key key;
+      Value value;
+    
+      bool operator<(const item_type& other) const { return key < other.key; }
+    
+      friend bool operator<(const item_type& self, const Key& key) { return self.key < key; }
+      friend bool operator<(const Key& key, const item_type& self) { return key < self.key; }    
+    };
+  
+    std::vector<item_type> items;
+  public:
+    sorted_array(std::size_t size, const Key& key = {}, const Value& value = {})
+      : items(size, item_type{key, value}) { };
+
+    std::size_t size() const { return items.size(); }
+  
+    void insert(const Key& key, const Value& value) {
+      items.pop_back();
+
+      auto it = std::upper_bound(items.begin(), items.end(), key);
+      items.emplace(it, key, value);
+    }
+
+    auto begin() const -> decltype(items.begin()) { return items.begin(); }
+    auto end() const -> decltype(items.begin()) { return items.begin(); }
+
+    auto back() const -> decltype(items.back()) { return items.back(); }    
+  };
+
+
+  // brute force 1-nn
+  template<class Real, class Distance, class Iterator>
+  static Iterator find_nearest(const Distance& distance, Real& best, Iterator first, Iterator last) noexcept {
+    Iterator res = last;
+
+    for(Iterator it = first; it != last; ++it) {
+      const Real d = distance(*it);
+      if(d < best) {
+        best = d;
+        res = it;
+      }
+    }
+    
+    return res;
   }
 
-  assert(count <= 8);
 
-  // process subcells by distance to query point
-  std::sort(chunks, chunks + count);
-  
-  for(auto it = chunks, end = chunks + count; it != end; ++it) {
-    // don't visit subcell if our furthest guess is closer than the subcell
-    if(it->d < result.back().key) {
-      find_nearest(result, distance, it->begin, it->end, it->c, next_level);
+  // brute force k-nn
+  template<class Real, class Distance, class Iterator>
+  static void find_nearest(sorted_array<Real, Iterator>& result, const Distance& distance,
+                           Iterator first, Iterator last) noexcept {
+    for(Iterator it = first; it != last; ++it) {
+      const Real d = distance(*it);
+      if(d < result.back().key) {
+        result.insert(d, it);
+      }
     }
   }
 
-  return result;
-};
+
+
+  // octree based 1-nn
+  template<class Real, class Distance, class Iterator, class T>
+  static Iterator find_nearest(const Distance& distance, Real& best, Iterator first, Iterator last,
+                               const cell<T>& origin, std::size_t level = cell<T>::max_level) noexcept {
+    const std::size_t size = last - first;
+  
+    // base case
+    if(size <= cell<T>::brute_force_threshold || !level) {
+      return find_nearest(distance, best, first, last);
+    }
+
+    // recursive case: split cell
+
+    const std::size_t next_level = level - 1;
+  
+    struct chunk_type {
+      Real d;
+      cell<T> c;
+      Iterator begin, end;
+    
+      inline bool operator<(const chunk_type& other) const { return d < other.d; }
+    };
+
+    chunk_type chunks[8];
+    std::size_t count = 0;
+
+    origin.children(next_level, [&](cell<T> curr, cell<T> next) noexcept {
+        const Iterator begin = std::lower_bound(first, last, curr);
+        if(begin == last) return; // no point found in subcell
+            
+        // note: lower bound of the *next* cell is an upper bound for all the
+        // subcells in this one
+        const Iterator end = std::lower_bound(begin, last, next);
+            
+        // const cell<T> child{curr};
+        chunks[count++] = {distance(curr, next_level), curr, begin, end};
+      });
+    
+    assert(count <= 8);
+
+    std::sort(chunks, chunks + count);
+
+    Iterator result = last;
+    
+    for(auto it = chunks, end = chunks + count; it != end; ++it) {
+      if(it->d < best) {
+        const Real old_best = best;
+        const Iterator sub = find_nearest(distance, best, it->begin, it->end, it->c, next_level);
+        
+        if(best < old_best) {
+          result = sub;
+        }
+
+      }
+    }
+
+    return result;
+  };
+
+
+  // octree based k-nn
+  template<class Real, class Distance, class Iterator, class T>
+  static void find_nearest(sorted_array<Real, Iterator>& result, const Distance& distance,
+                           Iterator first, Iterator last,
+                           const cell<T>& origin, std::size_t level = cell<T>::max_level) noexcept {
+    // range size
+    const std::size_t size = last - first;
+  
+    // base case
+    if( (level == 0) || size <= cell<T>::brute_force_threshold) {
+      find_nearest(result, distance, first, last);
+    }
+  
+    // recursive case: split cell
+    const std::size_t next_level = level - 1;
+
+    // subcell info TODO rename
+    struct chunk_type {
+      Real d;
+      cell<T> c;
+      Iterator begin, end;
+    
+      bool operator<(const chunk_type& other) const { return d < other.d; }
+    };
+
+    chunk_type chunks[8];
+    std::size_t count = 0;
+
+    // obtain subcell info, skip if empty
+    for(cell<T> c : typename cell<T>::children(origin, next_level)) {
+      const Iterator begin = std::lower_bound(first, last, c);
+      if(begin == last) continue; // no point found in subcell
+
+      // note: we want upper bound since we may have duplicate cells in the
+      // range (e.g. many points in same leafs)
+      const Iterator end = std::lower_bound(begin, last, c.next(next_level));
+    
+      chunks[count] = {distance(c, next_level), c, begin, end};
+      ++count; 
+    }
+
+    assert(count <= 8);
+
+    // process subcells by distance to query point
+    std::sort(chunks, chunks + count);
+  
+    for(auto it = chunks, end = chunks + count; it != end; ++it) {
+      // don't visit subcell if our furthest guess is closer than the subcell
+      if(it->d < result.back().key) {
+        find_nearest(result, distance, it->begin, it->end, it->c, next_level);
+      }
+    }
+
+    return result;
+  };
 
 }
 
@@ -406,24 +405,24 @@ struct octree<Real, T>::item {
   cell c;
   const vec3* p;
 
-  friend bool operator<(const T& c, const item& self) {
+  friend inline bool operator<(const T& c, const item& self) {
     return c < self.c.bits.to_ulong();
   }
 
-  friend bool operator<(const item& self, const T& c) {
+  friend inline bool operator<(const item& self, const T& c) {
     return self.c.bits.to_ulong() < c;
   }
 
-  friend bool operator<(const cell& c, const item& self) {
+  friend inline bool operator<(const cell& c, const item& self) {
     return c.bits.to_ulong() < self.c.bits.to_ulong();
   }
 
-  friend bool operator<(const item& self, const cell& c) {
+  friend inline bool operator<(const item& self, const cell& c) {
     return self.c.bits.to_ulong() < c.bits.to_ulong();
   }
 
   
-  friend bool operator<(const item& lhs, const item& rhs) {
+  friend inline bool operator<(const item& lhs, const item& rhs) {
     return lhs.c.bits.to_ulong() < rhs.c.bits.to_ulong();
   }
 };
@@ -471,7 +470,8 @@ struct octree<Real, T>::distance {
   // distance to cell
   real operator()(const cell& c, std::size_t level) const noexcept {
     // ++box_count;
-    return project(c, level).squaredNorm()  / (cell::resolution() * cell::resolution());
+    constexpr real factor = 1.0 / (cell::resolution() * cell::resolution());
+    return project(c, level).squaredNorm() * factor;
   }
 };
 
