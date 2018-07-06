@@ -28,7 +28,7 @@ namespace gl {
     glVertex3f(1.0f, 1.0f, 0.0f);
     glVertex3f(0.0f, 1.0f, 0.0f);
     glEnd();
-
+ 
     // back
     glBegin(mode);    
     glVertex3f(0.0f, 0.0f, 1.0f); 
@@ -128,12 +128,10 @@ namespace gl {
 
 int main(int argc, char** argv) {
 
-  using ucell = cell<unsigned long>;
-
   // source data
   std::vector<vec3> target, source;
-  const std::size_t m = 500000;
-  const std::size_t n = 500000;
+  const std::size_t m = 100000;
+  const std::size_t n = 100000;
   
   real duration = timer([&] {
       target.reserve(m);
@@ -161,13 +159,13 @@ int main(int argc, char** argv) {
   
   std::vector<const vec3*> closest;
   
-  octree<unsigned long> tree;
-
+  octree<> tree;
+  
   const real octree_prepare = timer( [&] {
       tree.reserve(target.size());
 
       for(const vec3& p : target) {
-        tree.push(&p);
+        tree.add(&p);
       }
       
       tree.sort();      
@@ -196,10 +194,10 @@ int main(int argc, char** argv) {
     });
 
   const real kdtree_find = timer([&] {
+      closest.clear();
+      closest.reserve(source.size());
+      
       for(const vec3& query : source) {
-        closest.clear();
-        closest.reserve(source.size());
-
         auto index = kd.closest(query, target.begin(), target.end());
         closest.push_back(&target[index]);
       }
