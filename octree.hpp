@@ -10,7 +10,9 @@
 
 #include <Eigen/Core>
 
+
 namespace detail {
+
   // a fast linear (morton) octree
   template<class T>
   struct cell {
@@ -119,7 +121,7 @@ namespace detail {
 
       for(T value = first, next; value != last; value = next) {
         next = value + incr;
-        func(cell(value), cell(next));
+        func(cell(value), cell(next - 1));
       }
     }
     
@@ -214,10 +216,7 @@ namespace detail {
       return find_nearest(distance, best, first, last);
     }
 
-    // recursive case: split cell
-
-    const std::size_t next_level = level - 1;
-  
+    // recursive case
     struct chunk_type {
       Real d;
       cell<T> c;
@@ -226,28 +225,34 @@ namespace detail {
       inline bool operator<(const chunk_type& other) const { return d < other.d; }
     };
 
+    const std::size_t next_level = level - 1;
+    
     chunk_type chunks[8];
-    std::size_t count = 0;
+    std::size_t non_empty = 0;
 
-    origin.children(next_level, [&](cell<T> curr, cell<T> next) noexcept {
-        const Iterator begin = std::lower_bound(first, last, curr);
+    origin.children(next_level, [&](cell<T> lower, cell<T> upper) noexcept {
+        assert(upper.bits.to_ulong() > lower.bits.to_ulong());
+
+        // find range for lower/upper cell corners
+        const Iterator begin = std::lower_bound(first, last, lower);
         if(begin == last) return; // no point found in subcell
             
-        // note: lower bound of the *next* cell is an upper bound for all the
-        // subcells in this one
-        const Iterator end = std::lower_bound(begin, last, next);
-            
-        // const cell<T> child{curr};
-        chunks[count++] = {distance(curr, next_level), curr, begin, end};
-      });
-    
-    assert(count <= 8);
+        const Iterator end = std::upper_bound(begin, last, upper);
 
-    std::sort(chunks, chunks + count);
+        assert(end >= begin);
+        chunks[non_empty++] = {distance(lower, next_level), lower, begin, end};
+      });
+
+    // paranoid sanity checks
+    assert(non_empty <= 8);
+    assert(chunks[0].begin == first);
+    assert(chunks[count - 1].end == last);    
+
+    // order non-empty subcells by distance
+    std::sort(chunks, chunks + non_empty);
 
     Iterator result = last;
-    
-    for(auto it = chunks, end = chunks + count; it != end; ++it) {
+    for(auto it = chunks, end = chunks + non_empty; it != end; ++it) {
       if(it->d < best) {
         const Real old_best = best;
         const Iterator sub = find_nearest(distance, best, it->begin, it->end, it->c, next_level);
@@ -255,7 +260,6 @@ namespace detail {
         if(best < old_best) {
           result = sub;
         }
-
       }
     }
 
@@ -263,64 +267,65 @@ namespace detail {
   };
 
 
-  // octree based k-nn
-  template<class Real, class Distance, class Iterator, class T>
-  static void find_nearest(sorted_array<Real, Iterator>& result, const Distance& distance,
-                           Iterator first, Iterator last,
-                           const cell<T>& origin, std::size_t level = cell<T>::max_level) noexcept {
-    // range size
-    const std::size_t size = last - first;
+  // // octree based k-nn
+  // template<class Real, class Distance, class Iterator, class T>
+  // static void find_nearest(sorted_array<Real, Iterator>& result, const Distance& distance,
+  //                          Iterator first, Iterator last,
+  //                          const cell<T>& origin, std::size_t level = cell<T>::max_level) noexcept {
+  //     // range size
+  //     const std::size_t size = last - first;
   
-    // base case
-    if( (level == 0) || size <= cell<T>::brute_force_threshold) {
-      find_nearest(result, distance, first, last);
-    }
+  //     // base case
+  //     if( (level == 0) || size <= cell<T>::brute_force_threshold) {
+  //         find_nearest(result, distance, first, last);
+  //     }
   
-    // recursive case: split cell
-    const std::size_t next_level = level - 1;
+  //     // recursive case: split cell
+  //     const std::size_t next_level = level - 1;
 
-    // subcell info TODO rename
-    struct chunk_type {
-      Real d;
-      cell<T> c;
-      Iterator begin, end;
+  //     // subcell info TODO rename
+  //     struct chunk_type {
+  //         Real d;
+  //         cell<T> c;
+  //         Iterator begin, end;
     
-      bool operator<(const chunk_type& other) const { return d < other.d; }
-    };
+  //         bool operator<(const chunk_type& other) const { return d < other.d; }
+  //     };
 
-    chunk_type chunks[8];
-    std::size_t count = 0;
+  //     chunk_type chunks[8];
+  //     std::size_t count = 0;
 
-    // obtain subcell info, skip if empty
-    for(cell<T> c : typename cell<T>::children(origin, next_level)) {
-      const Iterator begin = std::lower_bound(first, last, c);
-      if(begin == last) continue; // no point found in subcell
+  //     // obtain subcell info, skip if empty
+  //     for(cell<T> c : typename cell<T>::children(origin, next_level)) {
+  //         const Iterator begin = std::lower_bound(first, last, c);
+  //         if(begin == last) continue; // no point found in subcell
 
-      // note: we want upper bound since we may have duplicate cells in the
-      // range (e.g. many points in same leafs)
-      const Iterator end = std::lower_bound(begin, last, c.next(next_level));
+  //         // note: we want upper bound since we may have duplicate cells in the
+  //         // range (e.g. many points in same leafs)
+  //         const Iterator end = std::lower_bound(begin, last, c.next(next_level));
     
-      chunks[count] = {distance(c, next_level), c, begin, end};
-      ++count; 
-    }
+  //         chunks[count] = {distance(c, next_level), c, begin, end};
+  //         ++count; 
+  //     }
 
-    assert(count <= 8);
+  //     assert(count <= 8);
 
-    // process subcells by distance to query point
-    std::sort(chunks, chunks + count);
+  //     // process subcells by distance to query point
+  //     std::sort(chunks, chunks + count);
   
-    for(auto it = chunks, end = chunks + count; it != end; ++it) {
-      // don't visit subcell if our furthest guess is closer than the subcell
-      if(it->d < result.back().key) {
-        find_nearest(result, distance, it->begin, it->end, it->c, next_level);
-      }
-    }
+  //     for(auto it = chunks, end = chunks + count; it != end; ++it) {
+  //         // don't visit subcell if our furthest guess is closer than the subcell
+  //         if(it->d < result.back().key) {
+  //             find_nearest(result, distance, it->begin, it->end, it->c, next_level);
+  //         }
+  //     }
 
-    return result;
-  };
+  //     return result;
+  // };
 
 }
 
+}
 
 template<class Real=double, class T=unsigned long>
 class octree {
@@ -383,19 +388,19 @@ public:
     return it->p;
   }
 
-  template<class OutputIterator>
-  void nearest(OutputIterator out, const vec3& query, std::size_t count = 1) const {
-    assert(count >= data.size());
+  // template<class OutputIterator>
+  // void nearest(OutputIterator out, const vec3& query, std::size_t count = 1) const {
+  //     assert(count >= data.size());
         
-    using iterator = typename data_type::iterator;
+  //     using iterator = typename data_type::iterator;
     
-    detail::sorted_array<real, iterator> knn(count, std::numeric_limits<real>::max());
-    find_nearest(knn, distance{query}, data.begin(), data.end(), cell(0));
+  //     detail::sorted_array<real, iterator> knn(count, std::numeric_limits<real>::max());
+  //     find_nearest(knn, distance{query}, data.begin(), data.end(), cell(0));
 
-    for(auto& it : knn) {
-      *out++ = it.value.p;
-    }
-  }
+  //     for(auto& it : knn) {
+  //         *out++ = it.value.p;
+  //     }
+  // }
   
   
 };
@@ -451,7 +456,6 @@ struct octree<Real, T>::distance {
   }
 
   real operator()(const item& i) const noexcept {
-    // ++point_count;
     return operator()(*i.p);
   }
 
@@ -474,9 +478,6 @@ struct octree<Real, T>::distance {
     return project(c, level).squaredNorm() * factor;
   }
 };
-
-
-
 
 
 #endif
