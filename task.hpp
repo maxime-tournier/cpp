@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <functional>
-
+#include <future>
 
 #include <iostream>
 
@@ -88,6 +88,7 @@ public:
 
 
 
+
 class pool {
   std::atomic<int> last;
   std::vector<queue> queues;
@@ -121,12 +122,16 @@ public:
   pool(std::size_t n = std::thread::hardware_concurrency())
     : last(0),
       queues(n) {
-    
+
     for(std::size_t i = 0; i < n; ++i) {
       threads.emplace_back([this, i] {
           run(i);
         });
     }
+
+    // wait for the threads to start
+    auto join = split(std::size_t(0), n, [](std::size_t) { });
+    join.get();
   }
 
 
@@ -153,6 +158,43 @@ public:
 
     // all the queues are busy: fallback on waiting
     queues[next % size()].push(std::move(task));
+  }
+
+
+  template<class Iterator, class Func>
+  std::future<void> split(Iterator first, Iterator last, const Func& func) {
+    const std::size_t n = last - first;
+
+    struct shared_type {
+      std::promise<void> promise;
+      std::atomic<unsigned> count;
+    };
+    
+    auto shared = std::make_shared<shared_type>();
+    shared->count = size();
+    
+    const std::size_t m = (n + 1) / size();
+
+    Iterator begin = first;
+            
+    for(std::size_t i = 0; i < size(); ++i) {
+      const Iterator end = i == size() - 1 ? last : begin + m;
+
+      queues[i].push([shared, func, begin, end] {
+          for(Iterator it = begin; it != end; ++it) {
+            func(it);
+          }
+
+          // last one fills the promise
+          if(--shared->count == 0) {
+            shared->promise.set_value();
+          }
+        });
+      
+      begin += m;
+    }
+    
+    return shared->promise.get_future();
   }
   
 };
