@@ -14,6 +14,9 @@
 
 #include <iostream>
 
+
+// simple work-stealing thread pool based on "better code: concurrency" talk by
+// sean parent.
 using mutex_type = std::mutex;
 using lock_type = std::unique_lock<mutex_type>;
 
@@ -27,7 +30,7 @@ class queue {
 
   lock_type lock() { return lock_type(mutex); }
   lock_type try_lock() { return lock_type(mutex, std::try_to_lock); }
-  
+
 public:
 
   void done() {
@@ -48,6 +51,7 @@ public:
     tasks.pop_front();
     return true;    
   }
+
   
   bool pop(task_type& out) {
     auto lock = this->lock();
@@ -72,7 +76,6 @@ public:
     return true;
   }
 
-  
 
   void push(task_type task) {
     {
@@ -81,8 +84,6 @@ public:
     }
     cv.notify_one();
   }
-
-
   
 };
 
@@ -94,6 +95,8 @@ class pool {
   std::vector<queue> queues;
   std::vector<std::thread> threads;
 
+  // how far/long to keep looking for an available thread when pushing task
+  // (1=try each thread)
   const double factor = 1.5;
   
   void run(std::size_t i) {
@@ -129,7 +132,7 @@ public:
         });
     }
 
-    // wait for the threads to start
+    // wait for the threads to start by splitting an empty task
     auto join = split(std::size_t(0), n, [](std::size_t) { });
     join.get();
   }
@@ -161,6 +164,7 @@ public:
   }
 
 
+  // split a task on each thread
   template<class Iterator, class Func>
   std::future<void> split(Iterator first, Iterator last, const Func& func) {
     const std::size_t n = last - first;
