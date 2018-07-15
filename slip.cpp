@@ -63,24 +63,6 @@ namespace {
   struct overload : Func... {
     overload(const Func& ... func) : Func(func)... { }
   };
-
-
-  
-  template<class Func, class ... Args>
-  struct visitor_result_type;
-
-  template<class Func, class ... Params, class T>
-  struct visitor_result_type<Func(Params...), T> {
-    using type = typename std::result_of<Func(T, Params...)>::type;
-  };
-
-  template<class Func, class T, class ... Args>
-  struct visitor_result_type<Func, T, Args...> : visitor_result_type<Func, T> {
-    
-    static_assert(std::is_same<typename visitor_result_type::type,
-                  typename visitor_result_type<Func, Args...>::type>::value,
-                  "all return types must be the same");
-  };
   
 }
   
@@ -118,30 +100,29 @@ public:
   }
 
   variant(variant&& other) : index(other.index) {
-    visit(other, move(), &storage);
+    other.visit<void>(move(), &storage);
   }
   
   variant(const variant& other) : index(other.index) {
-    visit(other, copy(), &storage);
+    other.visit<void>(copy(), &storage);
   }
 
-  ~variant() { visit(*this, destruct()); }
+  ~variant() { visit<void>(destruct()); }
   
-  template<class Self, class Func, class ... Params>
-  friend auto visit(Self&& self, Func&& func, Params&& ... params) -> decltype(derived(self)) {
-    using ret_type = void;
-    using thunk_type = ret_type (*) (Self&&, Func&&, Params&&...);
+  template<class Ret = void, class Func, class ... Params>
+  Ret visit(Func&& func, Params&& ... params) const {
+    using ret_type = Ret;
+    using self_type = const variant&;
+    using thunk_type = ret_type (*) (self_type&&, Func&&, Params&&...);
     
-    static const thunk_type table[] = {thunk<Args, ret_type, Self, Func, Params...>...};
+    static const thunk_type table[] = {thunk<Args, ret_type, self_type, Func, Params...>...};
     
-    return table[self.index](std::forward<Self>(self),
-                             std::forward<Func>(func),
-                             std::forward<Params>(params)...);
+    return table[index](*this, std::forward<Func>(func), std::forward<Params>(params)...);
   }
 
-  template<class Self, class ... Func>
-  friend auto match(Self&& self, const Func& ... func) -> decltype(derived(self)) {
-    return visit(std::forward<Self>(self), overload<Func...>(func...));
+  template<class Ret = void, class ... Func>
+  Ret match(const Func& ... func) const {
+    return visit<Ret>(overload<Func...>(func...));
   }
   
 };
@@ -235,13 +216,12 @@ int main(int, char**) {
 
   const sexpr e = 2.0 >>= symbol("michel") >>= sexpr::list();
 
-  match(e,
-        [](real d) { std::clog << "double" << std::endl; },
-        [](integer d)  { std::clog << "long" << std::endl; },
-        [](boolean d) { std::clog << "bool" << std::endl; },
-        [](symbol s)  { std::clog << "symbol" << std::endl; },
-        [](sexpr::list x){ std::clog << "list" << std::endl; }
-        );
+  e.match([](real d) { std::clog << "double" << std::endl; },
+          [](integer d)  { std::clog << "long" << std::endl; },
+          [](boolean d) { std::clog << "bool" << std::endl; },
+          [](symbol s)  { std::clog << "symbol" << std::endl; },
+          [](sexpr::list x){ std::clog << "list" << std::endl; }
+          );
   
   return 0;
 }
