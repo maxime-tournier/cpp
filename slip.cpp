@@ -11,6 +11,8 @@
 // refs
 #include <memory>
 
+//
+#include <map>
 
 #include <iostream>
 
@@ -63,6 +65,15 @@ namespace {
   struct overload : Func... {
     overload(const Func& ... func) : Func(func)... { }
   };
+
+
+  // helpers
+  struct write {
+    template<class T>
+    void operator()(const T& self, std::ostream& out) const {
+      out << self;
+    }
+  };
   
 }
   
@@ -79,22 +90,34 @@ class variant {
 
   template<class T, class Ret, class Self, class Func, class ... Params>
   static Ret thunk(Self&& self, Func&& func, Params&& ... params) {
-    return std::forward<Func>(func)(std::forward<Self>(self).template get<T>(),
+    return std::forward<Func>(func)(std::forward<Self>(self).template cast<T>(),
                                     std::forward<Params>(params)...);
   }
 
-  static void derived(const variant&);
+  // unsafe casts
+  template<class T>
+  const T& cast() const { return reinterpret_cast<const T&>(storage); }
+
+  template<class T>
+  T& cast() { return reinterpret_cast<T&>(storage); }
 
 public:
 
-  template<class T>
-  const T& get() const { return reinterpret_cast<const T&>(storage); }
+  // accessors
+  template<class T, index_type index = helper_type::index( (typename std::decay<T>::type*) 0 )>
+  const T* get() const {
+    if(this->index == index) { return &cast<T>(); }
+    return nullptr;
+  }
 
-  template<class T>
-  T& get() { return reinterpret_cast<T&>(storage); }
+  template<class T, index_type index = helper_type::index( (typename std::decay<T>::type*) 0 )>
+  T* get() {
+    if(this->index == index) { return &cast<T>(); }
+    return nullptr;
+  }
 
-  
-  template<class T, index_type index = helper_type::index( (T*) 0 )>
+  // constructors/destructors
+  template<class T, index_type index = helper_type::index( (typename std::decay<T>::type*) 0 )>
   variant(T&& value) : index(index) {
     helper_type::construct(&storage, std::forward<T>(value));
   }
@@ -108,7 +131,8 @@ public:
   }
 
   ~variant() { visit<void>(destruct()); }
-  
+
+  // visitors
   template<class Ret = void, class Func, class ... Params>
   Ret visit(Func&& func, Params&& ... params) const {
     using ret_type = Ret;
@@ -124,10 +148,16 @@ public:
   Ret match(const Func& ... func) const {
     return visit<Ret>(overload<Func...>(func...));
   }
+
+  friend std::ostream& operator<<(std::ostream& out, const variant& self) {
+    self.visit(write(), out);
+    return out;
+  }
   
 };
 
-struct unit { };
+
+// base types
 using boolean = bool;
 using integer = long;
 using real = double;
@@ -143,9 +173,12 @@ public:
 
   const char* get() const { return name; }
   bool operator<(const symbol& other) const { return name < other.name; }
-  bool operator==(const symbol& other) const { return name == other.name; }  
+  bool operator==(const symbol& other) const { return name == other.name; }
+
+  friend std::ostream& operator<<(std::ostream& out, const symbol& self) { return out << self.name; }
 };
 
+// lists
 template<class T>
 using ref = std::shared_ptr<T>;
 
@@ -163,24 +196,51 @@ struct cons {
     return std::make_shared<cons>(head, tail);
   }
 
+  template<class Init, class Func>
+  friend Init foldl(const Init& init, const list<T>& self, const Func& func) {
+    if(!self) return init;
+    return foldl(func(init, self->head), self->tail, func);
+  }
+
+  template<class Init, class Func>
+  friend Init foldr(const Init& init, const list<T>& self, const Func& func) {
+    if(!self) return init;
+    return func(self->head, foldr(init, self->tail, func));
+  }
+  
   template<class Func>
   friend list< typename std::result_of<Func(T)>::type > map(const list<T>& self, const Func& func) {
     if(!self) return {};
     return func(self->head) >>= map(self->tail, func);
   }
-  
+
+  friend std::ostream& operator<<(std::ostream& out, const list<T>& self) {
+    out << '(';
+    foldl(true, self, [&](bool first, const T& it) {
+        if(!first) out << ' ';
+        out << it;
+        return false;
+      });
+    return out << ')';
+  }
 };
 
 
+// s-expressions
 struct sexpr : variant<real, integer, boolean, symbol, list<sexpr> > {
   using sexpr::variant::variant;
   using list = list<sexpr>;
 };
 
+struct env;
 
+// values
 struct lambda {
   const list<symbol> args;
   const sexpr body;
+  const ref<env> scope;
+
+  friend std::ostream& operator<<(std::ostream& out, const lambda& self) { return out << "#<lambda>"; }
 };
 
 struct value : variant<real, integer, boolean, symbol, lambda, list<value> > {
@@ -188,40 +248,81 @@ struct value : variant<real, integer, boolean, symbol, lambda, list<value> > {
   using list = list<value>;
 };
 
-template<class Target>
-struct cast {
 
-  template<class T>
-  Target operator()(const T& self) const { return self; }
-  
+// environments
+struct env {
+  std::map<symbol, value> locals;
+  ref<env> parent;
+
+  friend ref<env> augment(const ref<env>& self, const list<symbol>& args, const value::list& values) {
+    auto res = std::make_shared<env>();
+    res->parent = self;
+    foldl(args, values, [&](const list<symbol>& args, const value& self) {
+        if(!args) throw std::runtime_error("not enough args");
+        res->locals.emplace(args->head, self);
+        return args->tail;
+      });
+
+    return res;
+  };
 };
 
 
-// static value eval(const sexpr& expr) {
-//   return match(expr,
-//                [&](real x) -> value { return x; },
-//                [&](integer x) -> value { return x; },
-//                [&](boolean x) -> value { return x; },
-//                [&](lambda x) -> value { return x; },
-               
-//                [&](symbol x) -> value { return x; },
-//                [&](sexpr::list x) -> value {
-//                  return 1.0;
-//                });
-// }
+
+using eval_type = value (*)(const ref<env>&, const sexpr& );
+static std::map<symbol, eval_type> special;
+
+static std::runtime_error unimplemented() { return std::runtime_error("unimplemented"); }
+
+static value eval(const ref<env>& e, const sexpr& expr);
+
+static value apply(const ref<env>& e, const sexpr& func, const sexpr::list& args) {
+  return eval(e, func).match<value>
+    ([](value) -> value { throw std::runtime_error("invalid type in application"); },
+     [&](const lambda& self) {
+       return eval(augment(e, self.args, map(args, [&](const sexpr& it) { return eval(e, it); })),
+                   self.body);
+     });
+}
+
+static value eval(const ref<env>& e, const sexpr& expr) {
+  return expr.match<value>
+    ([](value self) { return self; },
+     [&](symbol self) {
+       auto it = e->locals.find(self);
+       if(it == e->locals.end()) {
+         throw std::runtime_error("unbound variable: " + std::string(self.get()));
+       }
+
+       return it->second;
+     },
+     [&](const sexpr::list& x) {
+       if(!x) throw std::runtime_error("empty list in application");
+
+       // special forms
+       if(auto s = x->head.get<symbol>()) {
+         auto it = special.find(*s);
+         if(it != special.end()) {
+           return it->second(e, x->tail);
+         }
+       }
+
+       // regular apply
+       return apply(e, x->head, x->tail);       
+     });
+}
 
 
 
 int main(int, char**) {
 
-  const sexpr e = 2.0 >>= symbol("michel") >>= sexpr::list();
-
-  e.match([](real d) { std::clog << "double" << std::endl; },
-          [](integer d)  { std::clog << "long" << std::endl; },
-          [](boolean d) { std::clog << "bool" << std::endl; },
-          [](symbol s)  { std::clog << "symbol" << std::endl; },
-          [](sexpr::list x){ std::clog << "list" << std::endl; }
-          );
+  const sexpr e = symbol("michel");
   
+  auto global = std::make_shared<env>();
+  global->locals.emplace("michel", 14l);
+  
+  std::clog << e << std::endl;
+  
+  std::clog << eval(global, e) << std::endl;
   return 0;
 }
