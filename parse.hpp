@@ -1,629 +1,546 @@
-#ifndef PARSE_HPP
-#define PARSE_HPP
+#ifndef HELPER_PARSER_HPP
+#define HELPER_PARSER_HPP
 
-#include <istream>
 #include <vector>
-#include <cassert>
+#include <array>
+#include <type_traits>
+#include <iosfwd>
 
-#include <iostream>
-#include <sstream>
-#include <functional>
+#include "maybe.hpp"
 
-namespace parse {
+// a small parser combinator library, loosely based on "Monadic Parser
+// Combinators" by Hutton & Meijer.
 
-  // recover type U for F: T -> M<U> 
-  template<template<class> class M, class F, class T, class = typename std::result_of<F(T)>::type>
-  struct monad_bind_type;
-  
-  template<template<class> class M, class F, class T, class U>
-  struct monad_bind_type<M, F, T, M<U> > {
-    using value_type = U;
-  };
+// each parser call is either:
 
-  
-  // maybe monad
-  template<class T> class maybe;
-  
+// 1. successful and the stream has the failbit **not** set
 
-  template<class T>
-  class maybe {
-    using storage_type = typename std::aligned_union<0, T>::type;
-    storage_type storage;
-    const bool flag;
-  public:
-    using value_type = T;
+// 2. unsuccessful and the stream state (pos/rdstate) must be restored as if
+// before the call. use the stream_state RAII for this.
+
+namespace parser {
+
+namespace {
+
+template<class Parser>
+using result_type = typename detail::require_maybe<
+    typename std::result_of<Parser(std::istream&)>::type
+    >::type;
+
+template<class Parser>
+using value_type = typename result_type<Parser>::value_type;
+
+
+// RAII for saving/restoring/discarding stream state
+class stream_state {
+    std::istream* stream;
+public:
+    const std::ios::iostate state;
+    const std::ios::pos_type pos;
     
-    maybe() : flag(false) { }
+    inline stream_state(std::istream& stream)
+        : stream(&stream),
+          state(stream.rdstate()),
+          pos(stream.good() ? stream.tellg() :  std::ios::pos_type() ){
+
+    }
+
+    inline ~stream_state() {
+        if(!stream) return;
+        stream->clear(state);
+        if(stream->good()) {
+            stream->seekg(pos);
+        }
+    }
+
+    inline stream_state(stream_state&& other)
+        : stream(other.stream),
+          state(other.state),
+          pos(other.pos) {
+        other.stream = nullptr;
+    }
+
+    inline void discard() { stream = nullptr; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// parser combinators
+
+// type erasure
+template<class T>
+using any = std::function< maybe<T> (std::istream& ) >;
+
+
+// reference
+template<class Parser>
+struct ref_type {
+    const Parser& parser;
+
+    result_type<Parser> operator()(std::istream& in) const {
+        return parser(in);
+    }
+};
+
+template<class Parser>
+static ref_type<Parser> ref(const Parser& parser) { return {parser}; }
+
+
+// monadic bind (parser sequencing with binding)
+template<class Parser, class Func>
+struct bind_type {
+    const Parser parser;
+    const Func func;
+
+    using func_result_type = typename std::result_of<Func(value_type<Parser>)>::type;
     
-    maybe(const value_type& value) : flag(true) {
-      new (&storage) value_type(value);
+    result_type<func_result_type> operator()(std::istream& in) const {
+        stream_state backup(in);
+        assert(!in.fail());
+        
+        if(auto value = parser(in)) {
+            if(auto res = func(std::move(value.get()))(in)) {
+                backup.discard();
+                return std::move(res.get());
+            }
+        }
+        return {};
     }
+};
 
-    maybe(value_type&& value) : flag(true) {
-      new (&storage) value_type(std::move(value));
+template<class Parser, class Func, class = value_type<Parser> >
+static bind_type<Parser, Func> operator>>(const Parser& parser, const Func& func) {
+    return {parser, func};
+}
+
+
+// monadic pure (lift value as a parser)
+template<class T>
+struct pure_type {
+    const T value;
+
+    maybe<T> operator()(std::istream& ) const { return value; }
+};
+
+template<class T>
+static pure_type< typename std::decay<T>::type> pure(T&& value = {}) {
+    return {std::forward<T>(value)};
+}
+
+// monadic zero
+template<class T>
+struct fail {
+    maybe<T> operator()(std::istream& ) const { return {}; }
+};
+
+// functor map
+template<class Parser, class Func>
+struct map_type {
+    const Parser parser;
+    const Func func;
+
+    using type = typename std::result_of<Func(value_type<Parser>)>::type;
+    maybe<type> operator()(std::istream& in) const {
+        return map(parser(in), func);
     }
-
-    ~maybe() { 
-      if(flag) get().~value_type();
-    }
-
-
-    maybe(const maybe& other) : flag(other.flag) {
-      if(flag) new (&storage) value_type(other.get());
-    }
-
-    maybe(maybe&& other) : flag(other.flag) {
-      if(flag) new (&storage) value_type(std::move(other.get()));
-    }
-
-    maybe& operator=(const maybe& ) = delete;
-    maybe& operator=(maybe&& ) = delete;    
     
-    explicit operator bool() const { return flag; }
+};
 
-    const value_type& get() const { return reinterpret_cast<const value_type&>(storage); }
-    value_type& get() { return reinterpret_cast<value_type&>(storage); }
+template<class Parser, class Func>
+static map_type<Parser, Func> map(const Parser& parser, const Func& func) {
+    return {parser, func};
+}
 
 
-    // monadic bind
-    template<class F>
-    using bind_type = maybe< typename monad_bind_type< parse::maybe, F, value_type >::value_type >;
+
+// sequencing without binding
+template<class Parser>
+struct then_type {
+    const Parser parser;
     
-    template<class F>
-    bind_type<F> operator>>(const F& f) const & {
-      if(!flag) return {};
-      return f(get());
-    }
+    template<class T>
+    Parser operator()(const T&) const { return parser; }
+};
 
-    template<class F>
-    bind_type<F> operator>>(const F& f) && {
-      if(!flag) return {};
-      return f( std::move(get()) );
+template<class Parser>
+static then_type<Parser> then(const Parser& parser) { return {parser}; }
+
+template<class LHS, class RHS>
+struct sequence_type {
+    using impl_type = bind_type<LHS, then_type<RHS>>;
+    const impl_type impl;
+
+    sequence_type(const LHS& lhs, const RHS& rhs)
+        : impl( lhs >> then(rhs) ) {
+
     }
     
-  };
+    result_type<RHS> operator()(std::istream& in) const {
+        return impl(in);
+    }
+    
+};
+
+template<class LHS, class RHS, class = value_type<LHS>, class = value_type<RHS>>
+static sequence_type<LHS, RHS> operator>>=(const LHS& lhs, const RHS& rhs) {
+    return {lhs, rhs};
+}
 
 
-  // parser value type
-  template<class Parser>
-  using value_type = typename monad_bind_type<maybe, Parser, std::istream& >::value_type;
-
-
-  // rollback stream on parse error. you need these everytime you recover from a
-  // parse error: the stream must be rolled back to the last good state (at
-  // which point the parsed value was obtained). see coproduct, kleene star.
-  template<class Parser>
-  struct backtrack_type {
+// sequencing with result drop
+template<class Parser>
+struct drop_type {
     const Parser parser;
 
-    using U = parse::value_type<Parser>;
-    maybe<U> operator()(std::istream& in) const {
-      const std::istream::pos_type pos = in.tellg();
-      const maybe<U> res = parser(in);
-      if(!res) {
-        in.clear();
-        in.seekg(pos);
-      }
-      return res;
+    template<class T>
+    sequence_type<Parser, pure_type<typename std::decay<T>::type>>
+    operator()(T&& value) const {
+        return parser >>= pure(std::forward<T>(value));
     }
-    
-  };
+};
 
-  template<class Parser>
-  static backtrack_type<Parser> backtrack(Parser parser) {
-    return {parser};
-  }
-  
-  
-  
-  template<class LHS, class RHS>
-  struct coproduct_type {
-    
-    const backtrack_type<LHS> lhs;
+template<class Parser>
+static drop_type<Parser> drop(const Parser& parser) { return {parser}; }
+
+
+// sequencing with result cast
+template<class U>
+struct cast {
+    template<class T>
+    pure_type<U> operator()(T&& value) const {
+        return pure<U>(std::forward<T>(value));
+    }
+};
+
+
+// parser either LHS or RHS (usual short-circuit applies)
+// TODO use coproduct type for values and relax check
+template<class LHS, class RHS>
+struct coproduct_type {
+    const LHS lhs;
     const RHS rhs;
 
-    static_assert( std::is_same< value_type<LHS>, value_type<RHS> >::value, 
-                   "parsers should have the same type");
-
-    using T = parse::value_type<LHS>;
-  
-    maybe<T> operator()(std::istream& in) const {
-      if(const maybe<T> tmp = lhs(in)) { return tmp; }
-      return rhs(in);
-    }
-  
-  };
-
-
-  template<class LHS, class RHS>
-  static inline coproduct_type<LHS, RHS> operator | (LHS lhs, RHS rhs) {
-    return {{lhs}, rhs};
-  }
-
-
-  // monadic return
-  template<class T>
-  struct pure_type {
-    const T value;
-  
-    maybe<T> operator()(std::istream& ) const {
-      return value;
-    }
-  
-  };
-
-  template<class T>
-  static inline pure_type<T> pure(T value) { return {value}; }
-  
-  
-  // monadic zero
-  template<class T>
-  struct fail {
-    maybe<T> operator()(std::istream& in) const { return {}; }
-  };
-
-
-  // parse error
-  template<class T, class Error = std::runtime_error>
-  struct error {
-    const char* what;
+    static_assert(std::is_same< result_type<LHS>, result_type<RHS> >::value,
+                  "parser value types must agree");
     
-    error(const char* what = "parse error") : what(what) { } 
-
-    maybe<T> operator()(std::istream&) const {
-      throw Error(what);
-    }
-    
-  };
-
-  // monadic bind
-  template<class Parser, class F>
-  struct bind_type {
-
-    const Parser parser;
-    const F f;
-
-    using T = parse::value_type<Parser>;
-    using result_type = typename std::result_of< F(T) >::type;
-    using U = parse::value_type<result_type>;
-    
-    maybe<U> operator()(std::istream& in) const {
-      // backup stream position TODO why is this needed?
-      const maybe<U> res = parser(in) >> [&](T&& source) {
-        return f( std::move(source) )(in);
-      };
-
-      return res;
-    }
-  
-  };
-
-
-  template<class Parser, class F, class Check = value_type<Parser> >
-  static inline bind_type<Parser, F> operator>>(Parser parser, F f) {
-    return {parser, f};
-  }
-
-  // sequence without binding: a >> then(b)
-  template<class Parser>
-  struct then_type {
-    const Parser parser;
-
-    template<class T>
-    Parser operator()(T&&) const {
-      return parser;
-    }
-  };
-
-  template<class LHS, class RHS>
-  static bind_type<LHS, then_type<RHS> > operator,(LHS lhs, RHS rhs) {
-    return {lhs, {rhs}};
-  }
-  
-
-  // use parser then ignore result and return previously bound value
-  template<class Parser>
-  struct drop_type {
-    const Parser parser;
-    
-    template<class T>
-    bind_type<Parser, then_type<pure_type< typename std::decay<T>::type > >> operator()(T&& value) const {
-      return (parser, pure( std::forward<T>(value) ) );
-    };
-    
-  };
-  
-
-  template<class Parser>
-  static drop_type<Parser> drop(Parser parser) {
-    return {parser};
-  }
-  
-  
-  // kleene star
-  template<class Parser>
-  struct kleene_type {
-    const backtrack_type<Parser> parser;
-
-    using T = parse::value_type<Parser>;
-    using U = std::vector<T>;
-
-    maybe<U> operator()(std::istream& in) const {
-
-      U res;
-      while(maybe<T> item = parser(in)) {
-        // TODO emplace_back is not available for bool
-        res.push_back( std::move(item.get()) );
-      }
-      
-      return res;
-    }
-  };
-  
-
-  template<class Parser>
-  static inline kleene_type<Parser> operator*(Parser parser) { return {{parser}}; }
-
-
-  template<class Parser>
-  struct repeat_type {
-    const Parser parser;
-    const std::size_t n;
-
-    using T = parse::value_type<Parser>;
-    using U = std::vector<T>;
-    
-    maybe<U> operator()(std::istream& in) const {
-      U res; res.reserve(n);
-      
-      for(std::size_t i = 0; i < n; ++i) {
-        if(maybe<T> value = parser(in)) {
-          res.emplace_back( std::move(value.get()) );
+    result_type<LHS> operator()(std::istream& in) const {
+        stream_state backup(in);
+        if(auto res = lhs(in)) {
+            backup.discard();
+            return std::move(res.get());
+        } else if(auto res = rhs(in)) {
+            backup.discard();            
+            return std::move(res.get());
         } else {
-          return {};
+            return {};
         }
-      }
-      
-      return res;
     }
-  };
+};
 
 
-  template<class Parser>
-  static repeat_type<Parser> operator*(Parser parser, std::size_t n) {
-    return {parser, n};
-  }
-  
-
-  // literal parser
-  template<class T>
-  struct lit {
-
-    maybe<T> operator()(std::istream& in) const {
-      T res;
-
-      if(in >> res) return res;
-      return {};
-    }
-    
-  };
-
-
-
-  // character parser from predicate
-  template<class Pred>
-  struct chr_type {
-    const Pred pred;
-  
-    maybe<char> operator()(std::istream& in) const {
-      const int c = in.get();
-
-      if(c == std::istream::traits_type::eof()) {
-        return {};
-      }
-      
-      if( pred(c) ) {
-        return c;
-      }
-
-      in.putback(c);
-      return {};
-    }
-
-    struct negate {
-      const Pred pred;
-      bool operator()(char c) const { return !pred(c); }
-    };
-
-    
-    chr_type< negate > operator!() const {
-      return {{pred}};
-    }
-    
-  };
-
-
-  template<char c> static inline bool equals(char x) { return x == c; }
-
-  template<class Pred>
-  static inline chr_type<Pred> chr(Pred pred) { return {pred}; }
-
-  template<char c>
-  static inline chr_type< bool (*)(char) > chr() { return chr(equals<c>); }
-
-  struct in_set {
-    const char* source;
-    
-    bool operator()(const char& x) const {
-      for(const char* ptr = source; *ptr; ++ptr) {
-        if(x == *ptr) return true;
-      }
-      return false;
-    }
-  };
-  
-
-  inline chr_type<in_set> chr(const char* set) {
-    return {{set}};
-  }
-
-  // convenience for std::isspace and friends
-  static inline chr_type<int (*)(int)> chr( int(*pred)(int) ) {
-    return {pred};
-  }
-  
-  
-  // string literals. pred tells separators.
-  template<class Pred>
-  struct str_type {
-    const std::string value;
-    const Pred pred;
-    
-    str_type(const std::string& value, const Pred pred)
-      : value(value),
-        pred(pred){ }
-    
-    maybe<const char*> operator()(std::istream& in) const {
-      // backup stream position
-      for(const char c : value) {
-
-        if(!chr( [c](char x) { return x == c; })(in)) {
-          return {};
-        }
-      }
-
-      const int next = in.peek();
-      
-      if(in.eof() || pred(next) ) {
-        return {value.c_str()};
-      } else {
-        return {};
-      }
-    }
-    
-  };
-
-
-  template<class Pred = int (*)(int)>
-  static str_type<Pred> str(const std::string& value, Pred pred = std::isspace) {
-    return {value, pred};
-  }
-  
-  
-
-  // convenience
-  static std::size_t debug_indent = 0;
-  
-  template<class Parser>
-  struct debug_type {
-    const Parser parser;
-    const char* name;
-    std::ostream& out;
-    
-    static std::ostream& indent(std::ostream& out, std::size_t depth) {
-      for(std::size_t i = 0; i < depth; ++i) out << "  ";
-      return out;
-    }
-    
-    using T = parse::value_type<Parser>;
-    
-    maybe<T> operator()(std::istream& in) const {
-      indent(out, debug_indent++) << ">> " << name << std::endl;
-      const maybe<T> res = parser(in);
-      char next = in.peek();
-      if(in.eof()) in.clear();
-      
-      indent(out, --debug_indent) << "<< " << name << ": " << (res ? "success" : "failed") 
-                                  << ", next: " << next << std::endl;;
-      return res;
-    }
-    
-  };
-
-  struct debug {
-
-#ifdef PARSE_ENABLE_DEBUG
-    static const bool enabled = true;
-#else
-    static const bool enabled = false;
-#endif
-    
-    const char* name;
-    std::ostream& out;
-
-    debug(const char* name, std::ostream& out = std::clog)
-      : name(name),
-        out(out) {
-
-    }
-
-    
-    template<class Parser>
-    typename std::enable_if<debug::enabled, debug_type<Parser>>::type operator<<=(Parser parser) const {
-      return {parser, name, out};
-    }
-
-    template<class Parser>
-    typename std::enable_if<!debug::enabled, Parser>::type operator<<=(Parser parser) const {
-      return parser;
-    }
-    
-  };
-  
-
-  template<class Parser, class Skip>
-  struct token_type {
-    const Parser parser;
-    const Skip skip;
-
-    using T = parse::value_type<Parser>;
-
-    maybe<T> operator()(std::istream& in) const {
-      // a token just skips leading spaces
-      while( skip(in) );
-      return parser(in);      
-    }
-    
-  };
-
-  
-  template<class Parser, class Skip = chr_type<int(*)(int)> >
-  static token_type<Parser, Skip> token(Parser parser, Skip skip = {std::isspace} ) {
-    return {parser, skip};
-  }
-
-  template<class Skip>
-  struct tokenize_type {
-    const Skip skip;
-
-    template<class Parser>
-    token_type<Parser, Skip> operator<<(Parser parser) const {
-      return {parser, skip};
-    }
-  };
-
-  template<class Skip>
-  static tokenize_type<Skip> tokenize(Skip skip) {
-    return {skip};
-  }
-  
-  // type erasure
-  template<class T>
-  using any = std::function< maybe<T> (std::istream& ) >;
-
-
-  // non-empty sequences
-  template<class Parser>
-  struct plus_type {
-    const Parser parser;
-    
-    using T = parse::value_type<Parser>;
-    using U = std::vector<T>;
-    
-    maybe<U> operator()(std::istream& in) const {
-
-      return (*parser)(in) >> [](U&& ts) -> maybe<U> {
-        if(ts.empty()) return {};
-        return std::move(ts);
-      };
-      
-    }
-    
-  };
-
-  template<class Parser>
-  static inline plus_type<Parser> operator+(Parser parser) { return {parser}; }
-
-
-  
-  // sequence parser
-  template<class Parser, class Separator>
-  static any< std::vector< parse::value_type<Parser> > > sequence(Parser parser, Separator separator) {
-    using value_type = parse::value_type<Parser>;
-
-    using vec = std::vector<value_type>;
-
-    static const auto empty = pure( vec() );
-    
-    const auto non_empty =
-      *(parser >> drop(separator)) >> [parser](vec&& xs) {
-      return parser >> [&xs](value_type&& last) {
-        xs.emplace_back(last);
-        return pure( std::move(xs) );
-      };
-    };
-
-    return non_empty | empty;
-  }
-
-
-  // fixed-length sequence parser
-  template<class Parser, class Separator>
-  static any< std::vector< parse::value_type<Parser> > > sequence(Parser parser, 
-                                                                  Separator separator, 
-                                                                  std::size_t size) {
-    using value_type = parse::value_type<Parser>;
-    using vec = std::vector<value_type>;
-
-    if(size == 0) {
-      throw std::runtime_error("cannot parse fixed-length empty sequences");
-    }
-    
-    return (parser >> drop(separator)) * (size - 1) >> [parser](vec&& xs) {
-      return parser >> [&xs](value_type&& x) {
-        xs.emplace_back(x);
-        return pure(std::move(xs));
-      };
-    };
-    
-  }
-
-  struct eof {
-
-    maybe<eof> operator()(std::istream& in) const {
-      const int next = in.peek();
-      if(next == std::istream::traits_type::eof()) return eof();
-      return {};
-    }
-    
-  };
-
-
-  // recursive rules (need unique tag, assign only once)
-
-  template<class Type, class Tag>
-  struct rec {
-    using impl_type = maybe<Type> (*)(std::istream&);
-    static impl_type impl;
-
-    // TODO use stateful friend injection magic to detect at compile-time?
-    maybe<Type> operator()(std::istream& in) const {
-      if(!impl) throw std::runtime_error("parser not defined!");
-      return impl(in);
-    }
-
-
-    template<class Parser>
-    rec& operator=(Parser parser) {
-      static const Parser copy = parser;
-      
-      static_assert( std::is_same< value_type<Parser>, Type >::value,
-                     "parser type error" );
-      
-      impl = [](std::istream& in) -> maybe<Type> {
-        return copy(in);
-      };
-
-      return *this;
-    }
-
-  };
-
-
-  template<class Type, class Tag>
-  typename rec<Type, Tag>::impl_type rec<Type, Tag>::impl;
-  
+template<class LHS, class RHS, class = value_type<LHS>, class = value_type<RHS>>
+static coproduct_type<LHS, RHS> operator|(const LHS& lhs, const RHS& rhs) {
+    return {lhs, rhs};
 }
+
+
+// kleene star
+template<class Parser>
+struct kleene_type {
+    const Parser parser;
+
+    using type = std::vector< value_type<Parser> >;
+    maybe<type> operator()(std::istream& in) const {
+        type res;
+        while(auto value = parser(in)) {
+            res.emplace_back(std::move(value.get()));
+        }
+        return res;
+    }
+};
+
+template<class Parser, class = value_type<Parser> >
+static kleene_type<Parser> operator*(const Parser& parser) {
+    return {parser};
+}
+
+
+// repetition 
+template<std::size_t N, class Parser>
+struct repeat_type {
+    const Parser parser;
+
+    using type = std::array<value_type<Parser>, N>;
+    maybe<type> operator()(std::istream& in) const {
+        stream_state backup(in);
+        type res;
+
+        for(std::size_t i = 0; i < N; ++i) {
+            if(auto ith = parser(in)) {
+                res[i] = std::move(ith.get());
+            } else {
+                return {};
+            }
+        }
+
+        return res;
+    }
+};
+
+template<std::size_t N, class Parser>
+static repeat_type<N, Parser> repeat(const Parser& parser) { return {parser}; }
+
+
+template<class T, class Exception = std::runtime_error>
+struct error : Exception {
+    using Exception::Exception;
+    
+    maybe<T> operator()(std::istream&) const {
+        throw *this;
+    }
+};
+
+
+// *non-empty* list with separator
+template<class Parser, class Separator>
+struct list {
+    const Parser parser;
+    const Separator separator;
+
+    using type = std::vector<value_type<Parser>>;
+    maybe<type> operator()(std::istream& in) const {
+
+        const auto impl = *(ref(parser) >> drop(ref(separator)))
+          >> [&](type&& firsts) {
+            return ref(parser) >> [&](value_type<Parser>&& last) {
+                firsts.emplace_back(std::move(last));
+                return pure(std::move(firsts));
+            };
+        };        
+        
+        return impl(in);
+    }
+};
+
+template<class Parser, class Separator,
+         class = value_type<Parser>, class = value_type<Separator>>
+static list<Parser, Separator> operator%(const Parser& parser,
+                                         const Separator& separator) {
+    return {parser, separator};
+};
+
+struct stream_format {
+    std::istream* in;
+    const std::istream::fmtflags fmt;
+    inline stream_format(std::istream& in)
+        : in(&in), fmt(in.flags()) { }
+
+    inline ~stream_format() {
+        if(in) in->flags(fmt);
+    }
+};
+
+// unformatted parsing
+template<class Parser>
+struct noskip_type {
+    const Parser parser;
+
+    result_type<Parser> operator()(std::istream& in) const {
+        const stream_format backup(in);
+        return parser(in >> std::noskipws);
+    }
+};
+
+
+template<class Parser>
+static noskip_type<Parser> noskip(const Parser& parser) {
+    return {parser};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// actual parsers
+
+// formatted for first char, unformatted for the rest
+struct token {
+    inline token(const char* value) : expected(value) { }
+    const char* const expected;
+
+    inline maybe<const char*> operator()(std::istream& in) const {
+        stream_state backup(in);
+        const auto fmt = in.flags();
+
+        // first read is formatted
+        // in >> std::skipws;
+        for(const char* c = expected; *c; ++c) {
+            char i = 0;
+            if(!(in >> i) || i != *c) {
+                in.flags(fmt); // restore flags
+                return {};
+            }
+
+            // next reads are unformatted
+            if(c == expected) in >> std::noskipws;
+        }
+
+        backup.discard();
+        in.flags(fmt);    // restore flags    
+        return expected;
+    }
+};
+
+
+// parse a value using standard stream input
+template<class T>
+struct value {
+    maybe<T> operator()(std::istream& in) const {
+        T res;
+        const std::ios::iostate state = in.rdstate();
+        if(in >> res) {
+            return res;
+        } else {
+            in.clear(state);
+            return {};
+        }
+    }
+};
+
+// parse true if the next read would yield eof
+struct eof {
+    inline maybe<bool> operator()(std::istream& in) const {
+        stream_state backup(in);
+        char c;
+        if( !(in >> c) && in.eof() ) return true;
+        return {};
+    }
+};
+
+
+// optional parser. value type must be default constructible in case parse
+// failed
+template<class Parser>
+struct option_type {
+    const Parser parser;
+
+    result_type<Parser> operator()(std::istream& in) const {
+        if(auto res = parser(in)) {
+            return res;
+        }
+        return {{}};
+    }
+};
+
+template<class Parser, class = result_type<Parser>>
+static option_type<Parser> operator~(const Parser& parser) { return {parser}; }
+
+
+template<int (*f) (int)>
+struct chr {
+    
+    maybe<char> operator()(std::istream& in) const {
+        stream_state backup(in);
+        char c;
+        if(in >> c && f(c)) {
+            backup.discard();
+            return c;
+        }
+        return {};
+    };
+    
+};
+
+// TODO character range/set/predicates
+template<class Parser>
+struct debug_type {
+    const Parser parser;
+    const char* const trace;
+    
+    result_type<Parser> operator()(std::istream& in) const;
+};
+
+
+namespace {
+struct debug {
+    const char* trace;
+    inline debug(const char* trace) : trace(trace) { }
+
+    template<class Parser>
+    inline debug_type<Parser> operator|=(const Parser& parser) const {
+        return {parser, trace};
+    }
+
+    static std::ostream* stream;
+    static std::size_t depth;
+};
+
+std::ostream* debug::stream = nullptr;
+std::size_t debug::depth = 0;
+}
+
+  
+// TODO character range/set/predicates
+template<class Parser>
+inline result_type<Parser> debug_type<Parser>::operator()(std::istream& in) const {
+    const std::size_t depth = debug::depth++;
+    const std::istream::streampos prev = in.tellg();
+    
+    const auto indent = [depth] () -> std::ostream& {
+        assert(debug::stream);
+        for(std::size_t i = 0; i < depth; ++i) *debug::stream << "  ";
+        return *debug::stream;
+    };
+    
+    if(debug::stream) {
+        indent() << ">> " << trace << std::endl;
+    }
+
+    auto res = parser(in);
+
+    if(debug::stream) {
+        const stream_state backup(in);
+        if(res) {
+            const std::istream::streampos curr = in.tellg();
+            const std::size_t size = curr - prev;
+            std::string buffer; buffer.resize(size);
+            in.seekg(prev);
+            in.read(&buffer[0], size);
+            assert(in.tellg() == curr);
+            indent() << "<< " << trace
+                     << " success \"" << buffer << "\"" << std::endl;
+        } else {
+            std::string next;
+            in >> next;
+            indent() << "<< " << trace
+                     << " failed on \"" << next << "\"" << std::endl;
+        }
+    }
+
+    --debug::depth;
+
+    return res;
+}
+
+
+
+
+
+// adaptor to standard c++ parsing api
+template<class Parser>
+static std::istream& parse(value_type<Parser>& self, const Parser& parser,
+                           std::istream& in) {
+    if(auto res = parser(in)) {
+        self = std::move(res.get());
+    } else {
+        in.setstate(std::ios::failbit);
+    }
+
+    return in;
+}
+
+}
+}
+
+
 
 
 #endif
