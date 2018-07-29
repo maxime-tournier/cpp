@@ -265,6 +265,34 @@ static kleene_type<Parser> operator*(const Parser& parser) {
 }
 
 
+// (non-empty) kleene star
+template<class Parser>
+struct plus_type {
+    const Parser parser;
+
+    using type = std::vector< value_type<Parser> >;
+    maybe<type> operator()(std::istream& in) const {
+      const auto impl = parser
+        >> [&](value_type<Parser>&& first) {
+             return *parser
+               >> [&](std::vector<value_type<Parser>>&& rest) {
+                    rest.insert(rest.begin(), std::move(first));
+                    return pure(rest);
+                  };
+           };
+      
+      return impl(in);
+    }
+};
+
+template<class Parser, class = value_type<Parser> >
+static plus_type<Parser> operator+(const Parser& parser) {
+    return {parser};
+}
+  
+
+  
+
 // repetition 
 template<std::size_t N, class Parser>
 struct repeat_type {
