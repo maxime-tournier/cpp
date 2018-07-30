@@ -1,7 +1,7 @@
 #ifndef HELPER_PARSER_HPP
 #define HELPER_PARSER_HPP
 
-#include <vector>
+#include <deque>
 #include <array>
 #include <type_traits>
 #include <iosfwd>
@@ -252,7 +252,7 @@ template<class Parser>
 struct kleene_type {
     const Parser parser;
 
-    using type = std::vector< value_type<Parser> >;
+    using type = std::deque< value_type<Parser> >;
     maybe<type> operator()(std::istream& in) const {
         type res;
         while(auto value = parser(in)) {
@@ -273,10 +273,10 @@ template<class Parser>
 struct plus_type {
     const Parser parser;
 
-    using type = std::vector< value_type<Parser> >;
+    using type = std::deque< value_type<Parser> >;
     maybe<type> operator()(std::istream& in) const {
       const auto impl = ref(parser) >> [&](value_type<Parser>&& first) {
-        return *ref(parser) >> [&](std::vector<value_type<Parser>>&& rest) {
+        return *ref(parser) >> [&](std::deque<value_type<Parser>>&& rest) {
           rest.insert(rest.begin(), std::move(first));
           return pure(rest);
         };
@@ -336,16 +336,17 @@ struct list {
     const Parser parser;
     const Separator separator;
 
-    using type = std::vector<value_type<Parser>>;
+    using type = std::deque<value_type<Parser>>;
     maybe<type> operator()(std::istream& in) const {
-
-        const auto impl = *(ref(parser) >> drop(ref(separator))) >> [&](type&& firsts) {
-            return ref(parser) >> [&](value_type<Parser>&& last) {
-                firsts.emplace_back(std::move(last));
-                return pure(std::move(firsts));
-            };
-        };        
-        
+      const auto impl = ref(parser)
+        >> [&](value_type<Parser>&& first) {
+             return *(ref(separator) >> then(ref(parser)))
+               >> [&](type&& rest) {
+                    rest.emplace_front(std::move(first));
+                    return pure(std::move(rest));
+                  };
+           };
+      
         return impl(in);
     }
 };
