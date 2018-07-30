@@ -275,14 +275,12 @@ struct plus_type {
 
     using type = std::vector< value_type<Parser> >;
     maybe<type> operator()(std::istream& in) const {
-      const auto impl = parser
-        >> [&](value_type<Parser>&& first) {
-             return *parser
-               >> [&](std::vector<value_type<Parser>>&& rest) {
-                    rest.insert(rest.begin(), std::move(first));
-                    return pure(rest);
-                  };
-           };
+      const auto impl = ref(parser) >> [&](value_type<Parser>&& first) {
+        return *ref(parser) >> [&](std::vector<value_type<Parser>>&& rest) {
+          rest.insert(rest.begin(), std::move(first));
+          return pure(rest);
+        };
+      };
       
       return impl(in);
     }
@@ -341,8 +339,7 @@ struct list {
     using type = std::vector<value_type<Parser>>;
     maybe<type> operator()(std::istream& in) const {
 
-        const auto impl = *(ref(parser) >> drop(ref(separator)))
-          >> [&](type&& firsts) {
+        const auto impl = *(ref(parser) >> drop(ref(separator))) >> [&](type&& firsts) {
             return ref(parser) >> [&](value_type<Parser>&& last) {
                 firsts.emplace_back(std::move(last));
                 return pure(std::move(firsts));
@@ -425,14 +422,15 @@ struct token {
 template<class T>
 struct value {
     maybe<T> operator()(std::istream& in) const {
-        T res;
-        const std::ios::iostate state = in.rdstate();
-        if(in >> res) {
-            return res;
-        } else {
-            in.clear(state);
-            return {};
-        }
+      stream_state backup(in);
+      T res;
+
+      if(in >> res) {
+        backup.discard();
+        return res;
+      } else {
+        return {};
+      }
     }
 };
 
@@ -465,15 +463,17 @@ template<class Parser, class = result_type<Parser>>
 static option_type<Parser> operator~(const Parser& parser) { return {parser}; }
 
 
+// character parser from predicate. warning: parsing is **formatted** unless
+// explicitely disabled with 'noskip'
 template<int (*f) (int)>
 struct chr {
     
     maybe<char> operator()(std::istream& in) const {
         stream_state backup(in);
         char c;
-        if(in >> c && f(c)) {
-            backup.discard();
-            return c;
+        if((in >> c) && f(c)) {
+          backup.discard();
+          return c;
         }
         return {};
     };
@@ -517,7 +517,9 @@ inline result_type<Parser> debug_type<Parser>::operator()(std::istream& in) cons
     
     const auto indent = [depth] () -> std::ostream& {
         assert(debug::stream);
-        for(std::size_t i = 0; i < depth; ++i) *debug::stream << "  ";
+        for(std::size_t i = 0; i < depth; ++i) {
+          *debug::stream << "  ";
+        }
         return *debug::stream;
     };
     
