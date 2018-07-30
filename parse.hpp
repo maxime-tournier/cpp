@@ -6,6 +6,9 @@
 #include <type_traits>
 #include <iosfwd>
 
+#include <functional>
+#include <cassert>
+
 #include "maybe.hpp"
 
 // a small parser combinator library, loosely based on "Monadic Parser

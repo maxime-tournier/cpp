@@ -84,8 +84,7 @@ static maybe<T> just(T&& value) { return {std::move(value)}; }
 
 // functor map
 template<class T, class F>
-static maybe<typename std::result_of<F(T)>::type> map(const maybe<T>& x,
-                                                        const F& f) {
+static maybe<typename std::result_of<F(T)>::type> map(const maybe<T>& x, const F& f) {
     if(x) return f(x.get());
     return {};
 }
