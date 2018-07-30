@@ -32,11 +32,14 @@ public:
     maybe(T&& value) : set(true) { new (&storage) T(std::move(value)); }
 
     maybe(maybe&& other) : set(other.set) {
-        if(set) new (&storage) T(std::move(other.get()));
+      if(set) new (&storage) T(std::move(other.get()));
     }
 
-    // unclear whether we actually need these, maybe the constructor?
-    maybe(const maybe& other) = delete;    
+    maybe(const maybe& other) : set(other.set) {
+      if(set) new (&storage) T(other.get());
+    }
+  
+    // unclear whether we actually need these at all
     maybe& operator=(maybe&& other) = delete; 
     maybe& operator=(const maybe& other) = delete;
     
