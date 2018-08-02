@@ -277,7 +277,7 @@ struct plus_type {
     maybe<type> operator()(std::istream& in) const {
       const auto impl = ref(parser) >> [&](value_type<Parser>&& first) {
         return *ref(parser) >> [&](std::deque<value_type<Parser>>&& rest) {
-          rest.insert(rest.begin(), std::move(first));
+          rest.emplace_front(std::move(first));
           return pure(rest);
         };
       };
@@ -511,7 +511,6 @@ std::size_t debug::depth = 0;
 }
 
   
-// TODO character range/set/predicates
 template<class Parser>
 inline result_type<Parser> debug_type<Parser>::operator()(std::istream& in) const {
     const std::size_t depth = debug::depth++;
