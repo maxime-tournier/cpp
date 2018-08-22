@@ -4,4 +4,9 @@
                  (python-indent-offset . 4)))
  
  (c++-mode . ((c-basic-offset . 2)
-			  (indent-tabs-mode . nil))))
+              (indent-tabs-mode . nil)
+              (c-offset-alist . ((innamespace . +)
+                                 (inlambda . 0)))
+              )
+           )
+ )
