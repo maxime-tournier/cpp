@@ -17,11 +17,11 @@ class nan_storage {
   ieee754 storage;
 
   // nan bits mask: all 11 exponent bits are set, which leaves us with 52
-  // mantissa bits + sign bit for storing stuff
+  // mantissa bits + sign bit = 53 bits for storing stuff
   static constexpr std::uint64_t nan_mask = ((std::uint64_t(1) << 11) - 1) << 52;
 
   // quiet bit mask: actually, only 51 mantissa bits since bit 51 signals a
-  // 'quiet nan'. that's a total 52 bits for storing information.
+  // 'quiet nan'. this gives only 52 bits for storing information.
   static constexpr std::uint64_t quiet_mask = std::uint64_t(1) << 51;
 
   // quiet nan bits mask
