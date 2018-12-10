@@ -278,7 +278,8 @@ namespace range {
   struct bind_range {
     map_range<Range, Func> impl;
 
-    using result_type = typename std::result_of<Func(typename Range::value_type)>::type;
+    using result_type =
+      typename std::result_of<Func(typename Range::value_type)>::type;
 
     // note: we need to store the impl result (otherwise side-effects will
     // happen on temporaries)
@@ -286,17 +287,30 @@ namespace range {
     storage_type storage;
 
     result_type& current() { return reinterpret_cast<result_type&>(storage); }
-    const result_type& current() const { return reinterpret_cast<const result_type&>(storage); }    
-    
-    bind_range(Range range, Func func):
-      impl(map(range, func)) {
-      if(impl) {
+    const result_type& current() const {
+      return reinterpret_cast<const result_type&>(storage);
+    }    
+
+    void find() {
+      // find next valid state from a valid impl
+      while(impl) {
         new (&storage) result_type(impl.get());
+        if(!current()) {
+          current().~result_type();
+          impl.next();
+        } else {
+          break;
+        }
       }
     }
     
+    bind_range(Range range, Func func):
+      impl(map(range, func)) {
+      find();      
+    }
+    
     explicit operator bool() const {
-      return impl && current();
+      return bool(impl);
     }    
     
     using value_type = typename result_type::value_type;
@@ -308,10 +322,8 @@ namespace range {
       if(!current()) {
         current().~result_type();
         impl.next();
-        
-        if(impl) {
-          new (&storage) result_type(impl.get());
-        }
+
+        find();
         // note: if impl is exhausted, current is destroyed
       }
     }
@@ -368,13 +380,13 @@ namespace range {
 
 
   struct guard {
-    const bool cond;
+    bool cond;
     guard(bool cond): cond(cond) { }
 
     // note: cannot use void :/
     using value_type = bool;
     
-    void next() { };
+    void next() { cond = false; };
     explicit operator bool() const { return cond; }
     bool get() const { return cond; };
   };
@@ -426,13 +438,15 @@ namespace range {
 
   // forward range on container
   template<class Container>
-  static iterator_range<typename Container::const_iterator> forward(const Container& self) {
+  static iterator_range<typename Container::const_iterator>
+  forward(const Container& self) {
     return {self.begin(), self.end()};
   }
 
   // backward range on container
   template<class Container>
-  static iterator_range<typename Container::const_reverse_iterator> backward(const Container& self) {
+  static iterator_range<typename Container::const_reverse_iterator>
+  backward(const Container& self) {
     return {self.rbegin(), self.rend()};
   }
   
@@ -468,7 +482,9 @@ namespace range {
   };
 
   template<class T=std::size_t>
-  static interval_range<T> interval(T from, T to, T step=1) { return {from, to, step}; }
+  static interval_range<T> interval(T from, T to, T step=1) {
+    return {from, to, step};
+  }
 
   template<class T=std::size_t>
   static interval_range<T> upto(T to, T step=1) { return {0, to, step}; }
@@ -497,30 +513,30 @@ namespace range {
 int main(int, char** ) {
   const std::size_t n = 10;
 
-  // const auto range = range::upto(n) >>= [=](std::size_t x) {
-  //   return range::interval(x, n) >>= [=](std::size_t y) {
-  //     return range::interval(y, n) >>= [=](std::size_t z) {
-  //       return range::guard(x * x + y * y == z * z) >>= [&](bool) {
-  //         return range::single(std::make_tuple(x, y, z));
-  //       };
-  //     };
+  const auto range = range::upto(n) >>= [=](std::size_t x) {
+    return range::interval(x, n) >>= [=](std::size_t y) {
+      return range::interval(y, n) >>= [=](std::size_t z) {
+        return range::guard(x * x + y * y == z * z) >>= [&](bool) {
+          return range::single(std::make_tuple(x, y, z));
+        };
+      };
+    };
+  };
+
+  iter(range, [](std::size_t x, std::size_t y, std::size_t z) {
+    std::cout << "x: " << x << ", y: " << y << ", z: " << z << std::endl;
+  });
+  
+  // const auto range = range::upto(n) >>= [](std::size_t x) {
+  //   return range::guard(x < 5) >>= [=](bool) {
+  //     return range::single(x);
   //   };
   // };
 
-  // iter(range, [](std::size_t x, std::size_t y, std::size_t z) {
-  //     std::cout << "x: " << x << "y: " << y << "z: " << z << std::endl;
+
+  // iter(range, [](std::size_t x) {
+  //     std::cout << "x: " << x << std::endl;
   //   });
-  
-  const auto range = range::upto(n) >>= [](std::size_t x) {
-    return range::guard(true) >>= [=](bool) {
-      return range::single(x);
-    };
-  };
-  
-  
-  iter(range, [](std::size_t x) {
-      std::cout << "x: " << x << std::endl;
-    });
   
   
   return 0;
