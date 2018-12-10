@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -O3 -o any2 any2.cpp -std=c++11 -lstdc++" -*-
+// -*- compile-command: "c++ -O3 -o range range.cpp -std=c++11 -lstdc++" -*-
 
 
 #include <vector>
@@ -138,42 +138,6 @@ namespace range {
   };
 
 
-  // sequencing
-  template<class LHS, class RHS>
-  struct sequence_range {
-    LHS lhs;
-    RHS rhs;
-
-    void next() {
-      if(lhs) lhs.next();
-      else rhs.next();
-    }
-  
-    explicit operator bool() const { return lhs || rhs; }
-  
-    using value_type = typename LHS::value_type;
-    static_assert(std::is_same<value_type, typename RHS::value_type>::value, "derp");
-  
-    value_type get() const {
-      if(lhs) return lhs.get();
-      else return rhs.get();
-    }
-  
-  };
-
-
-  template<class LHS, class RHS>
-  static sequence_range<LHS, RHS> seq(LHS lhs, RHS rhs) {
-    return {lhs, rhs};
-  }
-  
-  // convenience
-  template<class LHS, class RHS>
-  static sequence_range<LHS, RHS> operator>>(LHS lhs, RHS rhs) {
-    return {lhs, rhs};
-  }
-
-
   // functor map
   template<class Range, class Func>
   struct map_range {
@@ -285,21 +249,6 @@ namespace range {
   }
   
 
-  // yield value once (sequencing monad pure)
-  template<class T>
-  struct single_range {
-    const T value;
-    bool consumed = false;
-
-    explicit operator bool() const { return !consumed; }
-    const T& get() const { return value; }
-    void next() { consumed = true; }
-  };
-
-  template<class T>
-  static single_range<T> single(const T& value) { return {value}; }
-  
-
   // repeat value
   template<class T>
   struct repeat_range {
@@ -314,17 +263,94 @@ namespace range {
   static repeat_range<T> repeat(const T& value) { return {value}; }
 
 
-  template<class Range, class Func>
-  struct bind_range {
-    Range range;
-    const Func func;
+  // yield value once (monadic pure for range sequencing)
+  template<class T>
+  struct single_range {
+    const T value;
+    bool consumed = false;
 
-    using result_type = typename std::result_of<Func(typename Range::value_type)>::type;
-    using value_type = typename result_type::value_type;
-     
+    explicit operator bool() const { return !consumed; }
+    const T& get() const { return value; }
+    void next() { consumed = true; }
   };
+
+  template<class T>
+  static single_range<T> single(const T& value) { return {value}; }
   
 
+  // monadic bind for range sequencing
+  template<class Range, class Func>
+  struct bind_range {
+    map_range<Range, Func> impl;
+
+    bind_range(Range range, Func func):
+      impl(map(range, func)) { }
+    
+    using result_type = typename std::result_of<Func(typename Range::value_type)>::type;
+    using value_type = typename result_type::value_type;
+    value_type get() const { return impl.get().get(); }
+    
+    explicit bool operator() const { return impl && impl.get(); }
+
+    void next() {
+      if(impl.get()) impl.get().next();
+      else impl.next();
+    }
+    
+  };
+
+
+  template<class Range, class Func>
+  static bind_range<LHS, RHS> operator>>=(Range range, Func func) {
+    return {range, func};
+  }
+  
+  
+  // sequencing
+  template<class LHS, class RHS>
+  struct sequence_range {
+    LHS lhs;
+    RHS rhs;
+
+    void next() {
+      if(lhs) lhs.next();
+      else rhs.next();
+    }
+  
+    explicit operator bool() const { return lhs || rhs; }
+  
+    using value_type = typename LHS::value_type;
+    static_assert(std::is_same<value_type, typename RHS::value_type>::value, "derp");
+  
+    value_type get() const {
+      if(lhs) return lhs.get();
+      else return rhs.get();
+    }
+  
+  };
+
+
+  template<class LHS, class RHS>
+  static sequence_range<LHS, RHS> seq(LHS lhs, RHS rhs) {
+    return {lhs, rhs};
+  }
+
+  template<class LHS, class RHS>
+  static sequence_range<LHS, RHS> operator>>(LHS lhs, RHS rhs) {
+    return {lhs, rhs};
+  }
+
+
+  struct guard {
+    const bool cond;
+    guard(bool cond): cond(cond) { }
+    
+    void next() { };
+    explicit operator bool() const { return cond; }
+    void get() const { };
+  };
+  
+  ////////////////////////////////////////////////////////////////////////////////
   // actual impls
   template<class Iterator>
   struct iterator_range {
@@ -405,13 +431,17 @@ namespace range {
 int main(int, char** ) {
   const std::size_t n = 10;
 
-  std::vector<double> data; data.reserve(n);
+  range::any<std::size_t> range = range::count(0, n) >>= [&](std::size_t x) {
+    return range::count(x, n) >>= [&](std::size_t y) {
+      return range::count(y, n) >>= [&](std::size_t z) {
+        return range::guard(x * x + y * y == z * z) >>= [&] {
+          return range::single(std::make_tuple(x, y, z));
+        };
+      };
+    };
+  };
+
   
-  for(std::size_t i = 0; i < n; ++i) {
-    data.emplace_back(i);
-  }
-
-
   foldl(std::clog, range::forward(data), [](std::ostream& out, double value) -> std::ostream& {
       return out << value << " ";
     }) << std::endl;
