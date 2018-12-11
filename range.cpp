@@ -24,10 +24,11 @@ namespace type {
     using type = typename foldl<Func, typename Func<Init, H>::type, T...>::type;
   };
 
+  
   // foldr
   template<template<class, class> class Func, class Init, class ... Args>
   struct foldr;
-  
+
   template<template<class, class> class Func, class Init>
   struct foldr<Func, Init> {
     using type = Init;
@@ -39,12 +40,15 @@ namespace type {
   };
 
 
+  
   // tuple numbering
   template<std::size_t ...> struct indices { };
 
+  
   template<std::size_t I>
   using integer_constant = std::integral_constant<std::size_t, I>;
 
+  
   template<class LHS, class RHS>
   struct rank;
   
@@ -53,13 +57,16 @@ namespace type {
     using type = indices<Js..., sizeof...(Js)>;
   };
   
+  
   // index sequence for a type sequence
   template<class ... T>
   using indices_for = typename foldl<rank, indices<>, T...>::type;
 }
 
+
 namespace tuple {
-  
+
+  // expand a tuple into a continuation
   template<class ... T, class Func, std::size_t ... Is>
   typename std::result_of<Func(const T&...)>::type expand(const std::tuple<T...>& args, const Func& func,
                                                     type::indices<Is...>) {
@@ -89,7 +96,7 @@ namespace tuple {
 
 namespace range {
 
-  // type erasure
+  // type erasure using "impossibly fast delegates"
   template<class T>
   class any {
 
@@ -123,9 +130,12 @@ namespace range {
     explicit operator bool() const { return bool_ptr(storage.get()); }
     T get() const { return get_ptr(storage.get()); }
     
-    any(const any&) = default;
+    any(const any&) = delete;
     any(any&&) = default;  
-  
+
+    any& operator=(const any&) = delete;
+    any& operator=(any&&) = default;
+
     template<class Range>
     any(const Range& range):
       storage(new Range(range), deleter<Range>),
@@ -137,38 +147,48 @@ namespace range {
  
   };
 
-  // wrapped function applications (to expand tuples)
-  template<class T, class Func>
-  static auto apply(const Func& func, const T& self) -> decltype(func(self)) {
-    return func(self);
-  }
-
-  template<class ...T, class Func>
-  static auto apply(const Func& func, const std::tuple<T...>& self) -> decltype(tuple::expand(self, func)) {
-    return tuple::expand(self, func);
-  }
-
-  // call potential void args using: apply(func, (arg, noarg{}));
-  struct noarg { };
-
-  template<class T>
-  static const T& operator,(const T& rhs, noarg) { return rhs; }
-
-  template<class Func>
-  static auto apply(const Func& func, noarg) -> decltype(func()) {
-    return func();
-  }
-  
-  
-
-  template<class Func, class Value>
-  struct map_value_type {
-    using type = typename std::result_of<Func(Value)>::type;
+  template<class Func, class Arg>
+  struct apply_traits {
+    using type = typename std::result_of<Func(const Arg&)>::type;
+    
+    static type apply(const Func& func, const Arg& arg) { return func(arg); }
   };
 
+  template<class Func, class ... Args>
+  struct apply_traits<Func, std::tuple<Args...>> {
+    using type = typename std::result_of<Func(const Args&...)>::type;
+    
+    static type apply(const Func& func, const std::tuple<Args...>& arg) {
+      return tuple::expand(arg, func);
+    }
+  };
+
+  template<class Func, class LHS, class RHS>
+  struct apply_traits<Func, std::pair<LHS, RHS>> {
+    using type = typename std::result_of<Func(const LHS&, const RHS&)>::type;
+    
+    static type apply(const Func& func, const std::pair<LHS, RHS>& arg) {
+      return func(arg.first, arg.second);
+    }
+  };
+
+
+  // void argument tag class
+  struct void_tag { };
+
+  // when forming (arg, void_tag{}), if arg is void then the standard operator
+  // comma will be used, which will return void_tag. otherwise, this overload
+  // will be picked, which returns the actual argument type.
+  template<class T>
+  static const T& operator,(const T& rhs, void_tag) { return rhs; }
+  
   template<class Func>
-  struct map_value_type<Func, void> {
+  struct apply_traits<Func, void> {
     using type = typename std::result_of<Func()>::type;
+
+    static type apply(const Func& func, void_tag) {
+      return func();
+    }
   };
   
   
@@ -178,11 +198,12 @@ namespace range {
     Range range;
     const Func func;
 
-    using value_type = typename map_value_type<Func, typename Range::value_type>::type;
+    using traits = apply_traits<Func, typename Range::value_type>;
+    using value_type = typename traits::type;
     
     void next() { range.next(); }
     explicit operator bool() const { return bool(range); }
-    value_type get() const { return apply(func, (range.get(), noarg{})); }
+    value_type get() const { return traits::apply(func, (range.get(), void_tag{})); }
   };
 
   
@@ -199,12 +220,14 @@ namespace range {
     const Pred pred;
 
     using value_type = typename Range::value_type;
+
+    using traits = apply_traits<Pred, value_type>;
     
     filter_range(const Range& range, const Pred& pred):
       range(range),
       pred(pred) {
       // pull range until predicate matches
-      while(this->range && !apply(pred, this->range.get())) {
+      while(this->range && !traits::apply(pred, (this->range.get(), void_tag{}))) {
         this->range.next();
       }
     }
@@ -213,7 +236,8 @@ namespace range {
     value_type get() const { return range.get(); }
 
     void next() {
-      for(range.next(); range && !apply(pred, range); range.next()) { }
+      // pull range until pred is met
+      for(range.next(); range && !traits::apply(pred, (range.get(), void_tag{})); range.next()) { }
     }
     
   };
@@ -440,7 +464,7 @@ namespace range {
   template<class Range, class Func>
   static void iter(Range range, Func func) {
     while(range) {
-      apply(func, range.get());
+      apply_traits<Func, typename Range::value_type>::apply(func, (range.get(), void_tag{}));
       range.next();
     }
   }
@@ -534,19 +558,26 @@ namespace range {
 int main(int, char** ) {
   const std::size_t n = 10;
 
-  const auto range = range::upto(n) >>= [=](std::size_t x) {
-    return range::interval(x, n) >>= [=](std::size_t y) {
-      return range::interval(y, n) >>= [=](std::size_t z) {
-        return range::guard(x * x + y * y == z * z) >>= [&] {
-          return range::single(std::make_tuple(x, y, z));
-        };
-      };
-    };
+  // const auto range = range::upto(n) >>= [=](std::size_t x) {
+  //   return range::interval(x, n) >>= [=](std::size_t y) {
+  //     return range::interval(y, n) >>= [=](std::size_t z) {
+  //       return range::guard(x * x + y * y == z * z) >>= [&] {
+  //         return range::single(std::make_tuple(x, y, z));
+  //       };
+  //     };
+  //   };
+  // };
+
+
+  // iter(range, [](std::size_t x, std::size_t y, std::size_t z) {
+  //   std::cout << "x: " << x << ", y: " << y << ", z: " << z << std::endl;
+  // });
+
+
+  const auto range = zip(range::upto(n), range::upto(n)) >>= [&](std::size_t x, std::size_t y) {
+    return range::single(x + y);
   };
 
-  iter(range, [](std::size_t x, std::size_t y, std::size_t z) {
-    std::cout << "x: " << x << ", y: " << y << ", z: " << z << std::endl;
-  });
   
   // const auto range = range::upto(n) >>= [](std::size_t x) {
   //   return range::guard(x < 5) >>= [=](bool) {
@@ -555,9 +586,9 @@ int main(int, char** ) {
   // };
 
 
-  // iter(range, [](std::size_t x) {
-  //     std::cout << "x: " << x << std::endl;
-  //   });
+  iter(range, [](std::size_t x) {
+      std::cout << "x: " << x << std::endl;
+    });
   
   
   return 0;
