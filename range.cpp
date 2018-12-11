@@ -147,6 +147,10 @@ namespace range {
  
   };
 
+
+  namespace detail {
+  // function application traits for wrapping function applications to
+  // tuples/pairs/void... arguments
   template<class Func, class Arg>
   struct apply_traits {
     using type = typename std::result_of<Func(const Arg&)>::type;
@@ -190,7 +194,7 @@ namespace range {
       return func();
     }
   };
-  
+  }
   
   // functor map
   template<class Range, class Func>
@@ -198,12 +202,12 @@ namespace range {
     Range range;
     const Func func;
 
-    using traits = apply_traits<Func, typename Range::value_type>;
+    using traits = detail::apply_traits<Func, typename Range::value_type>;
     using value_type = typename traits::type;
     
     void next() { range.next(); }
     explicit operator bool() const { return bool(range); }
-    value_type get() const { return traits::apply(func, (range.get(), void_tag{})); }
+    value_type get() const { return traits::apply(func, (range.get(), detail::void_tag{})); }
   };
 
   
@@ -221,13 +225,13 @@ namespace range {
 
     using value_type = typename Range::value_type;
 
-    using traits = apply_traits<Pred, value_type>;
+    using traits = detail::apply_traits<Pred, value_type>;
     
     filter_range(const Range& range, const Pred& pred):
       range(range),
       pred(pred) {
       // pull range until predicate matches
-      while(this->range && !traits::apply(pred, (this->range.get(), void_tag{}))) {
+      while(this->range && !traits::apply(pred, (this->range.get(), detail::void_tag{}))) {
         this->range.next();
       }
     }
@@ -237,7 +241,8 @@ namespace range {
 
     void next() {
       // pull range until pred is met
-      for(range.next(); range && !traits::apply(pred, (range.get(), void_tag{})); range.next()) { }
+      while(range.next(),
+            range && !traits::apply(pred, (range.get(), detail::void_tag{}))) { }
     }
     
   };
@@ -318,6 +323,7 @@ namespace range {
   template<class T>
   static single_range<T> single(const T& value) { return {value}; }
 
+  
 
   // monadic bind for range sequencing
   template<class Range, class Func>
@@ -383,16 +389,16 @@ namespace range {
     
   };
 
-
-  template<class Range, class Func>
+  template<class Range, class Func,
+           class=typename Range::value_type>
   static bind_range<Range, Func> operator>>=(Range range, Func func) {
     return {range, func};
   }
   
   
-  // vanilla sequencing
+  // range concatenation
   template<class LHS, class RHS>
-  struct sequence_range {
+  struct concat_range {
     LHS lhs;
     RHS rhs;
 
@@ -404,7 +410,8 @@ namespace range {
     explicit operator bool() const { return lhs || rhs; }
   
     using value_type = typename LHS::value_type;
-    static_assert(std::is_same<value_type, typename RHS::value_type>::value, "derp");
+    static_assert(std::is_same<value_type, typename RHS::value_type>::value,
+                  "range types must be the same");
   
     value_type get() const {
       if(lhs) return lhs.get();
@@ -414,17 +421,14 @@ namespace range {
   };
 
 
-  template<class LHS, class RHS>
-  static sequence_range<LHS, RHS> seq(LHS lhs, RHS rhs) {
-    return {lhs, rhs};
-  }
-
-  template<class LHS, class RHS>
-  static sequence_range<LHS, RHS> operator>>(LHS lhs, RHS rhs) {
+  template<class LHS, class RHS,
+           class=typename LHS::value_type, class=typename RHS::value_type>
+  static concat_range<LHS, RHS> operator+(LHS lhs, RHS rhs) {
     return {lhs, rhs};
   }
 
 
+  // a range that will yield at most once with no value based on condition
   struct guard {
     bool cond;
     guard(bool cond): cond(cond) { }
@@ -436,8 +440,20 @@ namespace range {
     void get() const { };
   };
 
-  /////////////////////////////////////////////////////////////////////////////////
+
+  // a range that always yields nothing
+  struct forever {
+    using value_type = void;
+    void next() { }
+    explicit operator bool() const { return true; }
+    void get() const { };
+  };
+
+  
+  ////////////////////////////////////////////////////////////////////////////////
   // utils
+  ////////////////////////////////////////////////////////////////////////////////
+
   
   // left fold a range
   template<class Init, class Range, class Func>
@@ -460,17 +476,46 @@ namespace range {
     return func(value, foldr(init, range, func));
   }
 
+  
+
   // iterate a range
   template<class Range, class Func>
-  static void iter(Range range, Func func) {
+  static void foreach(Range range, Func func) {
+    using traits = detail::apply_traits<Func, typename Range::value_type>;
     while(range) {
-      apply_traits<Func, typename Range::value_type>::apply(func, (range.get(), void_tag{}));
+      traits::apply(func, (range.get(), detail::void_tag{}));
       range.next();
     }
+  }
+
+
+  template<class Range>
+  struct take_range {
+    Range range;
+    std::size_t remaining;
+
+    using value_type = typename Range::value_type;
+    value_type get() const {
+      return range.get();
+    }
+    
+    void next() {
+      range.next();
+      --remaining;
+    }
+    
+    explicit operator bool() const { return range && remaining; };
+  };
+
+  template<class Range>
+  static take_range<Range> take(std::size_t n, const Range& range) {
+    return {range, n};
   }
   
   ////////////////////////////////////////////////////////////////////////////////
   // actual concrete ranges
+  ////////////////////////////////////////////////////////////////////////////////
+  
   template<class Iterator>
   struct iterator_range {
     Iterator begin;
@@ -487,7 +532,7 @@ namespace range {
   static iterator_range<Iterator> from_iterators(Iterator begin, Iterator end) {
     return {begin, end};
   }
-
+  
 
   // forward range on container
   template<class Container>
@@ -496,12 +541,14 @@ namespace range {
     return {self.begin(), self.end()};
   }
 
+  
   // backward range on container
   template<class Container>
   static iterator_range<typename Container::const_reverse_iterator>
   backward(const Container& self) {
     return {self.rbegin(), self.rend()};
   }
+
   
   
   // counting range
@@ -520,6 +567,7 @@ namespace range {
   static count_range<T> count(T from=0, T step=1) { return {from, step}; }
 
 
+  
   // semi-open interval
   template<class T>
   struct interval_range {
@@ -534,13 +582,16 @@ namespace range {
     const T& get() const { return curr; }
   };
 
+  
   template<class T=std::size_t>
   static interval_range<T> interval(T from, T to, T step=1) {
     return {from, to, step};
   }
 
+  
   template<class T=std::size_t>
   static interval_range<T> upto(T to, T step=1) { return {0, to, step}; }
+
   
   
   // enumerate
@@ -548,8 +599,6 @@ namespace range {
   static auto enumerate(const Range& range) -> decltype(zip(count(), range)) {
     return zip(count(), range);
   }
-  
-
 
 }
 
@@ -558,36 +607,44 @@ namespace range {
 int main(int, char** ) {
   const std::size_t n = 10;
 
-  // const auto range = range::upto(n) >>= [=](std::size_t x) {
-  //   return range::interval(x, n) >>= [=](std::size_t y) {
-  //     return range::interval(y, n) >>= [=](std::size_t z) {
-  //       return range::guard(x * x + y * y == z * z) >>= [&] {
-  //         return range::single(std::make_tuple(x, y, z));
-  //       };
-  //     };
-  //   };
-  // };
-
-
-  // iter(range, [](std::size_t x, std::size_t y, std::size_t z) {
-  //   std::cout << "x: " << x << ", y: " << y << ", z: " << z << std::endl;
-  // });
-
-
-  const auto range = zip(range::upto(n), range::upto(n)) >>= [&](std::size_t x, std::size_t y) {
-    return range::single(x + y);
+  const auto pythagorean_triples = range::upto(n) >>= [=](std::size_t x) {
+    return range::interval(x, n) >>= [=](std::size_t y) {
+      return range::interval(y, n) >>= [=](std::size_t z) {
+        return range::guard(x * x + y * y == z * z) >>= [&] {
+          return range::single(std::make_tuple(x, y, z));
+        };
+      };
+    };
   };
 
+
+  foreach(pythagorean_triples, [](std::size_t x, std::size_t y, std::size_t z) {
+      std::cout << "x: " << x << ", y: " << y << ", z: " << z << std::endl;
+    });
   
-  // const auto range = range::upto(n) >>= [](std::size_t x) {
-  //   return range::guard(x < 5) >>= [=](bool) {
-  //     return range::single(x);
-  //   };
-  // };
 
+  const auto triple_sum = zip(range::upto(n), range::upto(n)) >>= [&](std::size_t x, std::size_t y) {
+    return range::single(x + y) >>= [&](std::size_t z) {
+      return range::guard(z % 3 == 0) >>= [&] {
+        return range::single(z);
+      };
+    };
+  };
 
-  iter(range, [](std::size_t x) {
+  foreach(triple_sum, [](std::size_t x) {
       std::cout << "x: " << x << std::endl;
+    });
+  
+
+  // random number generator
+  const auto random = range::forever() >>= [&] {
+    return range::single(std::rand());
+  };
+  
+
+  // take 10 numbers from random number generator
+  foreach(take(10, random), [](int i) {
+      std::cout << "i: " << i << std::endl;
     });
   
   
