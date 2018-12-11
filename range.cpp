@@ -137,7 +137,6 @@ namespace range {
  
   };
 
-
   // wrapped function applications (to expand tuples)
   template<class T, class Func>
   static auto apply(const Func& func, const T& self) -> decltype(func(self)) {
@@ -148,6 +147,29 @@ namespace range {
   static auto apply(const Func& func, const std::tuple<T...>& self) -> decltype(tuple::expand(self, func)) {
     return tuple::expand(self, func);
   }
+
+  // call potential void args using: apply(func, (arg, noarg{}));
+  struct noarg { };
+
+  template<class T>
+  static const T& operator,(const T& rhs, noarg) { return rhs; }
+
+  template<class Func>
+  static auto apply(const Func& func, noarg) -> decltype(func()) {
+    return func();
+  }
+  
+  
+
+  template<class Func, class Value>
+  struct map_value_type {
+    using type = typename std::result_of<Func(Value)>::type;
+  };
+
+  template<class Func>
+  struct map_value_type<Func, void> {
+    using type = typename std::result_of<Func()>::type;
+  };
   
   
   // functor map
@@ -156,11 +178,11 @@ namespace range {
     Range range;
     const Func func;
 
-    using value_type = typename std::result_of<Func(typename Range::value_type)>::type;
+    using value_type = typename map_value_type<Func, typename Range::value_type>::type;
     
     void next() { range.next(); }
     explicit operator bool() const { return bool(range); }
-    value_type get() const { return apply(func, range.get()); }
+    value_type get() const { return apply(func, (range.get(), noarg{})); }
   };
 
   
@@ -276,11 +298,11 @@ namespace range {
   // monadic bind for range sequencing
   template<class Range, class Func>
   struct bind_range {
-    map_range<Range, Func> impl;
+    using impl_type = map_range<Range, Func>;
+    impl_type impl;
 
-    using result_type =
-      typename std::result_of<Func(typename Range::value_type)>::type;
-
+    using result_type = typename impl_type::value_type;
+    
     // note: we need to store the impl result (otherwise side-effects will
     // happen on temporaries)
     using storage_type = typename std::aligned_union<0, result_type>::type;
@@ -344,7 +366,7 @@ namespace range {
   }
   
   
-  // sequencing
+  // vanilla sequencing
   template<class LHS, class RHS>
   struct sequence_range {
     LHS lhs;
@@ -383,18 +405,17 @@ namespace range {
     bool cond;
     guard(bool cond): cond(cond) { }
 
-    // note: cannot use void :/
-    using value_type = bool;
+    using value_type = void;
     
     void next() { cond = false; };
     explicit operator bool() const { return cond; }
-    bool get() const { return cond; };
+    void get() const { };
   };
 
   /////////////////////////////////////////////////////////////////////////////////
-  // folds
+  // utils
   
-  // left fold
+  // left fold a range
   template<class Init, class Range, class Func>
   static typename std::result_of<Func(Init&&, typename std::decay<Range>::type::value_type)>::type
   foldl(Init&& init, Range&& range, const Func& func) {
@@ -405,7 +426,7 @@ namespace range {
   }
 
   
-  // right fold (TODO check type)
+  // right fold a range (TODO check type)
   template<class Init, class Range, class Func>
   static typename std::result_of<Func(typename std::decay<Range>::type::value_type, Init&&)>::type
   foldr(Init&& init, Range&& range, const Func& func) {
@@ -414,10 +435,18 @@ namespace range {
     range.next();
     return func(value, foldr(init, range, func));
   }
-  
+
+  // iterate a range
+  template<class Range, class Func>
+  static void iter(Range range, Func func) {
+    while(range) {
+      apply(func, range.get());
+      range.next();
+    }
+  }
   
   ////////////////////////////////////////////////////////////////////////////////
-  // actual impls
+  // actual concrete ranges
   template<class Iterator>
   struct iterator_range {
     Iterator begin;
@@ -497,14 +526,6 @@ namespace range {
   }
   
 
-  // iterate a range
-  template<class Range, class Func>
-  static void iter(Range range, Func func) {
-    while(range) {
-      apply(func, range.get());
-      range.next();
-    }
-  }
 
 }
 
@@ -516,7 +537,7 @@ int main(int, char** ) {
   const auto range = range::upto(n) >>= [=](std::size_t x) {
     return range::interval(x, n) >>= [=](std::size_t y) {
       return range::interval(y, n) >>= [=](std::size_t z) {
-        return range::guard(x * x + y * y == z * z) >>= [&](bool) {
+        return range::guard(x * x + y * y == z * z) >>= [&] {
           return range::single(std::make_tuple(x, y, z));
         };
       };
