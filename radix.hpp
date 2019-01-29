@@ -1,6 +1,7 @@
 #ifndef RADIX_HPP
 #define RADIX_HPP
 
+#include <array>
 #include <memory>
 #include <cassert>
 
