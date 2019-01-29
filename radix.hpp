@@ -1,20 +1,26 @@
 #ifndef RADIX_HPP
 #define RADIX_HPP
 
+#include <memory>
+#include <cassert>
+
+#include <iostream>
+
 template<class T, std::size_t B, std::size_t L>
 struct chunk;
 
-static constexpr std::size_t chunk_ptr_size = sizeof(void*);
+static constexpr std::size_t chunk_ptr_size = 2 * sizeof(void*);
+// ((1ul << B) * chunk_ptr_size) / sizeof(T) (TODO log2 of that)
 
-template<class T, std::size_t B, std::size_t L=((1 << B) * chunk_ptr_size) / sizeof(T)>
+template<class T, std::size_t B, std::size_t L=B>
 struct chunk {
   using chunk_ptr_type = std::shared_ptr<chunk>;
-  static_assert(sizeof(chunk_ptr_type) == sizeof(void*), "size error");
+  static_assert(sizeof(chunk_ptr_type) == chunk_ptr_size, "size error");
   
-  static constexpr std::size_t children_size = 1 << B;
+  static constexpr std::size_t children_size = 1ul << B;
   static constexpr std::size_t children_mask = children_size - 1;
 
-  static constexpr std::size_t leaf_size = 1 << L;
+  static constexpr std::size_t leaf_size = 1ul << L;
   static constexpr std::size_t leaf_mask = leaf_size - 1;
   
   using children_type = std::array<chunk_ptr_type, children_size>;
@@ -22,8 +28,8 @@ struct chunk {
   
   static_assert(sizeof(buffer_type) <= sizeof(children_type), "size error");
   
-  using storage_type = typename std::aliagned_union<children_type, buffer_type>::type;
-  const storage_type storage;
+  using storage_type = typename std::aligned_union<0, children_type, buffer_type>::type;
+  storage_type storage;
   
   const std::size_t depth;
   const std::size_t shift;
@@ -32,10 +38,20 @@ struct chunk {
     return reinterpret_cast<buffer_type&>(storage);
   }
 
+  const buffer_type& buffer() const {
+    return reinterpret_cast<const buffer_type&>(storage);
+  }
+
+  
   children_type& children() {
     return reinterpret_cast<children_type&>(storage);
   }
 
+  const children_type& children() const {
+    return reinterpret_cast<const children_type&>(storage);
+  }
+
+  
   chunk(std::size_t depth=0):
     depth(depth),
     shift(depth ? L + B * (depth - 1) : 0){
@@ -55,14 +71,13 @@ struct chunk {
     }
   }
   
-  T& get(std::size_t index) {
+  T& ref(std::size_t index) {
     assert(index < capacity());
     
     if(!depth) {
       assert(index < leaf_size);
       return buffer()[index];
     }
-    assert(index >= leaf_size);
     
     // chop off leading chunk of B bits 
     const std::size_t mask = children_mask << shift;
@@ -75,7 +90,7 @@ struct chunk {
       c = std::make_shared<chunk>(depth - 1);
     }
     
-    return c->get(next);
+    return c->ref(next);
   }
 
   chunk_ptr_type set(std::size_t index, const T& value) const {
@@ -111,7 +126,7 @@ struct chunk {
       } else {
         // allocate fresh block and modify in-place
         r = std::make_shared<chunk>(depth - 1);
-        r.get(next) = value;
+        r->ref(next) = value;
       }
     }
     
@@ -121,33 +136,57 @@ struct chunk {
   std::size_t capacity() const {
     return 1 << (shift ? shift + B : L);
   }
+
+  friend std::ostream& operator<<(std::ostream& out, const chunk& self) {
+    out << "(";
+    if(!self.depth) {
+      bool first = true;
+      for(const auto& it: self.buffer()) {
+        if(first) first = false;
+        else out << " ";
+        out << it;
+      }
+    } else {
+      bool first = true;
+      for(const auto& it: self.children()) {
+        if(first) first = false;
+        else out << " ";
+        
+        if(it) out << *it;
+        else out << "()";
+      }
+    }
+    
+    return out << ")";
+  }
   
 };
 
 
 template<class T, std::size_t B=7>
-struct vector {
+class vector {
   using chunk_type = chunk<T, B>;
   using root_type = typename chunk_type::chunk_ptr_type;
-
-  const root_type root;
-  const std::size_t size;
-
+  
+  root_type root;
+  std::size_t size;
+  
 protected:
   vector(const root_type& root, std::size_t size):
     root(root),
     size(size) { }
 public:
   
-  vector(): root(std::make_shared<chunk_type>()) { };
+  vector():
+    root(std::make_shared<chunk_type>()),
+    size(0) { };
   
-  template<class T>
   vector push_back(const T& value) const {
     if(size == root->capacity()) {
-      root_type res = new chunk_type(root->depth + 1);
+      root_type res = std::make_shared<chunk_type>(root->depth + 1);
       res->children()[0] = root;
-      res->get(size) = value;
-      return res;
+      res->ref(size) = value;
+      return {res, size + 1};
     }
     
     return {root->set(size, value), size + 1};
@@ -159,7 +198,9 @@ public:
     return root->get(index);
   }
 
-  
+  friend std::ostream& operator<<(std::ostream& out, const vector& self) {
+    return out << *self.root;
+  }
   
 };
 
