@@ -450,6 +450,32 @@ namespace range {
   };
 
   
+
+  // range that take only n elements from a subrange
+  template<class Range>
+  struct take_range {
+    Range range;
+    std::size_t remaining;
+
+    using value_type = typename Range::value_type;
+    value_type get() const {
+      return range.get();
+    }
+    
+    void next() {
+      range.next();
+      --remaining;
+    }
+    
+    explicit operator bool() const { return range && remaining; };
+  };
+
+  template<class Range>
+  static take_range<Range> take(std::size_t n, const Range& range) {
+    return {range, n};
+  }
+
+  
   ////////////////////////////////////////////////////////////////////////////////
   // utils
   ////////////////////////////////////////////////////////////////////////////////
@@ -489,28 +515,6 @@ namespace range {
   }
 
 
-  template<class Range>
-  struct take_range {
-    Range range;
-    std::size_t remaining;
-
-    using value_type = typename Range::value_type;
-    value_type get() const {
-      return range.get();
-    }
-    
-    void next() {
-      range.next();
-      --remaining;
-    }
-    
-    explicit operator bool() const { return range && remaining; };
-  };
-
-  template<class Range>
-  static take_range<Range> take(std::size_t n, const Range& range) {
-    return {range, n};
-  }
   
   ////////////////////////////////////////////////////////////////////////////////
   // actual concrete ranges
