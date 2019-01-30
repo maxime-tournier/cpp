@@ -269,7 +269,7 @@ namespace range {
 
     void next() {
       return tuple::expand(ranges, [](Ranges& ... ranges) {
-          const int expand[] = {(ranges.next(), 0)...};
+           const int expand[] = {(ranges.next(), 0)...}; (void) expand;
         });
     }
 
