@@ -94,42 +94,38 @@ struct chunk {
   }
 
 
-  friend chunk_ptr_type try_emplace(const chunk_ptr_type& self, std::size_t index, const T& value) {
+  friend chunk_ptr_type try_emplace(chunk_ptr_type&& self, std::size_t index, const T& value) {
     assert(index < self->capacity());
     assert(self.unique());
     
     if(!self->depth) {
       // TODO could move
       self->buffer()[index] = value;
-      return self;
+      return std::move(self);
     }
-
+    
     const std::size_t mask = children_mask << self->shift;
     const std::size_t next = index & ~mask;
     const std::size_t sub = (index & mask) >> self->shift;
 
     if(auto& c = self->children()[sub]) {
-      const chunk_ptr_type s = try_emplace(c, next, value);
-      if(c == s) {
-        // success
-        return self;
+      if(c.unique()) {
+        // safe to emplace
+        c = try_emplace(std::move(c), next, value);
       } else {
-        // could not emplace, need to allocate
-        const chunk_ptr_type res = std::make_shared<chunk>(self->depth - 1);
-        for(std::size_t i = 0; i < children_size; ++i) {
-          res->children()[i] = (i == sub) ? s : self->children()[i];
-        }
-        
-        return res;
+        // c is shared: cannot emplace
+        c = c->set(next, value);
       }
+      
+      return std::move(self);
     } else {
-      // no chunk: allocate/ref
+      // no chunk: need to allocate/ref
       c = std::make_shared<chunk>(self->depth - 1);
 
       // TODO could move
       c->ref(next) = value;
-
-      return self;
+      
+      return std::move(self);
     }
   }
 
@@ -204,9 +200,9 @@ struct chunk {
 };
 
 
-template<class T, std::size_t B=7>
+template<class T, std::size_t B=7, std::size_t L=B>
 class vector {
-  using chunk_type = chunk<T, B>;
+  using chunk_type = chunk<T, B, L>;
   using root_type = typename chunk_type::chunk_ptr_type;
   
   root_type root;
@@ -245,8 +241,7 @@ public:
     }
 
     if(root.unique()) {
-      // TODO should we not move root at some point?
-      return {try_emplace(root, size(), value), size() + 1};
+      return {try_emplace(std::move(root), size(), value), size() + 1};
     } else {
       return {root->set(size(), value), size() + 1};
     }
