@@ -33,6 +33,7 @@ struct chunk {
   
   const std::size_t depth;
   const std::size_t shift;
+  const std::size_t mask;
   
   buffer_type& buffer() {
     return reinterpret_cast<buffer_type&>(storage);
@@ -41,7 +42,6 @@ struct chunk {
   const buffer_type& buffer() const {
     return reinterpret_cast<const buffer_type&>(storage);
   }
-
   
   children_type& children() {
     return reinterpret_cast<children_type&>(storage);
@@ -54,7 +54,8 @@ struct chunk {
   
   chunk(std::size_t depth=0):
     depth(depth),
-    shift(depth ? L + B * (depth - 1) : 0){
+    shift(depth ? L + B * (depth - 1) : 0),
+    mask(children_mask << shift) {
     
     if(depth) {
       new (&storage) children_type;
@@ -80,16 +81,14 @@ struct chunk {
     }
     
     // chop off leading chunk of B bits 
-    const std::size_t mask = children_mask << shift;
-    const std::size_t next = index & ~mask;
-    const std::size_t sub = (index & mask) >> shift;
-    
+    const std::size_t sub = index >> shift;
     auto& c = children()[sub];
     
     if(!c) {
       c = std::make_shared<chunk>(depth - 1);
     }
-    
+
+    const std::size_t next = index & ~mask;
     return c->ref(next);
   }
 
@@ -104,10 +103,9 @@ struct chunk {
       return std::move(self);
     }
     
-    const std::size_t mask = children_mask << self->shift;
-    const std::size_t next = index & ~mask;
-    const std::size_t sub = (index & mask) >> self->shift;
-
+    const std::size_t sub = index >> self->shift;
+    const std::size_t next = index & ~self->mask;
+    
     if(auto& c = self->children()[sub]) {
       if(c.unique()) {
         // safe to emplace
@@ -248,11 +246,35 @@ public:
   }
 
   
-  const T& operator[](std::size_t index) const {
+  const T& operator[](std::size_t index) const & {
     assert(index < root->capacity());
     assert(index < size());
     return root->get(index);
   }
+
+  const T& get(std::size_t index) const & {
+    assert(index < root->capacity());
+    assert(index < size());
+    return root->get(index);
+  }
+  
+  vector set(std::size_t index, const T& value) const & {
+    assert(index < root->capacity());
+    assert(index < size());
+    return {root->set(index, value), size()};
+  }
+
+
+  vector set(std::size_t index, const T& value) && {
+    assert(index < root->capacity());
+    assert(index < size());
+
+    root->ref(index) = value;
+    
+    return {std::move(root), size()};
+  }
+  
+  
 
   friend std::ostream& operator<<(std::ostream& out, const vector& self) {
     return out << *self.root;

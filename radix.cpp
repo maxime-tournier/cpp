@@ -1,25 +1,41 @@
-// -*- compile-command: "c++ -std=c++11 -o radix radix.cpp -O3 -DNDEBUG -g -lstdc++" -*-
+// -*- compile-command: "c++ -std=c++11 -o radix radix.cpp -O3 -DNDEBUG -march=native -lstdc++" -*-
 
 #include "radix.hpp"
 
-#include <deque>
-#include <vector>
+#include <set>
 
-int main(int, char**) {
-  using vec = vector<double, 8, 9>;
+
+template<class T, std::size_t B, std::size_t L>
+static std::size_t benchmark_emplace(std::size_t n) {
+  using vec = vector<T, B, L>;
 
   vec v;
 
-  const std::size_t n = 20000000;
-  // std::vector<double> test;
-  
   for(std::size_t i = 0; i < n; ++i) {
-    // v = v.push_back(i);
     v = std::move(v).push_back(i);
-    // test.push_back(i);
   }
 
-  // std::clog << v.size() << std::endl;
-  // std::clog << test.size() << std::endl;  
+  return v.size();
+}
+
+
+template<class T, std::size_t B, std::size_t L>
+static std::size_t benchmark_push(std::size_t n) {
+  using vec = vector<T, B, L>;
+
+  vec v;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    v = v.push_back(i);
+  }
+
+  return v.size();
+}
+
+
+int main(int, char**) {
+  const std::size_t n = 20000000;
+  std::clog << benchmark_emplace<double, 8, 8>(n) << std::endl;;
+  // std::clog << benchmark_push<double, 8, 8>(n) << std::endl;;
   return 0;
 }
