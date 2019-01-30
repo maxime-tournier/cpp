@@ -93,9 +93,50 @@ struct chunk {
     return c->ref(next);
   }
 
-  chunk_ptr_type set(std::size_t index, const T& value) const {
-    assert(index < capacity());
 
+  friend chunk_ptr_type try_emplace(const chunk_ptr_type& self, std::size_t index, const T& value) {
+    assert(index < self->capacity());
+    assert(self.unique());
+    
+    if(!self->depth) {
+      // TODO could move
+      self->buffer()[index] = value;
+      return self;
+    }
+
+    const std::size_t mask = children_mask << self->shift;
+    const std::size_t next = index & ~mask;
+    const std::size_t sub = (index & mask) >> self->shift;
+
+    if(auto& c = self->children()[sub]) {
+      const chunk_ptr_type s = try_emplace(c, next, value);
+      if(c == s) {
+        // success
+        return self;
+      } else {
+        // could not emplace, need to allocate
+        const chunk_ptr_type res = std::make_shared<chunk>(self->depth - 1);
+        for(std::size_t i = 0; i < children_size; ++i) {
+          res->children()[i] = (i == sub) ? s : self->children()[i];
+        }
+        
+        return res;
+      }
+    } else {
+      // no chunk: allocate/ref
+      c = std::make_shared<chunk>(self->depth - 1);
+
+      // TODO could move
+      c->ref(next) = value;
+
+      return self;
+    }
+  }
+
+  
+  chunk_ptr_type set(std::size_t index, const T& value) {
+    assert(index < capacity());
+    
     const chunk_ptr_type res = std::make_shared<chunk>(depth);
 
     // leaf chunk    
@@ -169,32 +210,52 @@ class vector {
   using root_type = typename chunk_type::chunk_ptr_type;
   
   root_type root;
-  std::size_t size;
+  std::size_t _size;
   
 protected:
   vector(const root_type& root, std::size_t size):
     root(root),
-    size(size) { }
+    _size(size) { }
 public:
+
+  std::size_t size() const { return _size; }
   
   vector():
     root(std::make_shared<chunk_type>()),
-    size(0) { };
+    _size(0) { };
   
-  vector push_back(const T& value) const {
-    if(size == root->capacity()) {
+  vector push_back(const T& value) const & {
+    if(size() == root->capacity()) {
       root_type res = std::make_shared<chunk_type>(root->depth + 1);
       res->children()[0] = root;
-      res->ref(size) = value;
-      return {res, size + 1};
+      res->ref(size()) = value;
+      return {res, size() + 1};
     }
     
-    return {root->set(size, value), size + 1};
+    return {root->set(size(), value), size() + 1};
   }
 
+
+  vector push_back(const T& value) && {
+    if(size() == root->capacity()) {
+      root_type res = std::make_shared<chunk_type>(root->depth + 1);
+      res->children()[0] = std::move(root);
+      res->ref(size()) = value;
+      return {res, size() + 1};
+    }
+
+    if(root.unique()) {
+      // TODO should we not move root at some point?
+      return {try_emplace(root, size(), value), size() + 1};
+    } else {
+      return {root->set(size(), value), size() + 1};
+    }
+  }
+
+  
   const T& operator[](std::size_t index) const {
     assert(index < root->capacity());
-    assert(index < size);
+    assert(index < size());
     return root->get(index);
   }
 
