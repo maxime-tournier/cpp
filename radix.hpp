@@ -199,6 +199,92 @@ struct chunk {
 };
 
 
+template<class T, std::size_t level, std::size_t B, std::size_t L>
+struct node {
+  static_assert(level > 0, "specialization error");
+  
+  static constexpr std::size_t children_size = 1 << B;
+
+  using ptr_type = std::shared_ptr<node>;
+  
+  using child_type = node<T, level - 1, B, L>;
+  using child_ptr_type = std::shared_ptr<child_type>;
+  
+  using children_type = std::array<children_size, child_ptr_type>;
+  children_type children;
+
+  node(const children_type& children={}): children(children) { }
+  
+  static constexpr std::size_t shift = L + B * (level - 1);
+  static constexpr std::size_t capacity = 1ul << shift;
+
+  static constexpr std::size_t mask = (children_size - 1) << shift;
+  
+  
+  T& ref(std::size_t index) {
+    assert(index < capacity);
+
+    const std::size_t sub = (index & mask) >> shift;
+    auto& c = children[sub];
+
+    if(!c) {
+      c = std::make_shared<child_type>();
+    }
+
+    const std::size_t next = index & ~mask;
+    return c->ref(next);
+  }
+
+
+  ptr_type set(std::size_t index, const T& value) const {
+    const std::size_t sub = (index & mask) >> shift;
+    const std::size_t next = index & ~mask;
+
+    // TODO skip sub copy?
+    ptr_type res = std::make_shared<node>(children);
+    if(res->children[sub]) {
+      res->children[sub] = res->children[sub]->set(next, value);
+    } else {
+      // new child node, emplace is allowed
+      res->children[sub] = std::make_shared<child_type>();
+      res->children[sub]->ref(next) = value;
+    }
+
+    return res;
+  }
+
+  friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
+    // TODO
+  }
+  
+  
+};
+
+
+template<class T, std::size_t B, std::size_t L>
+struct node<T, 0, B, L> {
+
+  static constexpr std::size_t capacity = 1 << L;
+  static constexpr std::size_t items_size = capacity;
+  
+  using items_type = std::array<items_size, T>;
+  items_type items;
+  
+  T& ref(std::size_t index) {
+    assert(index < items_size);
+    return items[index];
+  }
+
+  using ptr_type = std::shared_ptr<node>;
+  
+  ptr_type set(std::size_t index, const T& value) const {
+    ptr_type res = std::make_shared<node>();
+    
+  }
+  
+};
+
+
 template<class T, std::size_t B=7, std::size_t L=B>
 class vector {
   using chunk_type = chunk<T, B, L>;
