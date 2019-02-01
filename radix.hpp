@@ -199,90 +199,6 @@ struct chunk {
 };
 
 
-template<class T, std::size_t level, std::size_t B, std::size_t L>
-struct node {
-  static_assert(level > 0, "specialization error");
-  
-  static constexpr std::size_t children_size = 1 << B;
-
-  using ptr_type = std::shared_ptr<node>;
-  
-  using child_type = node<T, level - 1, B, L>;
-  using child_ptr_type = std::shared_ptr<child_type>;
-  
-  using children_type = std::array<children_size, child_ptr_type>;
-  children_type children;
-
-  node(const children_type& children={}): children(children) { }
-  
-  static constexpr std::size_t shift = L + B * (level - 1);
-  static constexpr std::size_t capacity = 1ul << shift;
-
-  static constexpr std::size_t mask = (children_size - 1) << shift;
-  
-  
-  T& ref(std::size_t index) {
-    assert(index < capacity);
-
-    const std::size_t sub = (index & mask) >> shift;
-    auto& c = children[sub];
-
-    if(!c) {
-      c = std::make_shared<child_type>();
-    }
-
-    const std::size_t next = index & ~mask;
-    return c->ref(next);
-  }
-
-
-  ptr_type set(std::size_t index, const T& value) const {
-    const std::size_t sub = (index & mask) >> shift;
-    const std::size_t next = index & ~mask;
-
-    // TODO skip sub copy?
-    ptr_type res = std::make_shared<node>(children);
-    if(res->children[sub]) {
-      res->children[sub] = res->children[sub]->set(next, value);
-    } else {
-      // new child node, emplace is allowed
-      res->children[sub] = std::make_shared<child_type>();
-      res->children[sub]->ref(next) = value;
-    }
-
-    return res;
-  }
-
-  friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
-    // TODO
-  }
-  
-  
-};
-
-
-template<class T, std::size_t B, std::size_t L>
-struct node<T, 0, B, L> {
-
-  static constexpr std::size_t capacity = 1 << L;
-  static constexpr std::size_t items_size = capacity;
-  
-  using items_type = std::array<items_size, T>;
-  items_type items;
-  
-  T& ref(std::size_t index) {
-    assert(index < items_size);
-    return items[index];
-  }
-
-  using ptr_type = std::shared_ptr<node>;
-  
-  ptr_type set(std::size_t index, const T& value) const {
-    ptr_type res = std::make_shared<node>();
-    
-  }
-  
-};
 
 
 template<class T, std::size_t B=7, std::size_t L=B>
@@ -369,6 +285,270 @@ public:
   
 };
 
+namespace alt {
+
+
+template<class T, std::size_t level, std::size_t B, std::size_t L>
+struct node {
+  static_assert(level > 0, "specialization error");
+  
+  static constexpr std::size_t children_size = 1ul << B;
+
+  using ptr_type = std::shared_ptr<node>;
+  
+  using child_type = node<T, level - 1, B, L>;
+  using child_ptr_type = std::shared_ptr<child_type>;
+  
+  using children_type = std::array<child_ptr_type, children_size>;
+  children_type children;
+
+  node(const children_type& children={}): children(children) { }
+  
+  static constexpr std::size_t shift = L + B * (level - 1);
+  static constexpr std::size_t capacity = 1ul << (shift + B);
+
+  static constexpr std::size_t mask = (children_size - 1ul) << shift;
+  
+  
+  T& ref(std::size_t index) {
+    assert(index < capacity);
+
+    const std::size_t sub = (index & mask) >> shift;
+    auto& c = children[sub];
+
+    if(!c) {
+      c = std::make_shared<child_type>();
+    }
+
+    const std::size_t next = index & ~mask;
+    return c->ref(next);
+  }
+
+  friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value);
+  
+  ptr_type set(std::size_t index, const T& value) const {
+    const std::size_t sub = (index & mask) >> shift;
+    const std::size_t next = index & ~mask;
+
+    // TODO skip sub copy?
+    ptr_type res = std::make_shared<node>(children);
+    if(res->children[sub]) {
+      res->children[sub] = res->children[sub]->set(next, value);
+    } else {
+      // allocating new child node, emplace
+      res->children[sub] = try_emplace(std::make_shared<child_type>(), next, value);
+    }
+
+    return res;
+  }
+
+  friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
+    assert(index < capacity);
+    assert(self.unique());
+
+    const std::size_t sub = (index & mask) >> shift;
+    const std::size_t next = index & ~mask;
+
+    auto& c = self->children[sub];
+
+    if(!c) {
+      c = std::make_shared<child_type>();
+      c->ref(next) = value;
+      return std::move(self);
+    }
+    
+    if(c.unique()) {
+      c = try_emplace(std::move(c), next, value);
+      return std::move(self);
+    }
+    
+    // cannot emplace, fallback to set
+    ptr_type res = std::make_shared<node>(self->children);
+    res->children[sub] = res->children[sub]->set(next, value);
+
+    return res;
+  }
+
+  
+};
+
+
+template<class T, std::size_t B, std::size_t L>
+struct node<T, 0, B, L> {
+
+  static constexpr std::size_t capacity = 1ul << L;
+  static constexpr std::size_t items_size = capacity;
+  
+  using items_type = std::array<T, items_size>;
+  items_type items;
+  
+  T& ref(std::size_t index) {
+    assert(index < items_size);
+    return items[index];
+  }
+
+  using ptr_type = std::shared_ptr<node>;
+  
+  ptr_type set(std::size_t index, const T& value) const {
+    assert(index < items_size);
+    ptr_type res = std::make_shared<node>();
+
+    for(std::size_t i = 0; i < items_size; ++i) {
+      res->items[i] = (i == index) ? value : items[i];
+    }
+
+    return res;
+  }
+
+  friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
+    assert(index < items_size);
+    assert(self.unique());
+    
+    self->items[index] = value;
+    return std::move(self);
+  }
+  
+};
+
+  
+  
+template<class T, std::size_t B=7, std::size_t L=B>
+class vector {
+
+  template<std::size_t level>
+  using node_type = node<T, level, B, L>;
+
+  using ptr_type = std::shared_ptr<void>;
+  ptr_type ptr;
+
+  std::size_t level;
+  std::size_t count;
+
+  template<std::size_t level>
+  std::shared_ptr<node_type<level>> root() const {
+    return std::static_pointer_cast<node_type<level>>(ptr);
+  }
+  
+  template<class Ret, class Func, class ... Args>
+  Ret visit(const Func& func, Args&& ... args) const {
+    // TODO function jump table?
+    switch(level) {
+    case 0: return func(root<0>(), std::forward<Args>(args)...);
+    case 1: return func(root<1>(), std::forward<Args>(args)...);
+    case 2: return func(root<2>(), std::forward<Args>(args)...);
+    case 3: return func(root<3>(), std::forward<Args>(args)...);
+    case 4: return func(root<4>(), std::forward<Args>(args)...);
+    case 5: return func(root<5>(), std::forward<Args>(args)...);
+    // case 6: return func(root<6>(), std::forward<Args>(args)...);
+    // case 7: return func(root<7>(), std::forward<Args>(args)...);
+    // case 8: return func(root<8>(), std::forward<Args>(args)...);
+    // case 9: return func(root<9>(), std::forward<Args>(args)...);
+    default:
+      throw std::logic_error("derp");
+    }
+  }
+
+  struct push_back_visitor {
+    template<std::size_t level>
+    vector operator()(std::shared_ptr<node_type<level>> self,
+                      std::size_t size,
+                      const T& value) const {
+      if(size == node_type<level>::capacity) {
+        auto root = std::make_shared<node_type<level + 1>>();
+        root->children[0] = std::move(self);
+        root->ref(size) = value;
+        return {root, level + 1, size + 1};
+      }
+
+      return {self->set(size, value), level, size + 1};
+    }
+      
+  };
+
+  struct push_back_emplace_visitor {
+    template<std::size_t level>
+    vector operator()(std::shared_ptr<node_type<level>> self,
+                      std::size_t size,
+                      const T& value,
+                      bool emplace) const {
+      if(size == node_type<level>::capacity) {
+        auto root = std::make_shared<node_type<level + 1>>();
+        root->children[0] = std::move(self);
+        root->ref(size) = value;
+        return {root, level + 1, size + 1};
+      }
+
+      if(emplace) {
+        return {try_emplace(std::move(self), size, value), level, size + 1};
+      } else {
+        return {self->set(size, value), level, size + 1};
+      }
+    }
+      
+  };
+
+  
+  vector(ptr_type ptr, std::size_t level, std::size_t count):
+    ptr(std::move(ptr)),
+    level(level),
+    count(count) { }
+  
+public:
+
+  std::size_t size() const { return count; }
+  
+  vector():
+    ptr(std::make_shared<node_type<0>>()),
+    level(0),
+    count(0) { };
+  
+  vector push_back(const T& value) const & {
+    return visit<vector>(push_back_visitor(), size(), value);
+  }
+
+  vector push_back(const T& value) && {
+    return visit<vector>(push_back_emplace_visitor(), size(), value, ptr.unique());
+  }
+  
+  
+  // const T& operator[](std::size_t index) const & {
+  //   assert(index < root->capacity());
+  //   assert(index < size());
+  //   return root->get(index);
+  // }
+
+  // const T& get(std::size_t index) const & {
+  //   assert(index < root->capacity());
+  //   assert(index < size());
+  //   return root->get(index);
+  // }
+  
+  // vector set(std::size_t index, const T& value) const & {
+  //   assert(index < root->capacity());
+  //   assert(index < size());
+  //   return {root->set(index, value), size()};
+  // }
+
+
+  // vector set(std::size_t index, const T& value) && {
+  //   assert(index < root->capacity());
+  //   assert(index < size());
+
+  //   root->ref(index) = value;
+    
+  //   return {std::move(root), size()};
+  // }
+  
+  
+
+  // friend std::ostream& operator<<(std::ostream& out, const vector& self) {
+  //   return out << *self.root;
+  // }
+  
+};
+
+
+}
 
 
 
