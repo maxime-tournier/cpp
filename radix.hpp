@@ -327,7 +327,7 @@ namespace alt {
       return c->ref(next);
     }
 
-    friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value);
+    friend ptr_type try_emplace(ptr_type self, std::size_t index, const T& value);
   
     ptr_type set(std::size_t index, const T& value) const {
       assert(!capacity || index < capacity);
@@ -348,7 +348,7 @@ namespace alt {
     }
 
     
-    friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
+    friend ptr_type try_emplace(ptr_type self, std::size_t index, const T& value) {
       assert(self);
       assert(!capacity || index < capacity);
       
@@ -367,12 +367,12 @@ namespace alt {
         // allocate child + set ret
         c = std::make_shared<child_type>();
         c->ref(next) = value;
-        return std::move(self);
+        return self;
       }
 
       // keep trying to emplace on child
       c = try_emplace(std::move(c), next, value);
-      return std::move(self);
+      return self;
     }
 
 
@@ -417,7 +417,7 @@ namespace alt {
       return res;
     }
 
-    friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
+    friend ptr_type try_emplace(ptr_type self, std::size_t index, const T& value) {
       assert(self);
       assert(index < items_size);
       
@@ -429,7 +429,7 @@ namespace alt {
       // ref may not have completed yet so still potential data race FIXME)
       
       self->items[index] = value;
-      return std::move(self);
+      return self;
     }
 
     template<class Func>

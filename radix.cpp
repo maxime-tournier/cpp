@@ -114,8 +114,6 @@ static T fill_sum_emplace_alt(std::size_t n) {
   return sum;
 }
 
-
-
 int main(int, char**) {
   const std::size_t n = 40000000;
   // std::clog << fill_reference<double>(n) << std::endl;      
