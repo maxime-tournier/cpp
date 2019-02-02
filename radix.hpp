@@ -457,8 +457,8 @@ namespace alt {
     std::size_t count;
 
     template<std::size_t level>
-    static std::shared_ptr<node_type<level>> cast(ptr_type&& ptr) {
-      const ptr_type local = std::move(ptr);
+    static std::shared_ptr<node_type<level>> cast(ptr_type ptr) {
+      ptr_type local = std::move(ptr);
 
       // note: this takes a const ref
       return std::static_pointer_cast<node_type<level>>(local);
@@ -488,7 +488,7 @@ namespace alt {
   
     struct push_back_visitor {
       template<std::size_t level>
-      vector operator()(std::shared_ptr<node_type<level>>&& self,
+      vector operator()(std::shared_ptr<node_type<level>> self,
                         std::size_t size,
                         const T& value) const {
         if(size == node_type<level>::capacity) {
@@ -506,7 +506,7 @@ namespace alt {
   
     struct push_back_emplace_visitor {
       template<std::size_t level>
-      vector operator()(std::shared_ptr<node_type<level>>&& self,
+      vector operator()(std::shared_ptr<node_type<level>> self,
                         std::size_t size,
                         const T& value) const {
         if(size == node_type<level>::capacity) {
