@@ -123,10 +123,10 @@ int main(int, char**) {
   // std::clog << fill_push_alt<double, 8, 8>(n) << std::endl;
   
   // std::clog << fill_emplace<double, 8, 8>(n) << std::endl;
-  // std::clog << fill_emplace_alt<double, 8, 8>(n) << std::endl;
+   std::clog << fill_emplace_alt<double, 8, 8>(n) << std::endl;
 
   // std::clog << fill_sum_reference<double>(n) << std::endl;
-  std::clog << fill_sum_emplace_alt<double, 8, 8>(n) << std::endl;  
+  // std::clog << fill_sum_emplace_alt<double, 8, 8>(n) << std::endl;  
   
   return 0;
 }

@@ -330,6 +330,8 @@ namespace alt {
     friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value);
   
     ptr_type set(std::size_t index, const T& value) const {
+      assert(!capacity || index < capacity);
+      
       const std::size_t sub = (index & mask) >> shift;
       const std::size_t next = index & ~mask;
 
@@ -345,31 +347,32 @@ namespace alt {
       return res;
     }
 
+    
     friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
+      assert(self);
       assert(!capacity || index < capacity);
-      assert(self.unique());
+      
+      if(!self.unique()) {
+        return self->set(index, value);
+      }
 
+      // at this point we're the only ref to *self (but writes to a destructed
+      // ref may not have completed yet so still potential data race :/ FIXME)
       const std::size_t sub = (index & mask) >> shift;
       const std::size_t next = index & ~mask;
 
       auto& c = self->children[sub];
 
       if(!c) {
+        // allocate child + set ret
         c = std::make_shared<child_type>();
         c->ref(next) = value;
         return std::move(self);
       }
-    
-      if(c.unique()) {
-        c = try_emplace(std::move(c), next, value);
-        return std::move(self);
-      }
-    
-      // cannot emplace, fallback to set
-      ptr_type res = std::make_shared<node>(self->children);
-      res->children[sub] = res->children[sub]->set(next, value);
 
-      return res;
+      // keep trying to emplace on child
+      c = try_emplace(std::move(c), next, value);
+      return std::move(self);
     }
 
 
@@ -383,6 +386,8 @@ namespace alt {
   
   };
 
+
+  
   // leaf nodes
   template<class T, std::size_t B, std::size_t L>
   struct node<T, 0, B, L> {
@@ -413,9 +418,16 @@ namespace alt {
     }
 
     friend ptr_type try_emplace(ptr_type&& self, std::size_t index, const T& value) {
+      assert(self);
       assert(index < items_size);
-      assert(self.unique());
-    
+      
+      if(!self.unique()) {
+        return self->set(index, value);
+      }
+
+      // at this point we're the only ref to *self (but writes to a destructed
+      // ref may not have completed yet so still potential data race FIXME)
+      
       self->items[index] = value;
       return std::move(self);
     }
@@ -445,22 +457,26 @@ namespace alt {
     std::size_t count;
 
     template<std::size_t level>
-    std::shared_ptr<node_type<level>> root() const {
-      return std::static_pointer_cast<node_type<level>>(ptr);
+    static std::shared_ptr<node_type<level>> cast(ptr_type&& ptr) {
+      const ptr_type local = std::move(ptr);
+
+      // note: this takes a const ref
+      return std::static_pointer_cast<node_type<level>>(local);
     }
 
   
     template<class Ret, class Func, class ... Args>
-    Ret visit(const Func& func, Args&& ... args) const {
+    static Ret visit(std::size_t level, ptr_type ptr,
+                     const Func& func, Args&& ... args) {
       // TODO function jump table?
       switch(level) {
-      case 0: return func(root<0>(), std::forward<Args>(args)...);
-      case 1: return func(root<1>(), std::forward<Args>(args)...);
-      case 2: return func(root<2>(), std::forward<Args>(args)...);
-      case 3: return func(root<3>(), std::forward<Args>(args)...);
-      case 4: return func(root<4>(), std::forward<Args>(args)...);
-      case 5: return func(root<5>(), std::forward<Args>(args)...);
-      case 6: return func(root<6>(), std::forward<Args>(args)...);
+      case 0: return func(cast<0>(std::move(ptr)), std::forward<Args>(args)...);
+      case 1: return func(cast<1>(std::move(ptr)), std::forward<Args>(args)...);
+      case 2: return func(cast<2>(std::move(ptr)), std::forward<Args>(args)...);
+      case 3: return func(cast<3>(std::move(ptr)), std::forward<Args>(args)...);
+      case 4: return func(cast<4>(std::move(ptr)), std::forward<Args>(args)...);
+      case 5: return func(cast<5>(std::move(ptr)), std::forward<Args>(args)...);
+      case 6: return func(cast<6>(std::move(ptr)), std::forward<Args>(args)...);
         // case 7: return func(root<7>(), std::forward<Args>(args)...);
         // case 8: return func(root<8>(), std::forward<Args>(args)...);
         // case 9: return func(root<9>(), std::forward<Args>(args)...);
@@ -472,7 +488,7 @@ namespace alt {
   
     struct push_back_visitor {
       template<std::size_t level>
-      vector operator()(std::shared_ptr<node_type<level>> self,
+      vector operator()(std::shared_ptr<node_type<level>>&& self,
                         std::size_t size,
                         const T& value) const {
         if(size == node_type<level>::capacity) {
@@ -490,22 +506,18 @@ namespace alt {
   
     struct push_back_emplace_visitor {
       template<std::size_t level>
-      vector operator()(std::shared_ptr<node_type<level>> self,
+      vector operator()(std::shared_ptr<node_type<level>>&& self,
                         std::size_t size,
-                        const T& value,
-                        bool emplace) const {
+                        const T& value) const {
         if(size == node_type<level>::capacity) {
+          // need to allocate a new level
           auto root = std::make_shared<node_type<level + 1>>();
           root->children[0] = std::move(self);
           root->ref(size) = value;
           return {root, level + 1, size + 1};
         }
 
-        if(emplace) {
-          return {try_emplace(std::move(self), size, value), level, size + 1};
-        } else {
-          return {self->set(size, value), level, size + 1};
-        }
+        return {try_emplace(std::move(self), size, value), level, size + 1};
       }
       
     };
@@ -543,22 +555,24 @@ namespace alt {
       count(0) { };
   
     vector push_back(const T& value) const & {
-      return visit<vector>(push_back_visitor(), size(), value);
+      return visit<vector>(level, ptr,
+                           push_back_visitor(), size(), value);
     }
 
     vector push_back(const T& value) && {
-      return visit<vector>(push_back_emplace_visitor(), size(), value, ptr.unique());
+      return visit<vector>(level, std::move(ptr),
+                           push_back_emplace_visitor(), size(), value);
     }
   
   
     const T& operator[](std::size_t index) const & {
       assert(index < size());
-      return visit<const T&>(get_visitor(), index);
+      return visit<const T&>(level, ptr, get_visitor(), index);
     }
 
     template<class Func>
     void iter(const Func& func) const {
-      return visit<void>(iter_visitor(), func);
+      return visit<void>(level, ptr, iter_visitor(), func);
     }
   
     // const T& get(std::size_t index) const & {
