@@ -94,14 +94,14 @@ struct chunk {
   }
 
 
-  friend chunk_ptr_type try_emplace(chunk_ptr_type&& self, std::size_t index, const T& value) {
+  friend chunk_ptr_type try_emplace(chunk_ptr_type self, std::size_t index, const T& value) {
     assert(index < self->capacity());
     assert(self.unique());
     
     if(!self->depth) {
       // TODO could move
       self->buffer()[index] = value;
-      return std::move(self);
+      return self;
     }
     
     const std::size_t sub = index >> self->shift;
@@ -116,7 +116,7 @@ struct chunk {
         c = c->set(next, value);
       }
       
-      return std::move(self);
+      return self;
     } else {
       // no chunk: need to allocate/ref
       c = std::make_shared<chunk>(self->depth - 1);
@@ -124,7 +124,7 @@ struct chunk {
       // TODO could move
       c->ref(next) = value;
       
-      return std::move(self);
+      return self;
     }
   }
 
