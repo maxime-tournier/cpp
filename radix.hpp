@@ -162,7 +162,46 @@ struct node<T, 0, B, L> {
 
 };
 
+
+template<class T, std::size_t B=7, std::size_t L=B>
+class map {
+  template<std::size_t level>
+  using node_type = node<T, level, B, L>;
+
+  using ptr_type = std::shared_ptr<void>;
+  ptr_type ptr;
+
+  std::size_t level;
+
+  template<std::size_t level>
+  static std::shared_ptr<node_type<level>> cast(ptr_type ptr) {
+    ptr_type local = std::move(ptr);
+    return std::static_pointer_cast<node_type<level>>(ptr);
+  }
+
+  template<class Ret, class Func, class ... Args>
+  static Ret visit(std::size_t level, ptr_type ptr,
+                   const Func& func, Args&& ... args) {
+    // TODO function jump table?
+    switch(level) {
+    case 0: return func(cast<0>(std::move(ptr)), std::forward<Args>(args)...);
+    case 1: return func(cast<1>(std::move(ptr)), std::forward<Args>(args)...);
+    case 2: return func(cast<2>(std::move(ptr)), std::forward<Args>(args)...);
+    case 3: return func(cast<3>(std::move(ptr)), std::forward<Args>(args)...);
+    case 4: return func(cast<4>(std::move(ptr)), std::forward<Args>(args)...);
+    case 5: return func(cast<5>(std::move(ptr)), std::forward<Args>(args)...);
+    case 6: return func(cast<6>(std::move(ptr)), std::forward<Args>(args)...);
+      // case 7: return func(root<7>(), std::forward<Args>(args)...);
+      // case 8: return func(root<8>(), std::forward<Args>(args)...);
+      // case 9: return func(root<9>(), std::forward<Args>(args)...);
+    default:
+      throw std::logic_error("derp");
+    }
+  }
   
+  
+};
+
   
 template<class T, std::size_t B=7, std::size_t L=B>
 class vector {
