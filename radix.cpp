@@ -90,10 +90,15 @@ int main(int, char**) {
   // std::clog << fill_reference<double>(n) << std::endl;      
   // std::clog << fill_push<double, 8, 8>(n) << std::endl;
   
-  std::clog << fill_emplace<double, 8, 8>(n) << std::endl;
+  // std::clog << fill_emplace<double, 8, 8>(n) << std::endl;
 
   // std::clog << fill_sum_reference<double>(n) << std::endl;
-  // std::clog << fill_sum_emplace_alt<double, 8, 8>(n) << std::endl;  
+  // std::clog << fill_sum_emplace<double, 8, 8>(n) << std::endl;
+
+
+  map<double> test;
+  test.set(10, 14);
+  std::clog << test.get(10) << std::endl;
   
   return 0;
 }
