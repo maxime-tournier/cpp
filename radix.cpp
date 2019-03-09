@@ -3,6 +3,7 @@
 #include "radix.hpp"
 
 #include <vector>
+#include <map>
 
 template<class T>
 static std::size_t fill_reference(std::size_t n) {
@@ -85,8 +86,121 @@ static T fill_sum_emplace(std::size_t n) {
   return sum;
 }
 
+
+template<class T>
+static T map_sum_ref(std::size_t n) {
+  using map = std::map<std::size_t, T>;
+
+  map m;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    m.emplace(i, i);
+  }
+
+  T sum = 0;
+  for(std::size_t i = 0; i < n; ++i) {
+    sum += m[i];
+  }
+
+  return sum;
+}
+
+
+template<class T, std::size_t B>
+static T map_sum_sparse_ref(std::size_t n) {
+  using map = std::map<std::size_t, T>;
+
+  map m;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    m.emplace(B * i, i);
+  }
+
+  T sum = 0;
+  for(std::size_t i = 0; i < n; ++i) {
+    sum += m[B * i];
+  }
+
+  return sum;
+}
+
+
+template<class T, std::size_t B>
+static T map_sum(std::size_t n) {
+
+  map<T, B> m;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    m = m.set(i, i);
+  }
+
+  T sum = 0;
+  for(std::size_t i = 0; i < n; ++i) {
+    sum += m.get(i);
+  }
+
+  return sum;
+}
+
+
+template<class T, std::size_t B>
+static T map_sum_sparse(std::size_t n) {
+
+  map<T, B> m;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    m = m.set(B * i, i);
+  }
+
+  T sum = 0;
+  for(std::size_t i = 0; i < n; ++i) {
+    sum += m.get(B * i);
+  }
+
+  return sum;
+}
+
+
+template<class T, std::size_t B>
+static T map_sum_emplace(std::size_t n) {
+
+  map<T, B> m;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    m = std::move(m).set(i, i);
+  }
+
+  T sum = 0;
+  for(std::size_t i = 0; i < n; ++i) {
+    sum += m.get(i);
+  }
+
+  return sum;
+}
+
+
+
+template<class T, std::size_t B>
+static T map_sum_sparse_emplace(std::size_t n) {
+
+  map<T, B> m;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    m = std::move(m).set(B * i, i);
+  }
+
+  T sum = 0;
+  for(std::size_t i = 0; i < n; ++i) {
+    sum += m.get(B * i);
+  }
+
+  return sum;
+}
+
+
+
 int main(int, char**) {
-  const std::size_t n = 50000000;
+  const std::size_t n = 2000000;
   // std::clog << fill_reference<double>(n) << std::endl;      
   // std::clog << fill_push<double, 8, 8>(n) << std::endl;
   
@@ -95,10 +209,13 @@ int main(int, char**) {
   // std::clog << fill_sum_reference<double>(n) << std::endl;
   // std::clog << fill_sum_emplace<double, 8, 8>(n) << std::endl;
 
+  // std::clog << map_sum_ref<double>(n) << std::endl;
+  // std::clog << map_sum<double, 8>(n) << std::endl;
+  std::clog << map_sum_emplace<double, 8>(n) << std::endl;      
 
-  map<double> test;
-  test.set(10, 14);
-  std::clog << test.get(10) << std::endl;
+  // std::clog << map_sum_sparse_ref<double, 8>(n) << std::endl;  
+  // std::clog << map_sum_sparse<double, 8>(n) << std::endl;
+  // std::clog << map_sum_sparse_emplace<double, 8>(n) << std::endl;      
   
   return 0;
 }

@@ -210,12 +210,29 @@ class map {
         auto next = std::make_shared<node_type<level + 1>>();
         next->children[0] = self;
 
-        // TODO emplace is safe here
-        return {next->set(index, value)};
+        return {try_emplace(std::move(next), index, value)};
       }
     }
   };
 
+
+  struct emplace_visitor {
+    template<std::size_t level>
+    map operator()(std::shared_ptr<node_type<level>> self,
+                   std::size_t index,
+                   const T& value) const {
+      if(index < node_type<level>::capacity) {
+        return {try_emplace(std::move(self), index, value)};
+      } else {
+        auto next = std::make_shared<node_type<level + 1>>();
+        next->children[0] = self;
+
+        return {try_emplace(std::move(next), index, value)};
+      }
+    }
+  };
+
+  
   struct get_visitor {
     template<std::size_t level>
     const T& operator()(std::shared_ptr<node_type<level>> self,
@@ -235,7 +252,7 @@ public:
   map() { }
 
   // TODO rvalue overload
-  map set(std::size_t index, const T& value) const {
+  map set(std::size_t index, const T& value) const & {
     if(!ptr) {
       auto ptr = std::make_shared<node_type<0>>();
       return map(ptr).set(index, value);
@@ -244,6 +261,16 @@ public:
     return map::visit<map>(level, ptr, set_visitor(), index, value);
   }
 
+  map set(std::size_t index, const T& value) && {
+    if(!ptr) {
+      auto ptr = std::make_shared<node_type<0>>();
+      return map(ptr).set(index, value);
+    }
+
+    return map::visit<map>(level, std::move(ptr), emplace_visitor(), index, value);
+  }
+
+  
   const T& get(std::size_t index) const {
     assert(ptr);
     return map::visit<const T&>(level, ptr, get_visitor(), index);
