@@ -28,8 +28,7 @@ struct node {
   node(const children_type& children={}): children(children) { }
   
   static constexpr std::size_t shift = L + B * (level - 1);
-  static constexpr std::size_t capacity =
-                                                      (shift + B >= 64) ? 0 : (1ul << (shift + B));
+  static constexpr std::size_t capacity = (shift + B >= 64) ? 0 : (1ul << (shift + B));
 
   static constexpr std::size_t mask = (children_size - 1ul) << shift;
   
@@ -176,7 +175,7 @@ class map {
   template<std::size_t level>
   static std::shared_ptr<node_type<level>> cast(ptr_type ptr) {
     ptr_type local = std::move(ptr);
-    return std::static_pointer_cast<node_type<level>>(ptr);
+    return std::static_pointer_cast<node_type<level>>(local);
   }
 
   template<class Ret, class Func, class ... Args>
@@ -198,7 +197,84 @@ class map {
       throw std::logic_error("derp");
     }
   }
+
+
+  struct set_visitor {
+    template<std::size_t level>
+    map operator()(std::shared_ptr<node_type<level>> self,
+                   std::size_t index,
+                   const T& value) const {
+      if(index < node_type<level>::capacity) {
+        return {self->set(index, value)};
+      } else {
+        auto next = std::make_shared<node_type<level + 1>>();
+        next->children[0] = self;
+
+        return {try_emplace(std::move(next), index, value)};
+      }
+    }
+  };
+
+
+  struct emplace_visitor {
+    template<std::size_t level>
+    map operator()(std::shared_ptr<node_type<level>> self,
+                   std::size_t index,
+                   const T& value) const {
+      if(index < node_type<level>::capacity) {
+        return {try_emplace(std::move(self), index, value)};
+      } else {
+        auto next = std::make_shared<node_type<level + 1>>();
+        next->children[0] = self;
+
+        return {try_emplace(std::move(next), index, value)};
+      }
+    }
+  };
+
   
+  struct get_visitor {
+    template<std::size_t level>
+    const T& operator()(std::shared_ptr<node_type<level>> self,
+                        std::size_t index) const {
+      assert(index < node_type<level>::capacity);
+      return self->ref(index);
+    }
+
+  };
+  
+
+  template<std::size_t level>
+  map(std::shared_ptr<node_type<level>> ptr): ptr(ptr), level(level) { }
+  
+public:
+
+  map() { }
+
+  // TODO rvalue overload
+  map set(std::size_t index, const T& value) const & {
+    if(!ptr) {
+      auto ptr = std::make_shared<node_type<0>>();
+      return map(ptr).set(index, value);
+    }
+
+    return map::visit<map>(level, ptr, set_visitor(), index, value);
+  }
+
+  map set(std::size_t index, const T& value) && {
+    if(!ptr) {
+      auto ptr = std::make_shared<node_type<0>>();
+      return map(ptr).set(index, value);
+    }
+
+    return map::visit<map>(level, std::move(ptr), emplace_visitor(), index, value);
+  }
+
+  
+  const T& get(std::size_t index) const {
+    assert(ptr);
+    return map::visit<const T&>(level, ptr, get_visitor(), index);
+  }
   
 };
 
