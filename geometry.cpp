@@ -1,6 +1,8 @@
 // -*- compile-command: "c++ -std=c++14 -o geometry geometry.cpp `pkg-config --cflags eigen3` -lstdc++" -*-
 
-#include "geometry.hpp"
+#include "group.hpp"
+#include "diff.hpp"
+
 
 int main(int, char**) {
   quat q1, q2;
@@ -8,7 +10,7 @@ int main(int, char**) {
   group<quat> SO3;
   group<vec3> R3;
 
-  R3.id();
+  group<vec2> R2;
   
   return 0;
 }
