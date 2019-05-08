@@ -7,7 +7,6 @@
 
 #include <iostream>
 
-
 // inner nodes
 template<class T, std::size_t level, std::size_t B, std::size_t L>
 struct node {

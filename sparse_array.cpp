@@ -4,6 +4,8 @@
 
 
 int main(int, char**) {
+  using namespace sparse;
+  
   using type = double;
 
   auto d = std::make_shared<derived<type>>();
