@@ -36,7 +36,6 @@ private:
     return table[size](this, func, std::forward<Args>(args)...);
   }
 
-
   static constexpr std::size_t default_size = 32;
 
 public:
@@ -69,7 +68,6 @@ public:
   
     return res;
   }
-  
   
 };
 
