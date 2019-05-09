@@ -40,7 +40,7 @@ struct node: base {
   
   
   template<class Func>
-  auto split(std::size_t index, const Func& func) {
+  static auto split(std::size_t index, const Func& func) {
     const std::size_t sub = index >> shift;
     const std::size_t rest = index & mask;
     return func(sub, rest);

@@ -31,7 +31,7 @@ namespace sparse {
     std::size_t size() const { return __builtin_popcount(mask); }
   
     std::size_t sparse_index(std::size_t index) const {
-      return __builtin_popcount(mask & (1 << (index + 1) - 1));
+      return __builtin_popcount(mask & ((1 << (index + 1)) - 1));
     }
 
     bool contains(std::size_t index) const { return mask & (1 << index); }
