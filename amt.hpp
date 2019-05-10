@@ -4,7 +4,7 @@
 #include "sparse_array.hpp"
 
 struct base {
-  const std::shared_ptr<void> storage;
+  std::shared_ptr<void> storage;
 
   template<class T>
   base(std::shared_ptr<T> storage): storage(std::move(storage)) { }
@@ -29,7 +29,7 @@ struct node: base {
   
   const children_type* children() const { return reinterpret_cast<const children_type*>(storage.get()); };
 
-  static children_type make_children(std::size_t index, const T& value) {
+  static std::shared_ptr<children_type> make_children(std::size_t index, const T& value) {
     return split(index, [&](std::size_t sub, std::size_t rest) {
       return std::make_shared<single_type>(1ul << sub, child_node(rest, value));
     });
@@ -37,6 +37,8 @@ struct node: base {
   
   node(std::size_t index, const T& value):
     base(make_children(index, value)) { }
+
+  node(std::shared_ptr<children_type> children={}): base(std::move(children)) {} 
   
   
   template<class Func>
@@ -47,14 +49,14 @@ struct node: base {
   }
   
   const T& get(std::size_t index) const {
-    return split([&](std::size_t sub, std::size_t rest) {
+    return split(index, [&](std::size_t sub, std::size_t rest) {
       assert(children()->contains(sub));
       return children()->get(sub).get(rest);
     });
   }
 
   node set(std::size_t index, const T& value) const {
-    return split([&](std::size_t sub, std::size_t rest) {
+    return split(index, [&](std::size_t sub, std::size_t rest) -> node {
       if(children()->contains(sub)) {
         return children()->set(sub, children()->get(sub).set(rest, value));
       } else {
@@ -63,7 +65,10 @@ struct node: base {
     });
   }
 
-  node<T, level + 1, B, L> raise() const { return {0, *this}; }  
+  using raise_type = node<T, level + 1, B, L>;
+  raise_type raise() const {
+    return children() ? raise_type{0, *this} : raise_type{};
+  }  
 };
 
 
@@ -80,7 +85,7 @@ struct node<T, 0, B, L>: base {
   node(std::size_t index, const T& value):
     base(std::make_shared<single_type>(1ul << index, value)) { }
 
-  node(children_type children): base(std::move(children)) { }
+  node(std::shared_ptr<children_type> children={}): base(std::move(children)) { }
   
   const T& get(std::size_t index) const {
     assert(index < children_size);
@@ -90,10 +95,9 @@ struct node<T, 0, B, L>: base {
 
   node set(std::size_t index, const T& value) const {
     assert(index < children_size);
-    return children()->set(index, value);
+    return {children()->set(index, value)};
   }
 
-  node<T, 1, B, L> raise() const { return {0, *this}; }
 };
 
 
@@ -130,19 +134,17 @@ public:
   }
 
   array set(std::size_t index, const T& value) const {
-    // return visit<array>(std::make_index_sequence<max_level>{}, [&](const auto& self) {
-    //   using node_type = decltype(self);
+    return visit<array>(std::make_index_sequence<max_level>{}, [&](const auto& self) {
+      using node_type = typename std::decay<decltype(self)>::type;
 
-    //   if(data.storage) {
-    //     if(index > node_type::capacity) {
-    //       return array(level + 1, self.raise()).set(index, value);
-    //     } else {
-    //       return array(level, self.set(index, value));
-    //     }
-    //   } else {
-    //     return array(level, 
-    //   }
-    // });
+      if(index > node_type::capacity) {
+        throw std::runtime_error("derp");
+      } else if(self.children()) {
+        return array(level, self.set(index, value));
+      } else {
+        return array(level, node_type(index, value));
+      }
+    });
   }
   
   
