@@ -1,4 +1,4 @@
-// -*- compile-command: "CXXFLAGS=-std=c++14 make amt2" -*-
+// -*- compile-command: "CXX=clang++-8 CXXFLAGS='-std=c++14 -fsanitize=address -g'  make amt2" -*-
 
 #ifndef AMT_HPP
 #define AMT_HPP
@@ -27,6 +27,7 @@ struct node {
   
   using child_node = node<T, level - 1, B, L>;
   using children_type = sparse::base<child_node>;
+
   sparse::ref<children_type> children;
 
   using single_type = sparse::derived<child_node, 1>;
@@ -46,6 +47,7 @@ struct node {
     const std::size_t sub = index >> shift;
     const std::size_t rest = index & mask;
 
+    assert(children->contains(sub));
     return children->get(sub).get(rest);
   }
 
@@ -120,7 +122,7 @@ public:
 #include <iostream>
 
 int main(int, char**) {
-  array<double, 8, 8> bob;
+  array<double, 4, 4> bob;
   bob = bob.set(0, 1.0);
   
   std::clog << bob.get(0) << std::endl;

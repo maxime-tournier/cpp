@@ -12,14 +12,20 @@ namespace sparse {
 
   template<class T>
   using ref = std::shared_ptr<T>;
+  
 
-  template<class ... Cases>
-  struct overload: Cases... {
-    using Cases::operator()...;
-    overload(Cases...cases): Cases(cases)... { }
-  };
-
-
+  template<class Ret, class T, std::size_t ... Ms, class Func>
+  static Ret visit(std::index_sequence<Ms...>, const base<T>& self, const Func& func) {
+    using thunk_type = Ret (*) (const base<T>&, const Func&);
+    
+    static const thunk_type table[] = {[](const base<T>& self, const Func& func) -> Ret {
+      return func(static_cast<const derived<T, Ms>&>(self));
+    }...};
+      
+    return table[self.size()](self, func);
+  }
+  
+  
   template<class T>
   struct base {
     const std::size_t mask;
@@ -41,34 +47,12 @@ namespace sparse {
       return data[sparse_index(index)];
     }
   
-  protected:
-    template<class Ret, std::size_t ... M, class Func>
-    Ret visit(std::index_sequence<M...>, const Func& func) const {
-      using thunk_type = Ret (*) (const base&, const Func&);
-    
-      static const thunk_type table[] = {
-        [](const base& self, const Func& func) -> Ret {
-          return func(static_cast<const derived<T, M>&>(self));
-        }...};
-      
-      return table[size()](*this, func);
-    }
-
-    static constexpr std::size_t default_size = sizeof(std::size_t) * 8;
-  
   public:
-  
-    template<class Ret, std::size_t M=default_size, class ... Cases>
-    Ret match(const Cases&... cases) const {
-      return visit<Ret>(std::make_index_sequence<M>{}, overload<Cases...>(cases...));
-    }
-
-    template<std::size_t M=default_size>
+    template<std::size_t M>
     ref<base> set(std::size_t index, const T& value) const {
-      return match<ref<base>>([&](const auto& self) -> ref<base> {
+      return visit<ref<base>>(std::make_index_sequence<M>{}, *this, [&](const auto& self) {
         using self_type = typename std::decay<decltype(self)>::type;
-        return self.set(index, value,
-                        std::make_index_sequence<self_type::static_size>{});
+        return self.set(index, value, std::make_index_sequence<self_type::static_size>{});
       });
     }
   
@@ -90,7 +74,6 @@ namespace sparse {
     template<std::size_t ... Ms>
     ref<base<T>> set(std::size_t index, const T& value,
                      std::index_sequence<Ms...>) const {
-      assert(index < base<T>::default_size);
       if(this->mask & (1 << index)) {
         auto res = std::make_shared<derived<T, N>>(this->mask, storage[Ms]...);
         res->storage[this->sparse_index(index)] = value;
