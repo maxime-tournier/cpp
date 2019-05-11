@@ -27,9 +27,12 @@ struct node: base {
   static constexpr std::size_t shift = L + B * (level - 1);
   static constexpr std::size_t mask = (1ul << (shift + 1)) - 1;
   
-  const children_type* children() const { return reinterpret_cast<const children_type*>(storage.get()); };
+  const children_type* children() const {
+    return reinterpret_cast<const children_type*>(storage.get());
+  };
 
-  static std::shared_ptr<children_type> make_children(std::size_t index, const T& value) {
+  static std::shared_ptr<children_type> make_children(std::size_t index,
+                                                      const T& value) {
     return split(index, [&](std::size_t sub, std::size_t rest) {
       return std::make_shared<single_type>(1ul << sub, child_node(rest, value));
     });
@@ -68,7 +71,8 @@ struct node: base {
   using raise_type = node<T, level + 1, B, L>;
   raise_type raise() const {
     return children() ? raise_type{0, *this} : raise_type{};
-  }  
+  }
+  
 };
 
 
@@ -80,7 +84,9 @@ struct node<T, 0, B, L>: base {
   static constexpr std::size_t children_size = 1ul << L;
   static constexpr std::size_t capacity = children_size;
   
-  const children_type* children() const { return reinterpret_cast<const children_type*>(storage.get()); };
+  const children_type* children() const {
+    return reinterpret_cast<const children_type*>(storage.get());
+  };
   
   node(std::size_t index, const T& value):
     base(std::make_shared<single_type>(1ul << index, value)) { }
@@ -104,8 +110,8 @@ struct node<T, 0, B, L>: base {
 
 template<class T, std::size_t B, std::size_t L>
 class array {
-  const std::size_t level;
-  const base data;
+  std::size_t level;
+  base data;
   
   // TODO compute from B, L
   static constexpr std::size_t max_level = 8;
@@ -113,10 +119,11 @@ class array {
   template<class Ret, std::size_t ... Ms, class Func>
   Ret visit(std::index_sequence<Ms...>, const Func& func) const {
     using thunk_type = Ret (*)(const base&, const Func& func);
-    static const thunk_type table[] = {[](const base& data, const Func& func) -> Ret {
-      return func(static_cast<const node<T, Ms, B, L>&>(data));
-    }...};
-
+    static const thunk_type table[] = {
+      [](const base& data, const Func& func) -> Ret {
+        return func(static_cast<const node<T, Ms, B, L>&>(data));
+      }...};
+    
     return table[level](data, func);
   }
 
@@ -125,12 +132,13 @@ class array {
 public:
 
   array(): level(0) { }
-
+    
   const T& get(std::size_t index) const {
     assert(data.storage);
-    return visit<const T&>(std::make_index_sequence<max_level>{}, [&](const auto& self) {
-      return self.get(index);
-    });
+    return visit<const T&>(std::make_index_sequence<max_level>{},
+                           [&](const auto& self) -> const T& {
+                             return self.get(index);
+                           });
   }
 
   array set(std::size_t index, const T& value) const {
