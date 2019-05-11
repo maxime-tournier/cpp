@@ -58,6 +58,7 @@ struct node {
     const std::size_t rest = index & mask;
 
     if(children->contains(sub)) {
+      // TODO recursive call to set chokes compiler
       return children->template set<max_size>(sub, children->get(sub).set(rest, value));
     } else {
       return children->template add<max_size>(sub, child_node(rest, value));
