@@ -4,6 +4,7 @@
 #define AMT_HPP
 
 #include "sparse_array.hpp"
+
 #include <array>
 #include <utility>
 
@@ -37,7 +38,8 @@ struct node {
     return std::make_shared<single_type>(1ul << sub, child_node(rest, value));
   }
   
-  node(std::size_t index, const T& value): children(make_single(index, value)) { }
+  node(std::size_t index, const T& value):
+    children(make_single(index, value)) { }
   
   node(sparse::ref<children_type> children):
     children(std::move(children)) { }
@@ -55,9 +57,11 @@ struct node {
     const std::size_t sub = index >> shift;
     const std::size_t rest = index & mask;
 
-    return children->template set<max_size>(sub, children->contains(sub) ?
-                                            children->get(sub).set(rest, value) :
-                                            child_node(rest, value));
+    if(children->contains(sub)) {
+      return children->template set<max_size>(sub, children->get(sub).set(rest, value));
+    } else {
+      return children->template add<max_size>(sub, child_node(rest, value));
+    }
   }
   
 };
@@ -66,22 +70,28 @@ struct node {
 template<class T, std::size_t B, std::size_t L>
 struct node<T, 0, B, L> {
   static constexpr std::size_t max_size = 1ul << L;
-  
+   
   using children_type = sparse::base<T>;
   sparse::ref<children_type> children;
 
   using single_type = sparse::derived<T, 1>;
   node(std::size_t index, const T& value):
-    children(std::make_shared<single_type>(1ul << index, value)) { }
+    children(std::make_shared<single_type>(1ul << index, value)) {
+   }
 
-  node(sparse::ref<children_type> children): children(std::move(children)) { }
+  node(sparse::ref<children_type> children):
+    children(std::move(children)) { }
   
   const T& get(std::size_t index) const {
     return children->get(index);
   }
 
   node set(std::size_t index, const T& value) const {
-    return {children->template set<max_size>(index, value)};
+    if(children->contains(index)) {
+      return {children->template set<max_size>(index, value)};
+    } else {
+      return {children->template add<max_size>(index, value)};
+    }
   }
   
 };
@@ -123,9 +133,18 @@ public:
 
 int main(int, char**) {
   array<double, 4, 4> bob;
-  bob = bob.set(0, 1.0);
+
+  for(std::size_t i = 0; i < 64; ++i) {
+    bob = bob.set(i, 2 * i);
+  }
+
+  bob = bob.set(1ul << 61, 14.0);
   
-  std::clog << bob.get(0) << std::endl;
+  std::clog << bob.get(4) << std::endl;
+  std::clog << bob.get(8) << std::endl;
+  std::clog << bob.get(1ul << 61) << std::endl;
+  
   
   return 0;
 }
+

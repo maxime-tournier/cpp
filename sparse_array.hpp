@@ -5,6 +5,8 @@
 #include <cassert>
 #include <iostream>
 
+#include <bitset>               // debug
+
 namespace sparse {
   
   template<class T> struct base;
@@ -24,6 +26,12 @@ namespace sparse {
       
     return table[self.size()](self, func);
   }
+
+  
+  static std::size_t sparse_index(std::size_t mask, std::size_t index) {
+    const std::size_t res = __builtin_popcount(mask & ((1ul << index) - 1));      
+    return res;
+  }
   
   
   template<class T>
@@ -36,15 +44,11 @@ namespace sparse {
 
     std::size_t size() const { return __builtin_popcount(mask); }
   
-    std::size_t sparse_index(std::size_t index) const {
-      return __builtin_popcount(mask & ((1 << (index + 1)) - 1));
-    }
-
-    bool contains(std::size_t index) const { return mask & (1 << index); }
+    bool contains(std::size_t index) const { return mask & (1ul << index); }
   
     const T& get(std::size_t index) const {
       assert(contains(index));
-      return data[sparse_index(index)];
+      return data[sparse_index(mask, index)];
     }
   
   public:
@@ -55,14 +59,23 @@ namespace sparse {
         return self.set(index, value, std::make_index_sequence<self_type::static_size>{});
       });
     }
-  
+
+    template<std::size_t M>
+    ref<base> add(std::size_t index, const T& value) const {
+      return visit<ref<base>>(std::make_index_sequence<M>{}, *this, [&](const auto& self) {
+        using self_type = typename std::decay<decltype(self)>::type;
+        return self.add(index, value, std::make_index_sequence<self_type::static_size + 1>{});
+      });
+    }
+
+    
   };
 
 
   template<class T, std::size_t N>
   struct derived: base<T> {
     static constexpr std::size_t static_size = N;
-    T storage[N];
+    const std::array<T, N> storage;
   
     template<class...Args>
     derived(std::size_t mask, Args&&...args):
@@ -70,20 +83,25 @@ namespace sparse {
       storage{std::forward<Args>(args)...} {
         assert(__builtin_popcount(mask) == N);
       }
-  
+
     template<std::size_t ... Ms>
     ref<base<T>> set(std::size_t index, const T& value,
                      std::index_sequence<Ms...>) const {
-      if(this->mask & (1 << index)) {
-        auto res = std::make_shared<derived<T, N>>(this->mask, storage[Ms]...);
-        res->storage[this->sparse_index(index)] = value;
-        return res;
-      } else {
-        auto res = std::make_shared<derived<T, N + 1>>(this->mask | (1 << index),
-                                                       storage[Ms]..., value);
-        std::swap(res->storage[this->sparse_index(index)], res->storage[N]);
-        return res;
-      }
+      assert(this->mask & (1ul << index));
+      const std::size_t sparse = sparse_index(this->mask, index);
+      return std::make_shared<derived>(this->mask, (Ms == sparse ? value : storage[Ms])...);
+    }
+    
+
+    template<std::size_t ... Ms>
+    ref<base<T>> add(std::size_t index, const T& value,
+                     std::index_sequence<Ms...>) const {
+      assert(!(this->mask & (1ul << index)));
+      const std::size_t new_mask = this->mask | (1 << index);
+      const std::size_t sparse = sparse_index(new_mask, index);
+      return std::make_shared<derived<T, N + 1>>(new_mask,
+                                                 (Ms < sparse ? storage[Ms] :
+                                                  Ms == sparse ? value : storage[Ms - 1])...);
     }
 
   };
