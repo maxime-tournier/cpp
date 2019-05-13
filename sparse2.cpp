@@ -28,21 +28,77 @@ struct array {
     
     block(const block&) = delete;
 
-    template<class Iterator>
-    block(std::size_t mask, T** data, Iterator first, Iterator last):
+    // add element
+    block(T** data, std::size_t mask, const T* source, const T* last,
+          std::size_t index, const T& value,
+          bool insert):
       mask(mask), data(*data) {
-      T* ptr = this->data;
-      for(Iterator it = first; it != last; ++it, ++ptr) {
-        new ((void*)ptr) T(*it);
+      
+      T* ptr = *data;
+      for(std::size_t i = 0, n = sparse_index(mask, index); i < n; ++i) {
+        new (ptr++) T(*source++);
+      }
+
+      // init value at correct index
+      new (ptr++) T(value);
+      if(!insert) ++source;     // skip source value if not inserting
+
+      while(source != last) {
+        new (ptr++) T(*source++);
       }
     }
 
+    // single element
+    block(T** data, std::size_t index, const T& value):
+      mask(1ul << index),
+      data(*data) {
+      new(*data) T(value);
+    }
+    
     ~block() {
       for(const T& it: *this) { it.~T(); }
     }
   };
 
   std::shared_ptr<block> blk;
+
+  template<class ... Args>
+  static std::shared_ptr<block> make_block(std::size_t size, Args&& ... args) {
+    T* data;
+    allocator<block> alloc{size, &data};
+    return std::allocate_shared<block>(alloc, &data, std::forward<Args>(args)...);
+  }
+
+  array() { }
+  array(std::shared_ptr<block> blk): blk(blk) { }
+  
+  const T& get(std::size_t index) const {
+    return blk->data[sparse_index(blk->mask, index)];
+  }
+
+  std::size_t size() const {
+    if(!blk) return 0;
+    return sparse_size(blk->mask);
+  }
+
+  bool contains(std::size_t index) const {
+    if(!blk) return false;
+    return blk->mask & 1ul << index;
+  }
+
+  array set(std::size_t index, const T& value) const {
+    if(!blk) {
+      return make_block(1, index, value);
+    }
+
+    const std::size_t bit = 1ul << index;
+    const bool insert = !(blk->mask & bit);
+    const std::size_t s = insert ? size() + 1 : size();
+    return make_block(s, blk->mask | bit, blk->begin(), blk->end(), index, value, insert);
+  }
+  
+  
+private:
 
   template<class V>
   struct allocator {
@@ -79,29 +135,17 @@ struct array {
     }
     
   };
-
-
-  template<class Iterator>
-  static std::shared_ptr<block> make_block(std::size_t mask, Iterator first, Iterator last) {
-    const std::size_t size = last - first;
-    T* data;
-    allocator<block> alloc{size, &data};
-    std::shared_ptr<block> res = std::allocate_shared<block>(alloc, size, &data, first, last);
-    return res;
-  }
-
   
-  template<class Iterator>
-  array(std::size_t mask, Iterator first, Iterator last):
-    blk(make_block(mask, first, last)) { }
 };
 
 
 int main() {
 
-  double values[] = {2, 4};
-  array<double> test(3, std::begin(values), std::end(values));
-  std::clog << test.blk->data[0] << std::endl;
-  std::clog << test.blk->data[1] << std::endl;
+  array<double> test;
+  test = test.set(0, 2.0);
+  test = test.set(10, 4.0);  
+  std::clog << test.get(0) << std::endl;
+  std::clog << test.get(10) << std::endl;
+  std::clog << test.size() << std::endl;
   return 0;
 }
