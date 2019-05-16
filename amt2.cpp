@@ -3,7 +3,8 @@
 #ifndef AMT_HPP
 #define AMT_HPP
 
-#include "sparse_array.hpp"
+// #include "sparse_array.hpp"
+#include "sparse2.hpp"
 
 #include <array>
 #include <utility>
@@ -27,21 +28,21 @@ struct node {
   static constexpr std::size_t mask = (1ul << (shift + 1)) - 1;
   
   using child_node = node<T, level - 1, B, L>;
-  using children_type = sparse::base<child_node>;
+  using children_type = sparse::array<child_node>;
 
-  sparse::ref<children_type> children;
+  children_type children;
 
-  using single_type = sparse::derived<child_node, 1>;
-  static sparse::ref<children_type> make_single(std::size_t index, const T& value) {
+  static children_type make_single(std::size_t index, const T& value) {
     const std::size_t sub = index >> shift;
     const std::size_t rest = index & mask;
-    return std::make_shared<single_type>(1ul << sub, child_node(rest, value));
+
+    return children_type().set(sub, child_node(rest, value));
   }
   
   node(std::size_t index, const T& value):
     children(make_single(index, value)) { }
   
-  node(sparse::ref<children_type> children):
+  node(children_type children):
     children(std::move(children)) { }
   
   
@@ -49,19 +50,19 @@ struct node {
     const std::size_t sub = index >> shift;
     const std::size_t rest = index & mask;
 
-    assert(children->contains(sub));
-    return children->get(sub).get(rest);
+    assert(children.contains(sub));
+    return children.get(sub).get(rest);
   }
 
   node set(std::size_t index, const T& value) const {
     const std::size_t sub = index >> shift;
     const std::size_t rest = index & mask;
 
-    if(children->contains(sub)) {
+    if(children.contains(sub)) {
       // TODO recursive call to set chokes compiler
-      return children->template set<max_size>(sub, children->get(sub).set(rest, value));
+      return children.set(sub, children.get(sub).set(rest, value));
     } else {
-      return children->template add<max_size>(sub, child_node(rest, value));
+      return children.set(sub, child_node(rest, value));
     }
   }
   
@@ -72,27 +73,22 @@ template<class T, std::size_t B, std::size_t L>
 struct node<T, 0, B, L> {
   static constexpr std::size_t max_size = 1ul << L;
    
-  using children_type = sparse::base<T>;
-  sparse::ref<children_type> children;
+  using children_type = sparse::array<T>;
+  children_type children;
 
-  using single_type = sparse::derived<T, 1>;
   node(std::size_t index, const T& value):
-    children(std::make_shared<single_type>(1ul << index, value)) {
-   }
-
-  node(sparse::ref<children_type> children):
+    children(children_type().set(1ul << index, value)) { 
+  }
+  
+  node(children_type children):
     children(std::move(children)) { }
   
   const T& get(std::size_t index) const {
-    return children->get(index);
+    return children.get(index);
   }
 
   node set(std::size_t index, const T& value) const {
-    if(children->contains(index)) {
-      return {children->template set<max_size>(index, value)};
-    } else {
-      return {children->template add<max_size>(index, value)};
-    }
+    return children.set(index, value);
   }
   
 };
@@ -116,11 +112,7 @@ public:
   
   array set(std::size_t index, const T& value) const {
     // TODO branch prediction should work here
-    if(root.children) {
-      return root.set(index, value);
-    }
-
-    return root_type(index, value);
+    return root.set(index, value);
   }
   
 };
