@@ -80,6 +80,10 @@ struct array {
     return blk->data[sparse_index(blk->mask, index)];
   }
 
+  T& get(std::size_t index) {
+    return blk->data[sparse_index(blk->mask, index)];
+  }
+  
   std::size_t size() const {
     if(!blk) return 0;
     return sparse_size(blk->mask);

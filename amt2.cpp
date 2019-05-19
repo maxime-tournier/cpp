@@ -1,4 +1,4 @@
-// -*- compile-command: "CXX=clang++-8 CXXFLAGS='-std=c++14 -fsanitize=address -g'  make amt2" -*-
+// -*- compile-command: "CXX=clang++-8 CXXFLAGS='-std=c++14 -O3'  make amt2" -*-
 
 #ifndef AMT_HPP
 #define AMT_HPP
@@ -65,6 +65,20 @@ struct node {
       return children.set(sub, child_node(rest, value));
     }
   }
+
+
+  node emplace(std::size_t index, const T& value) {
+    const std::size_t sub = index >> shift;
+    const std::size_t rest = index & mask;
+
+    if(children.contains(sub)) {
+      auto& child = children.get(sub);
+      child = child.emplace(rest, value);
+      return children;
+    }
+    
+    return children.set(sub, child_node(rest, value));
+  }
   
 };
 
@@ -90,6 +104,15 @@ struct node<T, 0, B, L> {
   node set(std::size_t index, const T& value) const {
     return children.set(index, value);
   }
+
+  node emplace(std::size_t index, const T& value) {
+    if(children.contains(index)) {
+      children.get(index) = value;
+      return children;
+    }
+
+    return children.set(index, value);
+  }
   
 };
 
@@ -110,10 +133,14 @@ public:
     return root.get(index);
   }
   
-  array set(std::size_t index, const T& value) const {
-    // TODO branch prediction should work here
+  array set(std::size_t index, const T& value) const& {
     return root.set(index, value);
   }
+
+  array set(std::size_t index, const T& value) && {
+    return root.emplace(index, value);
+  }
+
   
 };
 
@@ -123,20 +150,59 @@ public:
 
 
 #include <iostream>
+#include <vector>
+#include "timer.hpp"
 
-int main(int, char**) {
-  array<double, 4, 4> bob;
 
-  for(std::size_t i = 0; i < 64; ++i) {
-    bob = bob.set(i, 2 * i);
+template<std::size_t B, std::size_t L>
+static double fill_amt(std::size_t n) {
+  array<double, 4, 4> res;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    res = res.set(i, i);
   }
 
-  bob = bob.set(1ul << 61, 14.0);
+  return n;
+}
+
+
+template<std::size_t B, std::size_t L>
+static double fill_amt_emplace(std::size_t n) {
+  array<double, 4, 4> res;
+
+  for(std::size_t i = 0; i < n; ++i) {
+    res = std::move(res).set(i, i);
+  }
+
+  return n;
+}
+
+
+static double fill_vector(std::size_t n) {
+  std::vector<double> res;
   
-  std::clog << bob.get(4) << std::endl;
-  std::clog << bob.get(8) << std::endl;
-  std::clog << bob.get(1ul << 61) << std::endl;
+  for(std::size_t i = 0; i < n; ++i) {
+    res.emplace_back(i);
+  }
   
+  return res.size();  
+}
+
+
+
+
+
+int main(int, char**) {
+
+  std::size_t n = 1000000;
+  
+  static constexpr std::size_t B = 8;
+  static constexpr std::size_t L = 8;
+  timer t;
+  
+  std::clog << "amt: " << (t.restart(), fill_amt<B, L>(n), t.restart()) << std::endl;
+  std::clog << "amt emplace: " << (t.restart(), fill_amt_emplace<B, L>(n), t.restart()) << std::endl;  
+  std::clog << "std::vector: " << (t.restart(), fill_vector(n), t.restart()) << std::endl;  
   
   return 0;
 }
