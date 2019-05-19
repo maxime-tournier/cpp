@@ -74,7 +74,13 @@ struct array {
   }
 
   array() { }
-  array(std::shared_ptr<block> blk): blk(blk) { }
+  array(std::shared_ptr<block> blk): blk(std::move(blk)) { }
+
+  // array(array&&) = default;
+  // array(const array&) = default;
+
+  // array& operator=(const array&) = default;
+  // array& operator=(array&&) = default;    
   
   const T& get(std::size_t index) const {
     return blk->data[sparse_index(blk->mask, index)];

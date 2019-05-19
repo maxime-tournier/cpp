@@ -1,4 +1,4 @@
-// -*- compile-command: "CXX=clang++-8 CXXFLAGS='-std=c++14 -O3'  make amt2" -*-
+// -*- compile-command: "CXX=clang++-8 CXXFLAGS='-std=c++14 -O3 -g -fno-omit-frame-pointer'  make amt2" -*-
 
 #ifndef AMT_HPP
 #define AMT_HPP
@@ -74,7 +74,7 @@ struct node {
     if(children.contains(sub)) {
       auto& child = children.get(sub);
       child = child.emplace(rest, value);
-      return children;
+      return std::move(children);
     }
     
     return children.set(sub, child_node(rest, value));
@@ -96,6 +96,13 @@ struct node<T, 0, B, L> {
   
   node(children_type children):
     children(std::move(children)) { }
+
+  node(node&&) = default;
+  node(const node&) = default;  
+
+  node& operator=(node&&) = default;
+  node& operator=(const node&) = default;  
+
   
   const T& get(std::size_t index) const {
     return children.get(index);
@@ -127,7 +134,7 @@ class array {
   root_type root;
 
 public:
-  array(root_type root={{}}): root(root) { }
+  array(root_type root={{}}): root(std::move(root)) { }
   
   const T& get(std::size_t index) const {
     return root.get(index);
@@ -156,25 +163,25 @@ public:
 
 template<std::size_t B, std::size_t L>
 static double fill_amt(std::size_t n) {
-  array<double, 4, 4> res;
+  array<double, B, L> res;
 
   for(std::size_t i = 0; i < n; ++i) {
     res = res.set(i, i);
   }
 
-  return n;
+  return res.get(0);
 }
 
 
 template<std::size_t B, std::size_t L>
 static double fill_amt_emplace(std::size_t n) {
-  array<double, 4, 4> res;
+  array<double, B, L> res;
 
   for(std::size_t i = 0; i < n; ++i) {
     res = std::move(res).set(i, i);
   }
 
-  return n;
+  return res.get(0);
 }
 
 
@@ -185,7 +192,7 @@ static double fill_vector(std::size_t n) {
     res.emplace_back(i);
   }
   
-  return res.size();  
+  return res[0];
 }
 
 
@@ -200,7 +207,7 @@ int main(int, char**) {
   static constexpr std::size_t L = 8;
   timer t;
   
-  std::clog << "amt: " << (t.restart(), fill_amt<B, L>(n), t.restart()) << std::endl;
+  // std::clog << "amt: " << (t.restart(), fill_amt<B, L>(n), t.restart()) << std::endl;
   std::clog << "amt emplace: " << (t.restart(), fill_amt_emplace<B, L>(n), t.restart()) << std::endl;  
   std::clog << "std::vector: " << (t.restart(), fill_vector(n), t.restart()) << std::endl;  
   
