@@ -1,4 +1,4 @@
-// -*- compile-command: "CXX=clang++-8 CXXFLAGS='-std=c++14 -O3 -g -fno-omit-frame-pointer'  make amt2" -*-
+// -*- compile-command: "CXX=clang++ CXXFLAGS='-std=c++14 -O3 -g'  make amt2" -*-
 
 #ifndef AMT_HPP
 #define AMT_HPP
@@ -226,15 +226,15 @@ static double fill_unordered_map(std::size_t n) {
 
 int main(int, char**) {
 
-  std::size_t n = 5000000;
+  std::size_t n = 1000000;
   
   static constexpr std::size_t B = 12;
   static constexpr std::size_t L = 16;
   timer t;
   
-  // std::clog << "amt: " << (t.restart(), fill_amt<B, L>(n), t.restart()) << std::endl;
-  // std::clog << "std::map: " << (t.restart(), fill_map(n), t.restart()) << std::endl;
-  // std::clog << "std::unordered_map: " << (t.restart(), fill_unordered_map(n), t.restart()) << std::endl;      
+  std::clog << "amt: " << (t.restart(), fill_amt<B, L>(n), t.restart()) << std::endl;
+  std::clog << "std::map: " << (t.restart(), fill_map(n), t.restart()) << std::endl;
+  std::clog << "std::unordered_map: " << (t.restart(), fill_unordered_map(n), t.restart()) << std::endl;      
 
   std::clog << "amt emplace: " << (t.restart(), fill_amt_emplace<B, L>(n), t.restart()) << std::endl;  
   std::clog << "std::vector: " << (t.restart(), fill_vector(n), t.restart()) << std::endl;
