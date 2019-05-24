@@ -14,18 +14,6 @@ static double time(const Action& action) {
   return res.count();
 }
 
-struct timer {
-  using clock = std::chrono::high_resolution_clock;
-  clock::time_point last;
-
-  double restart() {
-    clock::time_point now = clock::now();
-    std::chrono::duration<double> delta = now - last;
-    last = now;
-    return delta.count();
-  }
-  
-};
 
 #endif
  
