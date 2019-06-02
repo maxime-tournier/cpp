@@ -157,7 +157,7 @@ namespace amt {
 
 
 
-  template<class T, std::size_t B, std::size_t L>
+  template<class T, std::size_t B=6, std::size_t L=6>
   class array {
     static constexpr std::size_t index_bits = sizeof(std::size_t) * 8;
     static constexpr std::size_t max_level = (index_bits - L) / B;
@@ -186,6 +186,11 @@ namespace amt {
     void iter(const Cont& cont) const {
       root.iter(0, cont);
     }
+
+    const T* find(std::size_t index) const {
+      return root.find(index);
+    }
+    
     
   };
 
@@ -193,7 +198,7 @@ namespace amt {
   template<class K>
   struct traits;
 
-  template<class K, class V, std::size_t B, std::size_t L>
+  template<class K, class V, std::size_t B=6, std::size_t L=6>
   class map {
     using storage_type = array<V, B, L>;
     storage_type storage;
@@ -210,6 +215,10 @@ namespace amt {
 
     map set(const K& key, const V& value) && {
        return std::move(storage).set(traits<K>::index(key), value);
+    }
+
+    const V* find(const K& key) const {
+      return storage.find(traits<K>::index(key));
     }
 
   };
