@@ -2,16 +2,9 @@
 *.o
 *.pyc
 *.so
-/flow
-/graph
-/parse
-/rtti
-
-/pcg
 build
 /pouf/main
 /pouf/pouf
-/sparse
 *.dSYM
 /gc
 /dynamic_sized
