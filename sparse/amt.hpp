@@ -20,20 +20,31 @@ namespace amt {
 
   template<class T, std::size_t level, std::size_t B, std::size_t L>
   struct node {
+    static_assert(level > 0, "level error");
     static constexpr std::size_t max_size = 1ul << B;
-    static constexpr std::size_t shift = L + B * (level - 1);
-    static constexpr std::size_t mask = (1ul << (shift + 1)) - 1;
+    static constexpr std::size_t shift = L + B * (level - 1ul);
+    static constexpr std::size_t mask = (max_size - 1ul) << shift;
   
     using child_node = node<T, level - 1, B, L>;
     using children_type = sparse::array<child_node>;
 
     children_type children;
 
+    struct split {
+      const std::size_t sub;
+      const std::size_t rest;
+      
+      split(std::size_t index):
+        sub(index >> shift),
+        rest(index & mask) {
+        assert(!(sub & (max_size - 1ul)));
+      }
+    };
+    
+    
     static children_type make_single(std::size_t index, const T& value) {
-      const std::size_t sub = index >> shift;
-      const std::size_t rest = index & mask;
-
-      return children_type().set(sub, child_node(rest, value));
+      const split next(index);
+      return children_type().set(next.sub, child_node(next.rest, value));
     }
   
     node(std::size_t index, const T& value):
@@ -44,36 +55,33 @@ namespace amt {
   
   
     const T& get(std::size_t index) const {
-      const std::size_t sub = index >> shift;
-      const std::size_t rest = index & mask;
+      const split next(index);
 
-      assert(children.contains(sub));
-      return children.get(sub).get(rest);
+      assert(children.contains(next.sub));
+      return children.get(next.sub).get(next.rest);
     }
 
     node set(std::size_t index, const T& value) const {
-      const std::size_t sub = index >> shift;
-      const std::size_t rest = index & mask;
-
-      if(children.contains(sub)) {
-        return children.set(sub, children.get(sub).set(rest, value));
+      const split next(index);
+      
+      if(children.contains(next.sub)) {
+        return children.set(next.sub, children.get(next.sub).set(next.rest, value));
       } else {
-        return children.set(sub, child_node(rest, value));
+        return children.set(next.sub, child_node(next.rest, value));
       }
     }
 
 
     node emplace(std::size_t index, const T& value) {
-      const std::size_t sub = index >> shift;
-      const std::size_t rest = index & mask;
-
-      if(children.contains(sub)) {
-        auto& child = children.get(sub);
-        child = child.emplace(rest, value);
+      const split next(index);
+      
+      if(children.contains(next.sub)) {
+        auto& child = children.get(next.sub);
+        child = child.emplace(next.rest, value);
         return std::move(children);
       }
     
-      return children.set(sub, child_node(rest, value));
+      return children.set(next.sub, child_node(next.rest, value));
     }
   
   };
@@ -130,18 +138,21 @@ namespace amt {
     root_type root;
 
   public:
-    array(root_type root={{}}): root(std::move(root)) { }
+    array(root_type root={{}}):
+      root(std::move(root)) { }
   
     const T& get(std::size_t index) const {
       return root.get(index);
     }
   
-    array set(std::size_t index, const T& value) const& {
-                                                         return root.set(index, value);
+    array set(std::size_t index, const T& value) const&
+    {
+       return root.set(index, value);
     }
 
-    array set(std::size_t index, const T& value) && {
-                                                     return root.emplace(index, value);
+    array set(std::size_t index, const T& value) &&
+    {
+       return root.emplace(index, value);
     }
 
   
