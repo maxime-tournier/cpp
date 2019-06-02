@@ -1,5 +1,3 @@
-// -*- compile-command: "CXX=clang++ CXXFLAGS='-std=c++14 -O3 -g'  make amt2" -*-
-
 #include "amt.hpp"
 #include "timer.hpp"
 
