@@ -101,7 +101,8 @@ struct array {
     const std::size_t s = insert ? size() + 1 : size();
     return make_block(s, blk->mask | bit, blk->begin(), blk->end(), index, value, insert);
   }
-  
+
+  bool unique() const { return blk.unique(); }
   
 private:
 

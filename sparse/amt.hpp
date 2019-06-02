@@ -67,19 +67,25 @@ namespace amt {
     }
 
 
-    node emplace(std::size_t i, const T& value) {
-      const split index(i);
-      // note: splitting inside function increases perfs
+
+    friend node emplace(node self, split index, const T& value) {
+      if(!self.children.unique()) return self.set(index, value);
+
+      // note: splitting inside function slightly increases perfs
       // TODO: investigate
-      if(children.contains(index.sub)) {
-        auto& child = children.get(index.sub);
-        child = child.emplace(index.rest, value);
-        return std::move(children);
+      
+      if(self.children.contains(index.sub)) {
+        auto& child = self.children.get(index.sub);
+        // since we're the only ref to children we may safely transfer their
+        // ownership
+        child = emplace(std::move(child), index.rest, value);
+        return self;
       }
     
-      return children.set(index.sub, child_node(index.rest, value));
+      return self.children.set(index.sub, child_node(index.rest, value));
     }
-  
+    
+    
   };
 
 
@@ -112,15 +118,20 @@ namespace amt {
       return children.set(index, value);
     }
 
-    node emplace(std::size_t index, const T& value) {
-      if(children.contains(index)) {
-        children.get(index) = value;
-        return children;
-      }
 
-      return children.set(index, value);
+    friend node emplace(node self, std::size_t index, const T& value) {
+      if(!self.children.unique()) return self.set(index, value); 
+      
+      if(self.children.contains(index)) {
+        self.children.get(index) = value;
+        return self;
+      }
+      
+      return self.children.set(index, value);
     }
-  
+    
+
+    
   };
 
 
@@ -141,14 +152,13 @@ namespace amt {
       return root.get(index);
     }
   
-    array set(std::size_t index, const T& value) const&
-    {
+    array set(std::size_t index, const T& value) const& {
        return root.set(index, value);
     }
 
-    array set(std::size_t index, const T& value) &&
-    {
-       return root.emplace(index, value);
+    array set(std::size_t index, const T& value) && {
+       // since we're a temporary we may safely transfer ownership
+       return emplace(std::move(root), index, value);
     }
 
   
