@@ -1,11 +1,8 @@
-#ifndef SPARSE2_HPP
-#define SPARSE2_HPP
-
+#ifndef SPARSE_SPARSE_HPP
+#define SPARSE_SPARSE_HPP
 
 #include <memory>
 #include <cassert>
-
-#include <iostream>
 
 namespace sparse { 
 static std::size_t sparse_index(std::size_t mask, std::size_t index) {
@@ -76,12 +73,6 @@ struct array {
   array() { }
   array(std::shared_ptr<block> blk): blk(std::move(blk)) { }
 
-  // array(array&&) = default;
-  // array(const array&) = default;
-
-  // array& operator=(const array&) = default;
-  // array& operator=(array&&) = default;    
-  
   const T& get(std::size_t index) const {
     return blk->data[sparse_index(blk->mask, index)];
   }

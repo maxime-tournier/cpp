@@ -56,7 +56,6 @@ namespace amt {
       const std::size_t rest = index & mask;
 
       if(children.contains(sub)) {
-        // TODO recursive call to set chokes compiler
         return children.set(sub, children.get(sub).set(rest, value));
       } else {
         return children.set(sub, child_node(rest, value));
