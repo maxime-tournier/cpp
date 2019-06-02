@@ -160,10 +160,60 @@ namespace amt {
        // since we're a temporary we may safely transfer ownership
        return emplace(std::move(root), index, value);
     }
-
-  
   };
 
+
+  template<class K>
+  struct traits;
+
+  template<class K, class V, std::size_t B, std::size_t L>
+  class map {
+    using storage_type = array<V, B, L>;
+    storage_type storage;
+  public:
+    map(storage_type storage={}): storage(std::move(storage)) { }
+    
+    const V& get(const K& key) const {
+      return storage.get(traits<K>::index(key));
+    }
+    
+    map set(const K& key, const V& value) const& {
+       return storage.set(traits<K>::index(key), value);                                                  
+    }
+
+    map set(const K& key, const V& value) && {
+       return std::move(storage).set(traits<K>::index(key), value);
+    }
+  };
+
+  
+  template<class T>
+  struct traits<T*> {
+    static std::size_t index(T* value) { return std::size_t(value); }
+  };
+
+  template<>
+  struct traits<unsigned long> {
+    static std::size_t index(std::size_t value) { return value; }
+  };
+
+  template<>
+  struct traits<long> {
+    static std::size_t index(long value) { return value; }
+  };
+
+  
+  template<>
+  struct traits<int> {
+    static std::size_t index(int value) { return value; }
+  };
+
+  template<>
+  struct traits<unsigned int> {
+    static std::size_t index(unsigned int value) { return value; }
+  };
+  
+  
 }
 
 
