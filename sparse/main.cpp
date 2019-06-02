@@ -81,7 +81,7 @@ int main(int, char**) {
 
   
   // array mapped trie
-  std::size_t n = 1000000;
+  std::size_t n = 2000000;
   
   static constexpr std::size_t B = 12;
   static constexpr std::size_t L = 16;

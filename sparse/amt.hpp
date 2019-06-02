@@ -42,9 +42,8 @@ namespace amt {
     };
     
     
-    static children_type make_single(std::size_t index, const T& value) {
-      const split next(index);
-      return children_type().set(next.sub, child_node(next.rest, value));
+    static children_type make_single(split index, const T& value) {
+      return children_type().set(index.sub, child_node(index.rest, value));
     }
   
     node(std::size_t index, const T& value):
@@ -54,34 +53,31 @@ namespace amt {
       children(std::move(children)) { }
   
   
-    const T& get(std::size_t index) const {
-      const split next(index);
-
-      assert(children.contains(next.sub));
-      return children.get(next.sub).get(next.rest);
+    const T& get(split index) const {
+      assert(children.contains(index.sub));
+      return children.get(index.sub).get(index.rest);
     }
 
-    node set(std::size_t index, const T& value) const {
-      const split next(index);
-      
-      if(children.contains(next.sub)) {
-        return children.set(next.sub, children.get(next.sub).set(next.rest, value));
+    node set(split index, const T& value) const {
+      if(children.contains(index.sub)) {
+        return children.set(index.sub, children.get(index.sub).set(index.rest, value));
       } else {
-        return children.set(next.sub, child_node(next.rest, value));
+        return children.set(index.sub, child_node(index.rest, value));
       }
     }
 
 
-    node emplace(std::size_t index, const T& value) {
-      const split next(index);
-      
-      if(children.contains(next.sub)) {
-        auto& child = children.get(next.sub);
-        child = child.emplace(next.rest, value);
+    node emplace(std::size_t i, const T& value) {
+      const split index(i);
+      // note: splitting inside function increases perfs
+      // TODO: investigate
+      if(children.contains(index.sub)) {
+        auto& child = children.get(index.sub);
+        child = child.emplace(index.rest, value);
         return std::move(children);
       }
     
-      return children.set(next.sub, child_node(next.rest, value));
+      return children.set(index.sub, child_node(index.rest, value));
     }
   
   };
