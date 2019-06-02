@@ -64,6 +64,16 @@ namespace amt {
       return children.get(index.sub).get(index.rest);
     }
 
+
+    const T* find(split index) const {
+      if(children.contains(index.sub)) {
+        return children.get(index.sub).find(index.rest);
+      }
+
+      return nullptr;      
+    }
+
+    
     node set(split index, const T& value) const {
       if(children.contains(index.sub)) {
         return children.set(index.sub, children.get(index.sub).set(index.rest, value));
@@ -129,6 +139,15 @@ namespace amt {
       return children.get(index);
     }
 
+
+    const T* find(std::size_t index) const {
+      if(children.contains(index)) {
+        return &children.get(index);
+      }
+
+      return nullptr;
+    }
+    
     node set(std::size_t index, const T& value) const {
       return children.set(index, value);
     }
