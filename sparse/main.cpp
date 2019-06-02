@@ -9,7 +9,6 @@
 #include <unordered_map>
 
 
-
 template<std::size_t B, std::size_t L>
 static double fill_amt(std::size_t n) {
   amt::array<double, B, L> res;
