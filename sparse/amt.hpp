@@ -240,35 +240,23 @@ namespace amt {
       return storage.find(traits<K>::index(key));
     }
 
+
+    template<class Cont>
+    void iter(const Cont& cont) const {
+      storage.iter([&](std::size_t index, const T& value) {
+        cont(traits<K>::key(index), value);
+      });
+    }
+    
   };
 
-  
+
   template<class T>
-  struct traits<T*> {
-    static std::size_t index(T* value) { return std::size_t(value); }
+  struct traits {
+    static std::size_t index(T self) { return std::size_t(self); }
+    static T key(std::size_t self) { return T(self); }    
   };
 
-  template<>
-  struct traits<unsigned long> {
-    static std::size_t index(std::size_t value) { return value; }
-  };
-
-  template<>
-  struct traits<long> {
-    static std::size_t index(long value) { return value; }
-  };
-
-  
-  template<>
-  struct traits<int> {
-    static std::size_t index(int value) { return value; }
-  };
-
-  template<>
-  struct traits<unsigned int> {
-    static std::size_t index(unsigned int value) { return value; }
-  };
-  
   
 }
 
