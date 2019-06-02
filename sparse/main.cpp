@@ -87,8 +87,8 @@ int main(int, char**) {
   // static constexpr std::size_t B = 12;
   // static constexpr std::size_t L = 16;
 
-  static constexpr std::size_t B = 6;
-  static constexpr std::size_t L = 6;
+  static constexpr std::size_t B = 8;
+  static constexpr std::size_t L = 8;
   
   timer t;
   
