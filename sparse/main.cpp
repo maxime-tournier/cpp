@@ -1,7 +1,8 @@
+#include <iostream>
+
 #include "amt.hpp"
 #include "timer.hpp"
 
-#include <iostream>
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -81,10 +82,14 @@ int main(int, char**) {
 
   
   // array mapped trie
-  std::size_t n = 2000000;
+  std::size_t n = 1000000;
   
-  static constexpr std::size_t B = 12;
-  static constexpr std::size_t L = 16;
+  // static constexpr std::size_t B = 12;
+  // static constexpr std::size_t L = 16;
+
+  static constexpr std::size_t B = 6;
+  static constexpr std::size_t L = 6;
+  
   timer t;
   
   std::clog << "amt: " << (t.restart(), fill_amt<B, L>(n), t.restart()) << std::endl;
