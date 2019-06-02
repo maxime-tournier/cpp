@@ -95,7 +95,7 @@ namespace amt {
     template<class Cont>
     void iter(std::size_t offset, const Cont& cont) const {
       children.iter([&](std::size_t sub, const child_node& child) {
-        child.iter(sub << shift, cont);
+        child.iter(offset + (sub << shift), cont);
       });
     }
     

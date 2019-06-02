@@ -96,14 +96,12 @@ int main(int, char**) {
   static constexpr std::size_t L = 6;
 
   amt::array<std::size_t, B, L> v;
-  for(std::size_t i = 0; i < n; ++i) {
+  for(std::size_t i = 0; i < 1ul << 13; ++i) {
     v = std::move(v).set(i, i);
   }
 
-  std::clog << n / 2 << ": " << v.get(n/2) << std::endl;
-
   v.iter([](std::size_t i, std::size_t j) {
-    assert(i == j);
+    std::clog << i << ": " << j << std::endl;
   });
   
   
