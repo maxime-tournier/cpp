@@ -4,17 +4,22 @@
 #include <memory>
 #include <cassert>
 
-namespace sparse { 
-static std::size_t sparse_index(std::size_t mask, std::size_t index) {
-  const std::size_t res = __builtin_popcount(mask & ((1ul << index) - 1));      
-  return res;
-}
+namespace sparse {
+  
+  static std::size_t sparse_index(std::size_t mask, std::size_t index) {
+    const std::size_t res = __builtin_popcountl(mask & ((1ul << index) - 1));      
+    return res;
+  }
 
-static std::size_t sparse_size(std::size_t mask) {
-  return __builtin_popcount(mask);
-}
+  static std::size_t sparse_first(std::size_t mask) {
+    const std::size_t res = __builtin_ctzl(mask);
+    return res;
+  }
 
 
+  static std::size_t sparse_size(std::size_t mask) {
+    return __builtin_popcountl(mask);
+  }
 
 
 template<class T>
@@ -34,6 +39,9 @@ struct array {
           std::size_t index, const T& value,
           bool insert):
       mask(mask), data(*data) {
+      
+      assert((!insert) <= (sparse_index(mask, index) < (last - source)));
+      assert(insert <= (sparse_index(mask, index) == (last - source)));      
       
       T* ptr = *data;
       for(std::size_t i = 0, n = sparse_index(mask, index); i < n; ++i) {
@@ -67,7 +75,10 @@ struct array {
   static std::shared_ptr<block> make_block(std::size_t size, Args&& ... args) {
     T* data;
     allocator<block> alloc{size, &data};
-    return std::allocate_shared<block>(alloc, &data, std::forward<Args>(args)...);
+    auto&& result = std::allocate_shared<block>(alloc, &data, std::forward<Args>(args)...);
+    assert(sparse_size(result->mask) == size);
+    
+    return result;
   }
 
   array() { }
@@ -88,21 +99,47 @@ struct array {
 
   bool contains(std::size_t index) const {
     if(!blk) return false;
-    return blk->mask & 1ul << index;
+    return blk->mask & (1ul << index);
   }
 
   array set(std::size_t index, const T& value) const {
     if(!blk) {
-      return make_block(1, index, value);
+      return make_block(1ul, index, value);
     }
 
     const std::size_t bit = 1ul << index;
+    
     const bool insert = !(blk->mask & bit);
+    
+    assert(!insert <= (sparse_index(blk->mask, index) < size()));
+    assert(insert <= (sparse_index(blk->mask | bit, index) == size()));
+    
     const std::size_t s = insert ? size() + 1 : size();
-    return make_block(s, blk->mask | bit, blk->begin(), blk->end(), index, value, insert);
+    
+    return make_block(s, (blk->mask | bit), blk->begin(), blk->end(), index, value, insert);
   }
 
   bool unique() const { return blk.unique(); }
+
+  template<class Cont>
+  void iter(Cont cont) const {
+    if(!blk) return;
+
+    std::size_t off = 0;
+    std::size_t mask = blk->mask;
+    for(const T& value: *blk) {
+      const std::size_t fst = sparse_first(mask);
+      off += fst;
+      mask >>= fst;
+      
+      cont(off, value);
+      
+      mask >>= 1;
+      off += 1;
+    }
+  }
+  
+
   
 private:
 

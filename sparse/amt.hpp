@@ -21,9 +21,14 @@ namespace amt {
   template<class T, std::size_t level, std::size_t B, std::size_t L>
   struct node {
     static_assert(level > 0, "level error");
+    static_assert(L > 0, "L error");
+    static_assert(B > 0, "B error");
+    
     static constexpr std::size_t max_size = 1ul << B;
+    static_assert(max_size <= sizeof(std::size_t) * 8, "size error");
+    
     static constexpr std::size_t shift = L + B * (level - 1ul);
-    static constexpr std::size_t mask = (max_size - 1ul) << shift;
+    static constexpr std::size_t mask = (1ul << shift) - 1ul;
   
     using child_node = node<T, level - 1, B, L>;
     using children_type = sparse::array<child_node>;
@@ -37,7 +42,7 @@ namespace amt {
       split(std::size_t index):
         sub(index >> shift),
         rest(index & mask) {
-        assert(!(sub & (max_size - 1ul)));
+        assert(sub < max_size);
       }
     };
     
@@ -47,7 +52,8 @@ namespace amt {
     }
   
     node(std::size_t index, const T& value):
-      children(make_single(index, value)) { }
+      children(make_single(index, value)) {
+    }
   
     node(children_type children):
       children(std::move(children)) { }
@@ -84,6 +90,14 @@ namespace amt {
     
       return self.children.set(index.sub, child_node(index.rest, value));
     }
+
+
+    template<class Cont>
+    void iter(std::size_t offset, const Cont& cont) const {
+      children.iter([&](std::size_t sub, const child_node& child) {
+        child.iter(sub << shift, cont);
+      });
+    }
     
     
   };
@@ -91,14 +105,15 @@ namespace amt {
 
   template<class T, std::size_t B, std::size_t L>
   struct node<T, 0, B, L> {
+    static constexpr std::size_t level = 0;
     static constexpr std::size_t max_size = 1ul << L;
-   
+    static_assert(max_size <= sizeof(std::size_t) * 8, "size error");
+    
     using children_type = sparse::array<T>;
     children_type children;
 
     node(std::size_t index, const T& value):
-      children(children_type().set(1ul << index, value)) { 
-    }
+      children(children_type().set(index, value)) { }
   
     node(children_type children):
       children(std::move(children)) { }
@@ -131,6 +146,12 @@ namespace amt {
     }
     
 
+    template<class Cont>
+    void iter(std::size_t offset, const Cont& cont) const {
+      children.iter([&](std::size_t index, const T& value) {
+        cont(offset + index, value);
+      });
+    }
     
   };
 
@@ -160,6 +181,12 @@ namespace amt {
        // since we're a temporary we may safely transfer ownership
        return emplace(std::move(root), index, value);
     }
+
+    template<class Cont>
+    void iter(const Cont& cont) const {
+      root.iter(0, cont);
+    }
+    
   };
 
 
@@ -184,6 +211,7 @@ namespace amt {
     map set(const K& key, const V& value) && {
        return std::move(storage).set(traits<K>::index(key), value);
     }
+
   };
 
   

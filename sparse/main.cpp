@@ -73,22 +73,39 @@ int main(int, char**) {
   // sparse array test
   sparse::array<double> test;
 
-  test = test.set(0, 2.0);
+  test = test.set(1, 2.0);
   test = test.set(10, 4.0);
+  test = test.set(20, 8.0);  
+
+  test.iter([](std::size_t index, double value) {
+    std::cout << index << ": " << value << std::endl;
+  });
   
   std::clog << test.get(0) << std::endl;
   std::clog << test.get(10) << std::endl;
   std::clog << test.size() << std::endl;
 
-  
+
   // array mapped trie
   std::size_t n = 1000000;
   
   // static constexpr std::size_t B = 12;
   // static constexpr std::size_t L = 16;
 
-  static constexpr std::size_t B = 8;
-  static constexpr std::size_t L = 8;
+  static constexpr std::size_t B = 6;
+  static constexpr std::size_t L = 6;
+
+  amt::array<std::size_t, B, L> v;
+  for(std::size_t i = 0; i < n; ++i) {
+    v = std::move(v).set(i, i);
+  }
+
+  std::clog << n / 2 << ": " << v.get(n/2) << std::endl;
+
+  v.iter([](std::size_t i, std::size_t j) {
+    assert(i == j);
+  });
+  
   
   timer t;
   
