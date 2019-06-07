@@ -114,8 +114,6 @@ struct node: base {
   static_assert(L > 0, "L error");
   static_assert(B > 0, "B error");
 
-  explicit operator bool() const { return bool(storage); }
-  
   static constexpr std::size_t max_size = 1ul << B;
   static_assert(max_size <= sizeof(std::size_t) * 8, "size error");
     
@@ -201,8 +199,6 @@ struct node<T, 0, B, L>: base {
     return children()->template set<max_size>(index, T(value));
   }
 
-  explicit operator bool() const { return bool(storage); }
-  
   node(std::size_t index, const T& value):
     base(children_type().template set<max_size>(index, T(value))) { }
 
@@ -233,7 +229,7 @@ public:
   amt() : root(nullptr) {}
 
   amt set(std::size_t index, const T& value) const {
-    if(!root) {
+    if(!root.storage) {
       return root_type(index, value);
     }
 
@@ -245,7 +241,7 @@ public:
   }
 
   friend amt emplace(amt self, std::size_t index, const T& value) {
-    if(!self.root) return root_type(index, value);
+    if(!self.root.storage) return root_type(index, value);
     return emplace(std::move(self.root), index, value);
   }
   
