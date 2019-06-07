@@ -228,19 +228,11 @@ class amt {
 public:
   amt() : root(nullptr) {}
 
-  amt set(std::size_t index, const T& value) const {
-    if(!root.storage) {
-      return root_type(index, value);
-    }
-
-    return root.set(index, value);
-  }
-
   const T& get(std::size_t index) const {
     return root.get(index);
   }
 
-  friend amt emplace(amt self, std::size_t index, const T& value) {
+  friend amt set(amt self, std::size_t index, const T& value) {
     if(!self.root.storage) return root_type(index, value);
     return emplace(std::move(self.root), index, value);
   }

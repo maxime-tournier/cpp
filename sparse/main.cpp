@@ -39,7 +39,7 @@ static double fill_alt_emplace(std::size_t n) {
   alt::amt<double, B, L> res;
   
   for(std::size_t i = 0; i < n; ++i) {
-    res = emplace(std::move(res), i, i);
+    res = set(std::move(res), i, i);
   }
   
   return res.get(0);
