@@ -243,7 +243,7 @@ namespace amt {
 
     template<class Cont>
     void iter(const Cont& cont) const {
-      storage.iter([&](std::size_t index, const T& value) {
+      storage.iter([&](std::size_t index, const K& value) {
         cont(traits<K>::key(index), value);
       });
     }
