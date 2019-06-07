@@ -23,7 +23,7 @@ struct base {
   base(std::size_t mask=0): mask(mask) { }
 
   std::size_t size() const { return sparse::size(mask); }
-  T& get(std::size_t index) { return data[sparse::index(mask, index)]; }
+  T& at(std::size_t index) { return data[sparse::index(mask, index)]; }
 
   template<std::size_t M>
   std::shared_ptr<base> set(std::size_t index, T&& value) const;
@@ -50,7 +50,7 @@ static std::shared_ptr<base<T>> make_array(std::size_t mask) {
   using thunk_type = std::shared_ptr<base<T>> (*)(std::size_t mask);
   
   static const auto table =
-    unpack_sequence<thunk_type>(std::make_index_sequence<M>{}, [](auto index) -> thunk_type {
+    unpack_sequence<thunk_type>(std::make_index_sequence<M + 1>{}, [](auto index) -> thunk_type {
       using index_type = decltype(index);
       return +[](std::size_t mask) -> std::shared_ptr<base<T>> {
         return std::make_shared<derived<T, index_type::value>>(mask);
@@ -118,12 +118,12 @@ struct node {
   node() = default;
   
   T& get(split index) const {
-    return children->get(index.sub)->get(index.rest);
+    return children->at(index.sub).get(index.rest);
   }
   
   node set(split index, const T& value) const {
     if(children->has(index.sub)) {
-      return children->template set<max_size>(index.sub, children->get(index.sub).set(index.rest, value));
+      return children->template set<max_size>(index.sub, children->at(index.sub).set(index.rest, value));
     } else {
       return children->template set<max_size>(index.sub, child_type(index.rest, value));
     }
@@ -131,6 +131,18 @@ struct node {
 
   node(split index, const T& value):
     children(base<child_type>().template set<max_size>(index.sub, child_type(index.rest, value))) { }
+
+
+  friend node emplace(node self, split index, const T& value) {
+    if(!self.children.unique() || !self.children->has(index.sub)) {
+      return self.set(index, value);
+    }
+
+    auto& child = self.children->at(index.sub);
+    child = emplace(std::move(child), index.rest, value);
+    
+    return self;
+  }
   
 
 };
@@ -150,7 +162,7 @@ struct node<T, 0, B, L> {
   node() = default;
   
   T& get(std::size_t index) const {
-    return children->get(index);
+    return children->at(index);
   }
 
   node set(std::size_t index, const T& value) const {
@@ -161,6 +173,16 @@ struct node<T, 0, B, L> {
 
   node(std::size_t index, const T& value):
     children(base<child_type>().template set<max_size>(index, T(value))) { }
+
+  friend node emplace(node self, std::size_t index, const T& value) {
+    if(!self.children.unique() || !self.children->has(index)) {
+      return self.set(index, value);
+    }
+
+    self.children->at(index) = value;
+    
+    return self;
+  }
   
 };
 
@@ -189,6 +211,11 @@ public:
   const T& get(std::size_t index) const {
     return root.get(index);
   }
+
+  friend amt emplace(amt self, std::size_t index, const T& value) {
+    if(!self.root) return root_type(index, value);
+    return emplace(self.root, index, value);
+  }
   
 };
 
@@ -201,12 +228,19 @@ static const struct test {
     auto x = make_array<double, 32>(0ul);
     x = x->set<32>(0, 1);
     x = x->set<32>(4, 2);
-    std::clog << x->get(0) << std::endl;
-    std::clog << x->get(4) << std::endl;    
-    std::exit(0);
+    std::clog << x->at(0) << std::endl;
+    std::clog << x->at(4) << std::endl;    
 
     amt<double> test;
-    test.set(0, 1);
+
+    for(std::size_t i = 0; i < (1ul << 14); ++i) {
+      test = emplace(std::move(test), i, i);
+    }
+
+    std::clog << test.get(1ul << 10) << std::endl;
+    
+    std::exit(0);
+    
   }
 } instance;
 
