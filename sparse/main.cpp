@@ -7,6 +7,8 @@
 #include <map>
 #include <unordered_map>
 
+#include "alt.hpp"
+
 
 template<std::size_t B, std::size_t L>
 static double fill_amt(std::size_t n) {
@@ -30,6 +32,19 @@ static double fill_amt_emplace(std::size_t n) {
 
   return res.get(0);
 }
+
+
+template<std::size_t B, std::size_t L>
+static double fill_alt_emplace(std::size_t n) {
+  alt::amt<double, B, L> res;
+  
+  for(std::size_t i = 0; i < n; ++i) {
+    res = emplace(std::move(res), i, i);
+  }
+  
+  return res.get(0);
+}
+
 
 
 static double fill_vector(std::size_t n) {
@@ -95,14 +110,14 @@ int main(int, char**) {
   static constexpr std::size_t B = 6;
   static constexpr std::size_t L = 6;
 
-  amt::array<std::size_t, B, L> v;
-  for(std::size_t i = 0; i < 1ul << 13; ++i) {
-    v = std::move(v).set(i, i);
-  }
+  // amt::array<std::size_t, B, L> v;
+  // for(std::size_t i = 0; i < 1ul << 13; ++i) {
+  //   v = std::move(v).set(i, i);
+  // }
 
-  v.iter([](std::size_t i, std::size_t j) {
-    std::clog << i << ": " << j << std::endl;
-  });
+  // v.iter([](std::size_t i, std::size_t j) {
+  //   std::clog << i << ": " << j << std::endl;
+  // });
   
   
   timer t;
@@ -111,7 +126,8 @@ int main(int, char**) {
   std::clog << "std::map: " << (t.restart(), fill_map(n), t.restart()) << std::endl;
   std::clog << "std::unordered_map: " << (t.restart(), fill_unordered_map(n), t.restart()) << std::endl;      
 
-  std::clog << "amt emplace: " << (t.restart(), fill_amt_emplace<B, L>(n), t.restart()) << std::endl;  
+  std::clog << "alt emplace: " << (t.restart(), fill_alt_emplace<B, L>(n), t.restart()) << std::endl;    
+  std::clog << "amt emplace: " << (t.restart(), fill_amt_emplace<B, L>(n), t.restart()) << std::endl;
   std::clog << "std::vector: " << (t.restart(), fill_vector(n), t.restart()) << std::endl;
   
   return 0;
