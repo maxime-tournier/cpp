@@ -21,27 +21,27 @@ namespace sparse {
 
 
 template<class T>
-struct base {
+struct array {
   const std::size_t mask;
   T data[0];
   
-  base(std::size_t mask=0): mask(mask) { }
+  array(std::size_t mask=0): mask(mask) { }
 
   std::size_t size() const { return sparse::size(mask); }
   T& at(std::size_t index) { return data[sparse::index(mask, index)]; }
 
   template<std::size_t M>
-  std::shared_ptr<base> set(std::size_t index, T&& value) const;
+  std::shared_ptr<array> set(std::size_t index, T&& value) const;
 
   bool has(std::size_t index) const { return mask & (1ul << index); }
 };
 
 
 template<class T, std::size_t N>
-struct derived: base<T> {
+struct derived: array<T> {
   T values[N];
   
-  derived(std::size_t mask): base<T>(mask) { }
+  derived(std::size_t mask): array<T>(mask) { }
 };
 
 
@@ -51,13 +51,13 @@ static std::array<Ret, sizeof...(Ms)> unpack_sequence(std::index_sequence<Ms...>
 };
 
 template<class T, std::size_t M>
-static std::shared_ptr<base<T>> make_array(std::size_t mask) {
-  using thunk_type = std::shared_ptr<base<T>> (*)(std::size_t mask);
+static std::shared_ptr<array<T>> make_array(std::size_t mask) {
+  using thunk_type = std::shared_ptr<array<T>> (*)(std::size_t mask);
   
   static const auto table =
     unpack_sequence<thunk_type>(std::make_index_sequence<M + 1>{}, [](auto index) -> thunk_type {
       using index_type = decltype(index);
-      return +[](std::size_t mask) -> std::shared_ptr<base<T>> {
+      return +[](std::size_t mask) -> std::shared_ptr<array<T>> {
         return std::make_shared<derived<T, index_type::value>>(mask);
       };
     });
@@ -69,7 +69,7 @@ static std::shared_ptr<base<T>> make_array(std::size_t mask) {
 
 template<class T>
 template<std::size_t M>
-std::shared_ptr<base<T>> base<T>::set(std::size_t index, T&& value) const {
+std::shared_ptr<array<T>> array<T>::set(std::size_t index, T&& value) const {
   const T* in = data;
   const std::size_t bit = 1ul << index;
 
@@ -99,14 +99,22 @@ std::shared_ptr<base<T>> base<T>::set(std::size_t index, T&& value) const {
   return res;
 }
 
+struct base {
+  using storage_type = std::shared_ptr<void>;
+  storage_type storage;
+
+  base(storage_type storage): storage(std::move(storage)) { }
+  base() = default;
+};
+  
 
 template<class T, std::size_t level, std::size_t B, std::size_t L>
-struct node {
+struct node: base {
   static_assert(level > 0, "level error");
   static_assert(L > 0, "L error");
   static_assert(B > 0, "B error");
 
-  explicit operator bool() const { return bool(children); }
+  explicit operator bool() const { return bool(storage); }
   
   static constexpr std::size_t max_size = 1ul << B;
   static_assert(max_size <= sizeof(std::size_t) * 8, "size error");
@@ -126,34 +134,41 @@ struct node {
   };
   
   using child_type = node<T, level - 1, B, L>;
-  using children_type = std::shared_ptr<base<child_type>>;
-  children_type children;
+  using children_type = array<base>;
   
-  node(children_type children): children(std::move(children)) { }
+  children_type* children() const {
+    return static_cast<children_type*>(base::storage.get());
+  }
+
+  child_type& child(std::size_t index) const {
+    return static_cast<child_type&>(children()->at(index));
+  }
+  
+  node(std::shared_ptr<children_type> children): base(std::move(children)) { }
   node() = default;
   
   T& get(split index) const {
-    return children->at(index.sub).get(index.rest);
+    return child(index.sub).get(index.rest);
   }
   
   node set(split index, const T& value) const {
-    if(children->has(index.sub)) {
-      return children->template set<max_size>(index.sub, children->at(index.sub).set(index.rest, value));
+    if(children()->has(index.sub)) {
+      return children()->template set<max_size>(index.sub, child(index.sub).set(index.rest, value));
     } else {
-      return children->template set<max_size>(index.sub, child_type(index.rest, value));
+      return children()->template set<max_size>(index.sub, child_type(index.rest, value));
     }
   }
 
   node(split index, const T& value):
-    children(base<child_type>().template set<max_size>(index.sub, child_type(index.rest, value))) { }
-
+    base(children_type().template set<max_size>(index.sub, child_type(index.rest, value))) { }
+  
 
   friend node emplace(node self, split index, const T& value) {
-    if(!self.children.unique() || !self.children->has(index.sub)) {
+    if(!self.storage.unique() || !self.children()->has(index.sub)) {
       return self.set(index, value);
     }
 
-    auto& child = self.children->at(index.sub);
+    auto& child = self.child(index.sub);
     child = emplace(std::move(child), index.rest, value);
     
     return self;
@@ -163,38 +178,40 @@ struct node {
 };
 
 
+
 template<class T, std::size_t B, std::size_t L>
-struct node<T, 0, B, L> {
+struct node<T, 0, B, L>: base {
   static constexpr std::size_t level = 0;
   static constexpr std::size_t max_size = 1ul << L;
   static_assert(max_size <= sizeof(std::size_t) * 8, "size error");
-  
-  using child_type = T;
-  using children_type = std::shared_ptr<base<child_type>>;
-  children_type children;
-  
-  node(children_type children): children(std::move(children)) { }
+
+  using children_type = array<T>;
+  children_type* children() const {
+    return static_cast<children_type*>(base::storage.get());
+  }
+
+  node(std::shared_ptr<children_type> children): base(std::move(children)) { }
   node() = default;
   
   T& get(std::size_t index) const {
-    return children->at(index);
+    return children()->at(index);
   }
 
   node set(std::size_t index, const T& value) const {
-    return children->template set<max_size>(index, T(value));
+    return children()->template set<max_size>(index, T(value));
   }
 
-  explicit operator bool() const { return bool(children); }
-
+  explicit operator bool() const { return bool(storage); }
+  
   node(std::size_t index, const T& value):
-    children(base<child_type>().template set<max_size>(index, T(value))) { }
+    base(children_type().template set<max_size>(index, T(value))) { }
 
   friend node emplace(node self, std::size_t index, const T& value) {
-    if(!self.children.unique() || !self.children->has(index)) {
+    if(!self.storage.unique() || !self.children()->has(index)) {
       return self.set(index, value);
     }
 
-    self.children->at(index) = value;
+    self.children()->at(index) = value;
     
     return self;
   }
