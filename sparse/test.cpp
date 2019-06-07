@@ -1,6 +1,6 @@
 #include <memory>
-
-
+#include <cassert>
+#include <array>
 
 namespace sparse {
 
@@ -20,13 +20,15 @@ struct base {
   const std::size_t mask;
   T data[0];
   
-  base(std::size_t mask): mask(mask) { }
+  base(std::size_t mask=0): mask(mask) { }
 
   std::size_t size() const { return sparse::size(mask); }
   T& get(std::size_t index) { return data[sparse::index(mask, index)]; }
 
   template<std::size_t M>
   std::shared_ptr<base> set(std::size_t index, T&& value) const;
+
+  bool has(std::size_t index) const { return mask & (1ul << index); }
 };
 
 
@@ -83,6 +85,115 @@ std::shared_ptr<base<T>> base<T>::set(std::size_t index, T&& value) const {
 }
 
 
+template<class T, std::size_t level, std::size_t B, std::size_t L>
+struct node {
+  static_assert(level > 0, "level error");
+  static_assert(L > 0, "L error");
+  static_assert(B > 0, "B error");
+
+  explicit operator bool() const { return bool(children); }
+  
+  static constexpr std::size_t max_size = 1ul << B;
+  static_assert(max_size <= sizeof(std::size_t) * 8, "size error");
+    
+  static constexpr std::size_t shift = L + B * (level - 1ul);
+  static constexpr std::size_t mask = (1ul << shift) - 1ul;
+
+  struct split {
+    const std::size_t sub;
+    const std::size_t rest;
+      
+    split(std::size_t index):
+      sub(index >> shift),
+      rest(index & mask) {
+      assert(sub < max_size);
+    }
+  };
+  
+  using child_type = node<T, level - 1, B, L>;
+  using children_type = std::shared_ptr<base<child_type>>;
+  children_type children;
+  
+  node(children_type children): children(std::move(children)) { }
+  node() = default;
+  
+  T& get(split index) const {
+    return children->get(index.sub)->get(index.rest);
+  }
+  
+  node set(split index, const T& value) const {
+    if(children->has(index.sub)) {
+      return children->template set<max_size>(index.sub, children->get(index.sub).set(index.rest, value));
+    } else {
+      return children->template set<max_size>(index.sub, child_type(index.rest, value));
+    }
+  }
+
+  node(split index, const T& value):
+    children(base<child_type>().template set<max_size>(index.sub, child_type(index.rest, value))) { }
+  
+
+};
+
+
+template<class T, std::size_t B, std::size_t L>
+struct node<T, 0, B, L> {
+  static constexpr std::size_t level = 0;
+  static constexpr std::size_t max_size = 1ul << L;
+  static_assert(max_size <= sizeof(std::size_t) * 8, "size error");
+  
+  using child_type = T;
+  using children_type = std::shared_ptr<base<child_type>>;
+  children_type children;
+  
+  node(children_type children): children(std::move(children)) { }
+  node() = default;
+  
+  T& get(std::size_t index) const {
+    return children->get(index);
+  }
+
+  node set(std::size_t index, const T& value) const {
+    return children->template set<max_size>(index, T(value));
+  }
+
+  explicit operator bool() const { return bool(children); }
+
+  node(std::size_t index, const T& value):
+    children(base<child_type>().template set<max_size>(index, T(value))) { }
+  
+};
+
+
+template<class T, std::size_t B=6, std::size_t L=6>
+class amt {
+  static constexpr std::size_t index_bits = sizeof(std::size_t) * 8;
+  static constexpr std::size_t max_level = (index_bits - L) / B;
+
+  using root_type = node<T, max_level, B, L>;
+  root_type root;
+  
+  amt(root_type root): root(std::move(root)) { }
+  
+public:
+  amt() : root(nullptr) {}
+
+  amt set(std::size_t index, const T& value) const {
+    if(!root) {
+      return root_type(index, value);
+    }
+
+    return root.set(index, value);
+  }
+
+  const T& get(std::size_t index) const {
+    return root.get(index);
+  }
+  
+};
+
+
+
 #include <iostream>
 
 static const struct test {
@@ -93,6 +204,9 @@ static const struct test {
     std::clog << x->get(0) << std::endl;
     std::clog << x->get(4) << std::endl;    
     std::exit(0);
+
+    amt<double> test;
+    test.set(0, 1);
   }
 } instance;
 
