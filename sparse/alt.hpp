@@ -233,6 +233,12 @@ namespace alt {
     node(std::size_t index, const T& value):
       base(children_type().set(index, T(value))) { }
 
+    // node(std::size_t index, const T& value):
+    //   base(make_array<T>(-1l)) {
+    //   get(index) = value;
+    // }
+
+    
     friend node emplace(node self, std::size_t index, const T& value) {
       if(!self.storage.unique() || !self.children()->has(index)) {
         return self.set(index, value);
