@@ -4,19 +4,40 @@
 #include <memory>
 #include <cassert>
 #include <array>
+#include <cstdint>
 
 namespace alt { 
 
   namespace sparse {
 
-    static std::size_t size(std::size_t mask) {
+    static std::size_t size(std::uint64_t mask) {
       return __builtin_popcountl(mask);
     }
   
-    static std::size_t index(std::size_t mask, std::size_t index) {
+    static std::size_t index(std::uint64_t mask, std::size_t index) {
       return size(mask & ((1ul << index) - 1));      
     }
-  
+
+    static std::size_t first(std::uint64_t mask) {
+      return __builtin_ctzl(mask);
+    }
+
+    template<class Cont>
+    static void iter(std::uint64_t mask, const Cont& cont) {
+      std::size_t index = 0;
+      while(mask) {
+        const std::size_t rank = sparse::first(mask);
+
+        index += rank;
+        mask >>= rank;
+        
+        cont(index);
+        
+        mask >>= 1;
+        index += 1;
+      }
+    }
+    
   }
 
   template<class T, class V>
@@ -62,10 +83,11 @@ namespace alt {
 
   template<class T>
   struct array {
-    const std::size_t mask;
+    using mask_type = std::uint64_t;
+    const mask_type mask;
     T* const data;
     
-    array(std::size_t mask, T** allocated):
+    array(mask_type mask, T** allocated):
       mask(mask), data(*allocated) {
       for(std::size_t i = 0, n = size(); i < n; ++i) {
         new (data + i) T;
@@ -86,6 +108,15 @@ namespace alt {
     std::shared_ptr<array> set(std::size_t index, T&& value) const;
 
     bool has(std::size_t index) const { return mask & (1ul << index); }
+
+    template<class Cont>
+    void iter(const Cont& cont) const {
+      auto it = data;
+      sparse::iter(mask, [&](std::size_t index) {
+        cont(index, *it++);
+      });
+    }
+    
   };
 
 
@@ -130,6 +161,7 @@ namespace alt {
     return res;
   }
 
+  
   struct base {
     using storage_type = std::shared_ptr<void>;
     storage_type storage;
@@ -202,7 +234,43 @@ namespace alt {
     
       return self;
     }
-  
+
+
+    template<class Cont>
+    void iter(std::size_t offset, const Cont& cont) const {
+      children()->iter([&](std::size_t sub, const base& child) {
+        static_cast<const child_type&>(child).iter(offset + (sub << shift), cont);
+      });
+    }
+
+
+    friend node merge(node lhs, node rhs) {
+      auto result = make_array<base>(lhs.children()->mask | rhs.children()->mask);
+
+      // left-only
+      sparse::iter(lhs.children()->mask & ~rhs.children()->mask,
+                   [&](std::size_t index) {
+                     // TODO move from if unique
+                     result->at(index) = lhs.child(index);
+                   });
+
+      // right-only
+      sparse::iter(~lhs.children()->mask & rhs.children()->mask,
+                   [&](std::size_t index) {
+                     // TODO move from if unique      
+                     result->at(index) = rhs.child(index);
+                   });
+
+      // both
+      sparse::iter(lhs.children()->mask & rhs.children()->mask,
+                   [&](std::size_t index) {
+                     // TODO move from if unique      
+                     result->at(index) = merge(lhs.child(index), rhs.child(index));
+                   });      
+      
+      return result;
+    }
+    
 
   };
 
@@ -248,7 +316,45 @@ namespace alt {
     
       return self;
     }
-  
+
+
+    template<class Cont>
+    void iter(std::size_t offset, const Cont& cont) const {
+      children()->iter([&](std::size_t index, const T& value) {
+        // TODO capture offset by value?
+        cont(offset + index, value);
+      });
+    }
+
+    
+    friend node merge(node lhs, node rhs) {
+      auto result = make_array<T>(lhs.children()->mask | rhs.children()->mask);
+
+      // left-only
+      sparse::iter(lhs.children()->mask & ~rhs.children()->mask,
+                   [&](std::size_t index) {
+                     // TODO move from if unique
+                     result->at(index) = lhs.get(index);
+                   });
+
+      // right-only
+      sparse::iter(~lhs.children()->mask & rhs.children()->mask,
+                   [&](std::size_t index) {
+                     // TODO move from if unique      
+                     result->at(index) = rhs.get(index);
+                   });
+
+      // both
+      sparse::iter(lhs.children()->mask & rhs.children()->mask,
+                   [&](std::size_t index) {
+                     assert(lhs.get(index) == rhs.get(index));
+                     // TODO move from if unique      
+                     result->at(index) = lhs.get(index);
+                   });      
+
+      return result;
+    }
+    
   };
 
 
@@ -273,7 +379,22 @@ namespace alt {
       if(!self.root.storage) return root_type(index, value);
       return emplace(std::move(self.root), index, value);
     }
-  
+
+    friend amt operator+(amt lhs, amt rhs) {
+      if(!lhs.root.storage) return rhs;
+      if(!rhs.root.storage) return lhs;
+
+      return merge(std::move(lhs.root), std::move(rhs.root));
+    }
+
+
+    template<class Cont>
+    void iter(const Cont& cont) const {
+      if(!root.storage) return;
+      root.iter(0, cont);
+    }
+    
+    
   };
 
 }

@@ -110,6 +110,18 @@ int main(int, char**) {
   static constexpr std::size_t B = 6;
   static constexpr std::size_t L = 6;
 
+  alt::amt<double> lhs, rhs;
+
+  for(std::size_t i = 0; i < 10; ++i) {
+    lhs = set(std::move(lhs), i, i);
+    rhs = set(std::move(rhs), 20 + i, 20 + i);
+  }
+
+  (lhs + rhs).iter([&](std::size_t index, double value) {
+    std::clog << "(" << index << " " << value << ") ";
+  });
+  std::clog << std::endl;
+  
   // amt::array<std::size_t, B, L> v;
   // for(std::size_t i = 0; i < 1ul << 13; ++i) {
   //   v = std::move(v).set(i, i);
