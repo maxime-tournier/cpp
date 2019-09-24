@@ -90,7 +90,7 @@ void default_handler(const std::string& line) {
   std::stringstream ss(line);
   log::emitter em;
   if(ss >> em) {
-    std::cout << "emitter: " << em;
+    std::cout << "emitter: " << em.tag << " ";
   }
   std::cout << "message: " << ss.rdbuf() << "\n";
 }
@@ -102,7 +102,8 @@ int main(int, char** ) {
   
   std::ostream s(&buf);
 
-  s << log::emitter{"michel"} << "yo" << std::endl << "what" << std::flush << "dobidou" << "\n" << std::flush;
+  s << log::emitter{"michel"} << "yo" << std::endl
+    << "what" << std::flush << "dobidou" << "\n" << std::flush;
 
 
   return 0;
