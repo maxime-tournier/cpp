@@ -1,4 +1,4 @@
-// -*- compile-command: "make log" -*-
+// -*- compile-command: "CXXFLAGS=-std=c++14 make log" -*-
 
 #include <iostream>
 #include <sstream>
@@ -17,42 +17,48 @@ namespace log {
   };
 
 
-  using handler = std::function<void(const std::string& line, const char* emitter)>;
+  using handler = std::function<void(const std::string& line)>;
 
   std::vector<handler>& handlers(log::level level) {
     static std::vector<handler> table[log::level::size];
     return table[level];
   }
 
-  class emitter {
+  struct emitter {
     std::string tag;
-  public:
+
     friend std::ostream& operator<<(std::ostream& out, const emitter& self) {
-      // return out << "__" << tag << "@";
+      return out << "[" << self.tag << "]";
     }
 
     friend std::istream& operator>>(std::istream& in, emitter& self) {
+      const auto pos = in.tellg();
       char c;
-      if(in >> c && c == '[') {
-        while(in && in.get() != ']')
+      if((in >> c) && c == '[') {
+        std::string tag;
+        if(std::getline(in, tag, ']')) {
+          self.tag = tag;
+          return in;
+        }
       }
 
-      in.fail();
+      in.clear();
+      in.seekg(pos);
+      in.setstate(std::ios::failbit);
+      
       return in;
     }
-
+    
   };
-
+  
 
   struct dispatch: std::stringbuf {
     std::stringstream ss;
 
-    dispatch(log::level level, const char* emitter=nullptr):
-      level(level),
-      emitter(emitter) { }
+    dispatch(log::level level):
+      level(level) { }
     
     const log::level level;
-    const char* emitter = nullptr;
     
     virtual int sync() {
       // start from leftovers
@@ -62,12 +68,12 @@ namespace log {
       std::string line;
       while(std::getline(ss, line, '\n') && !ss.eof()) {
         for(const auto& h: handlers(level)) {
-          h(line, emitter);
+          h(line);
         }
       }
     
       // reset stringstream with leftovers, if any
-      ss = {};
+      ss = std::stringstream();
       ss << line;
 
       // clear buffer
@@ -77,12 +83,16 @@ namespace log {
     }
   };
 
-  
 
 }
 
-void default_handler(const std::string& line, const char* emitter=nullptr) {
-  std::cout << "process: " << line << '\n';
+void default_handler(const std::string& line) {
+  std::stringstream ss(line);
+  log::emitter em;
+  if(ss >> em) {
+    std::cout << "emitter: " << em;
+  }
+  std::cout << "message: " << ss.rdbuf() << "\n";
 }
 
 
@@ -92,7 +102,7 @@ int main(int, char** ) {
   
   std::ostream s(&buf);
 
-  s << "yo" << std::endl << "what" << std::flush << "dobidou" << "\n" << std::flush;
+  s << log::emitter{"michel"} << "yo" << std::endl << "what" << std::flush << "dobidou" << "\n" << std::flush;
 
 
   return 0;
