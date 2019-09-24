@@ -4,6 +4,7 @@
 #include <sstream>
 #include <vector>
 #include <memory>
+#include <functional>
 
 enum level {
             debug,
@@ -13,15 +14,12 @@ enum level {
             fatal,
 };
 
-struct handler {
-  virtual ~handler() { }
 
-  virtual void process(const std::string& line, const char* emitter=nullptr) = 0;
-};
+using handler = std::function<void(const std::string& line, const char* emitter)>;
 
 
 struct dispatch: std::stringbuf {
-  std::vector<std::unique_ptr<handler>> handlers;
+  std::vector<handler> handlers;
   
   std::stringstream ss;
   
@@ -33,7 +31,7 @@ struct dispatch: std::stringbuf {
     std::string line;
     while(std::getline(ss, line, '\n') && !ss.eof()) {
       for(const auto& h: handlers) {
-        h->process(line);
+        h(line, nullptr);
       }
     }
     
@@ -50,16 +48,14 @@ struct dispatch: std::stringbuf {
 };
 
 
-struct default_handler: handler {
-  void process(const std::string& line, const char* emitter=nullptr) override {
-    std::cout << "process: " << line << '\n';
-  }
-};
+void default_handler(const std::string& line, const char* emitter=nullptr) {
+  std::cout << "process: " << line << '\n';
+}
 
 
 int main(int, char** ) {
   dispatch buf;
-  buf.handlers.emplace_back(new default_handler);
+  buf.handlers.emplace_back(default_handler);
 
   std::ostream s(&buf);
 
