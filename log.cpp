@@ -11,6 +11,7 @@ namespace log {
               debug = 0,
               info,
               warning,
+              deprecated,
               error,
               fatal,
               size
