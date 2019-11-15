@@ -107,10 +107,10 @@ static void run(frame* callee) {
   }
 }
 
-// call [offset, argc]
+// call [argc, addr]
 static void call(frame* caller) {
-  frame callee{fetch_code(caller), caller->sp, caller->sp};
   const word argc = fetch_data(caller);
+  frame callee{fetch_code(caller), caller->sp, caller->sp};
   assert(argc >= 0);
   
   run(&callee);
@@ -122,6 +122,20 @@ static void call(frame* caller) {
   next(caller);
 }
 
+template<std::size_t argc>
+static void call(frame* caller) {
+  frame callee{fetch_code(caller), caller->sp, caller->sp};
+  
+  run(&callee);
+  
+  // replace args with result
+  caller->sp[-argc] = callee.sp[-1];
+  caller->sp += 1 - argc;
+  
+  next(caller);
+}
+
+  
 // push [word]
 static void push(frame* caller) {
   *caller->sp++ = fetch_data(caller);
@@ -148,6 +162,14 @@ static void load(frame* caller) {
   next(caller);
 }
 
+// load []
+template<word index>
+static void load(frame* caller) {
+  *caller->sp++ = caller->fp[index];
+  next(caller);
+}
+
+  
 static const instr ret = {0};
 
 

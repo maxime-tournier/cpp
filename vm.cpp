@@ -102,7 +102,7 @@ static std::vector<line> test =
 static std::vector<line> id = 
 {
  push, word(42),
- call, label("id"), word(1),
+ call, word(1), label("id"),
 
  
  {label("id"), load},
@@ -115,7 +115,7 @@ static std::vector<line> id =
 static std::vector<line> fact = 
 {
  push, word(10),
- call, label("fact"), word(1),
+ call, word(1), label("fact"), 
  ret,
  
  // load arg
@@ -138,7 +138,7 @@ static std::vector<line> fact =
  op<sub>,
 
  // compute fact n - 1
- call, label("fact"), word(1),
+ call, word(1), label("fact"), 
 
  // multiply
  op<mul>,
@@ -155,12 +155,11 @@ static std::vector<line> fact =
 static std::vector<line> fib = 
 {
  push, word(35),
- debug<call>, label("fib"), word(1),
+ call<1>, label("fib"), 
  ret,
  
  // load arg
- {label("fib"), load},
- word(-1),
+ {label("fib"), load<-1>},
  
  // compare to 0
  push,
@@ -171,12 +170,11 @@ static std::vector<line> fib =
  jnz, label("zero"),
 
  // load arg
- load,
- word(-1),
-
+ load, word(-1),
+ 
  // compare to 1
  push,
- word(1),
+ word(1), 
 
  cmp<eq>,
  
@@ -188,7 +186,7 @@ static std::vector<line> fib =
  op<sub>,
 
  // compute fib n - 1
- call, label("fib"), word(1),
+ call<1>, label("fib"), 
 
  // compute n - 2
  push, word(2),
@@ -196,7 +194,7 @@ static std::vector<line> fib =
  op<sub>,
 
  // compute fib n - 2 
- call, label("fib"), word(1), 
+ call<1>, label("fib"), 
  
  // add 
  op<add>, 
