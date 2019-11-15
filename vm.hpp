@@ -53,7 +53,7 @@ static void jnz(frame* caller) {
 
 
 // comparisons
-  using binary_predicate = bool (*) (word, word);
+using binary_predicate = bool (*)(word, word);
 template<binary_predicate pred>
 static void cmp(frame* caller) {
   const word rhs = *(--caller->sp);
@@ -71,6 +71,7 @@ static bool ge(word lhs, word rhs) { return lhs >= rhs; }
 static bool gt(word lhs, word rhs) { return lhs > rhs; }
 
 
+// binary ops
 using binary_operation = word (*) (word, word);
 template<binary_operation binop>
 static void op(frame* caller) {
@@ -84,8 +85,9 @@ static void op(frame* caller) {
 static word add(word lhs, word rhs) { return lhs + rhs; }
 static word sub(word lhs, word rhs) { return lhs - rhs; }
 static word mul(word lhs, word rhs) { return lhs * rhs; }
+static word div(word lhs, word rhs) { return lhs / rhs; }
+static word mod(word lhs, word rhs) { return lhs % rhs; }    
   
-// 
   
 
 // run []
