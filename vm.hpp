@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <cassert>
 
+#include <iostream>
+
 namespace vm {
 
   
@@ -23,6 +25,13 @@ struct frame {
   const code* ip;
   word* fp;
   word* sp;
+
+  friend std::ostream& operator<<(std::ostream& out, const frame& self) {
+    for(const word* it = self.fp; it != self.sp; ++it) {
+      out << it - self.fp << "\t" << *it << '\n';
+    }
+    return out;
+  }
 };
 
 // fetch next instruction as data
@@ -48,6 +57,7 @@ static void jnz(frame* caller) {
     jmp(caller);
   } else {
     next(caller);
+    next(caller);    
   }
 }
 
@@ -75,8 +85,8 @@ static bool gt(word lhs, word rhs) { return lhs > rhs; }
 using binary_operation = word (*) (word, word);
 template<binary_operation binop>
 static void op(frame* caller) {
-  const word rhs = *(--caller->sp);
   const word lhs = *(--caller->sp);
+  const word rhs = *(--caller->sp);
   
   *caller->sp++ = binop(lhs, rhs);
   next(caller);
@@ -106,9 +116,8 @@ static void call(frame* caller) {
   run(&callee);
   
   // replace args with result
-  caller->sp[-argc] = *caller->sp;
-  caller->sp -= argc;
-  ++caller->sp;
+  caller->sp[-argc] = callee.sp[-1];
+  caller->sp += 1 - argc;
   
   next(caller);
 }
@@ -149,5 +158,10 @@ static word eval(const code* prog, word* stack) {
   return stack[0];
 }
 
+template<instr op=next>
+static void debug(frame* caller) {
+  op(caller);
+  std::clog << *caller << std::endl;
+}
 
 } // namespace vm
