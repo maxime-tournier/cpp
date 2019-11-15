@@ -3,21 +3,24 @@
 
 namespace vm {
 
+  
 using word = std::int64_t;
 struct frame;
 
 using instr = void (*)(frame*);
 
+
 union code {
   instr op;
   word data;
-
+  
   code(instr op): op(op) { }
   code(word data): data(data) { }
 };
 
+
 struct frame {
-  code* ip;
+  const code* ip;
   word* fp;
   word* sp;
 };
@@ -25,24 +28,65 @@ struct frame {
 // fetch next instruction as data
 static word fetch_data(frame* caller) { return (++caller->ip)->data; }
 
-// fetch next instruction as code pointer  
-static code* fetch_code(frame* caller) {
-  // note: offset is relative to the current instruction
-  code* const base = caller->ip;
+// fetch next instruction as code pointer 
+static const code* fetch_code(frame* caller) {
   const word offset = fetch_data(caller);
-
-  return base + offset;
+  return caller->ip + offset;
 }
 
 // next []
 static void next(frame* caller) { ++caller->ip; }
 
 // jump [offset]
-static void jump(frame* caller) {
-  // note: offset is relative to the jump instruction
+static void jmp(frame* caller) {
   caller->ip = fetch_code(caller);
 }
 
+// jnz [offset]
+static void jnz(frame* caller) {
+  if(*(--caller->sp)) {
+    jmp(caller);
+  } else {
+    next(caller);
+  }
+}
+
+
+// comparisons
+  using binary_predicate = bool (*) (word, word);
+template<binary_predicate pred>
+static void cmp(frame* caller) {
+  const word rhs = *(--caller->sp);
+  const word lhs = *(--caller->sp);
+  
+  *caller->sp++ = pred(lhs, rhs);
+  next(caller);
+}
+
+static bool eq(word lhs, word rhs) { return lhs == rhs; }
+static bool ne(word lhs, word rhs) { return lhs != rhs; }
+static bool le(word lhs, word rhs) { return lhs <= rhs; }
+static bool lt(word lhs, word rhs) { return lhs < rhs; }
+static bool ge(word lhs, word rhs) { return lhs >= rhs; }
+static bool gt(word lhs, word rhs) { return lhs > rhs; }
+
+
+using binary_operation = word (*) (word, word);
+template<binary_operation binop>
+static void op(frame* caller) {
+  const word rhs = *(--caller->sp);
+  const word lhs = *(--caller->sp);
+  
+  *caller->sp++ = binop(lhs, rhs);
+  next(caller);
+}
+
+static word add(word lhs, word rhs) { return lhs + rhs; }
+static word sub(word lhs, word rhs) { return lhs - rhs; }
+static word mul(word lhs, word rhs) { return lhs * rhs; }
+  
+// 
+  
 
 // run []
 static void run(frame* callee) {
@@ -53,7 +97,6 @@ static void run(frame* callee) {
 
 // call [offset, argc]
 static void call(frame* caller) {
-  // note: offset is relative to the call instruction
   frame callee{fetch_code(caller), caller->sp, caller->sp};
   const word argc = fetch_data(caller);
   assert(argc >= 0);
@@ -98,7 +141,7 @@ static const instr ret = {0};
 
 
 // toplevel eval
-static word eval(code* prog, word* stack) {
+static word eval(const code* prog, word* stack) {
   frame init{prog, stack, stack};
   run(&init);
   return stack[0];
