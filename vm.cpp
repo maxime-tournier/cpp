@@ -1,4 +1,5 @@
 #include "vm.hpp"
+#include "as.hpp"
 
 #include <vector>
 #include <set>
@@ -7,89 +8,10 @@
 #include <iostream>
 
 
-using label = const char*;
-
-static label make_label(std::string name) {
-  static std::set<std::string> table;
-  return table.emplace(name).first->c_str();
-}
-
-
-struct line {
-  union  {
-    struct {
-      vm::instr op;
-      label addr;
-    } instr;
-  
-    vm::word data;
-    label addr;
-  } value;
-
-  enum {INSTR, DATA, ADDR} kind;
-
-  line(vm::instr op) {
-    kind = INSTR;
-    value.instr = {op, nullptr};
-  }
-
-  line(label addr, vm::instr op) {
-    kind = INSTR;
-    value.instr = {op, addr};
-  }
-
-  
-  line(vm::word data) {
-    kind = DATA;
-    value.data = data;
-  }
-
-  line(label addr) {
-    kind = ADDR;
-    value.addr = addr;
-  }
-};
-
-
-
-static std::vector<vm::code> link(const std::vector<line>& listing) {
-  std::map<label, const line*> table;
-  
-  for(const line& it: listing) {
-    // build address table
-    if(it.kind == line::INSTR && it.value.instr.addr) {
-      const auto info = table.emplace(it.value.instr.addr, &it);
-      if(!info.second) throw std::runtime_error("duplicate label");
-    }
-  }
-  
-  std::vector<vm::code> result;
-  
-  for(const line& it: listing) {
-    switch(it.kind) {
-    case line::INSTR:
-      result.emplace_back(it.value.instr.op);
-      break;
-    case line::DATA:
-      result.emplace_back(it.value.data);
-      break;
-    case line::ADDR: {
-      const auto at = table.find(it.value.addr);
-      if(at == table.end()) throw std::runtime_error("unknown label");
-      const vm::word offset = at->second - &it;
-      result.emplace_back(offset);
-      break;
-    }
-    }
-  }
-
-  return result;
-}
 
 
 using namespace vm;
-
-
+using namespace as;
 
 
 static std::vector<line> test = 
@@ -102,7 +24,7 @@ static std::vector<line> test =
 static std::vector<line> id = 
 {
  push, word(42),
- call, word(1), label("id"),
+ call, word(1), as::label("id"),
 
  
  {label("id"), load},
@@ -112,7 +34,7 @@ static std::vector<line> id =
 
 
 
-static std::vector<line> fact = 
+static std::vector<as::line> fact = 
 {
  push, word(10),
  call, word(1), label("fact"), 
@@ -217,7 +139,7 @@ int main(int, char**) {
   static constexpr std::size_t size = 1024;
   static vm::word stack[size];
 
-  const auto prog = link(fib);
+  const auto prog = as::link(fib);
   std::cout << vm::eval(prog.data(), stack) << std::endl;
   
   return 0;

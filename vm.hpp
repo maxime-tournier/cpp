@@ -1,3 +1,6 @@
+#ifndef VM_HPP
+#define VM_HPP
+
 #include <cstdint>
 #include <cassert>
 
@@ -187,3 +190,7 @@ static void debug(frame* caller) {
 }
 
 } // namespace vm
+
+
+
+#endif
