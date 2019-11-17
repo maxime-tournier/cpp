@@ -16,3 +16,5 @@ distclean: FORCE
 
 FORCE:
 
+CXXFLAGS += -O3
+vm: vm.o vm-ext.o
