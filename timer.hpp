@@ -43,14 +43,14 @@ struct event {
 
 class timeline {
   std::vector<event> events;
-  std::atomic<std::size_t> next;
+  std::atomic<std::size_t> size;
 public:
   timeline(std::size_t size): events(size), next(0) { };
 
   // add event, return true on success, false otherwise. thread-safe.
   bool add(event ev) {
     // atomic
-    const std::size_t index = next++;
+    const std::size_t index = size++;
     
     if(index >= events.size()) {
       return false;
@@ -63,24 +63,37 @@ public:
 
   // clear timeline. *not* thread-safe
   void clear() {
-    const std::size_t max = next;
+    const std::size_t max = size;
     events.resize(std::max(max, events.size()));
-    next = 0;
+    size = 0;
   }
+
+  // iterators
+  const event* begin() const { return events.data(); }
+  const event* end() const { return events.data() + size; }  
   
+  static timeline instance;
 };
+
+timeline timeline::instance(100000);
 
 struct timer {
   const event::id_type id;
   timeline& tl;
   
-  timer(event::id_type id, timeline& tl): id(id), tl(tl) {
+  timer(event::id_type id, timeline& tl=timeline::instance): id(id), tl(tl) {
     tl.add(event::begin(id));
   }
 
   ~timer() { tl.add(event::end(id)); }
 };
 
+
+template<class T>
+struct tree {
+  T value;
+  std::vector<tree> children;
+};
 
 
 
