@@ -45,7 +45,7 @@ class timeline {
   std::vector<event> events;
   std::atomic<std::size_t> size;
 public:
-  timeline(std::size_t size): events(size), next(0) { };
+  timeline(std::size_t size): events(size), size(0) { };
 
   // add event, return true on success, false otherwise. thread-safe.
   bool add(event ev) {
@@ -90,11 +90,22 @@ struct timer {
 
 
 template<class T>
-struct tree {
-  T value;
+struct tree: T {
+  using T::T;
   std::vector<tree> children;
 };
 
+struct node {
+  const char* id;
+  event::time_type begin, end;
+};
+
+
+static tree<node> process(const timeline& self) {
+  for(const event& ev: self) {
+    
+  }
+}
 
 
 #endif
