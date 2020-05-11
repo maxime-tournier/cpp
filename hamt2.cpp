@@ -1,3 +1,5 @@
+// -*- compile-command: "c++ -std=c++14 hamt2.cpp -o hamt" -*-
+
 #include <array>
 #include <memory>
 
@@ -54,16 +56,59 @@ struct node<T, B, L, 0>: chunk<T, (1ul << L)> {
 };
 
 
+namespace detail {
+  template<std::size_t B, std::size_t L, std::size_t D>
+  static constexpr std::size_t mask() {
+    return ((1ul << (L + 1)) - 1) << (D * B);
+  }
+
+  template<std::size_t B, std::size_t L, std::size_t D>
+  static constexpr std::size_t offset() {
+    return D ? L + (D - 1) * B : 0;
+  }
+
+
+  template<std::size_t B, std::size_t L, std::size_t ... Ds>
+  static constexpr std::array<std::size_t, sizeof...(Ds)> make_masks(std::index_sequence<Ds...>) {
+    return {mask<B, L, Ds>()...};
+  }
+
+  template<std::size_t B, std::size_t L, std::size_t ... Ds>
+  static constexpr std::array<std::size_t, sizeof...(Ds)> make_offsets(std::index_sequence<Ds...>) {
+    return {offset<B, L, Ds>()...};
+  }
+
+  template<std::size_t B, std::size_t L, std::size_t ... Ds>
+  static std::array<std::size_t, sizeof...(Ds)> split(const std::array<std::size_t, sizeof...(Ds)>& masks,
+                                                      const std::array<std::size_t, sizeof...(Ds)>& offsets,
+                                                      std::size_t index, std::index_sequence<Ds...>) {
+    return {((index & masks[Ds]) >> offsets[Ds])...};
+  }
+  
+}
+
+
+
 template <class T, std::size_t B, std::size_t L>
 class hamt {
     static constexpr std::size_t bits = sizeof(std::size_t) * 8;
     static_assert(L <= bits, "size error");
     static constexpr std::size_t depth = (bits - L) / B;
 
+    using indices = std::make_index_sequence<depth>;
+    static constexpr auto masks = make_masks<B, L>(indices{});
+    static constexpr auto offsets = make_offsets<B, L>(indices{});
+
     using root_type = node<T, B, L, depth>;
     ref<root_type> root;
+    
 public:
     bool empty() const { return !bool(root); }
+
+    const T& get(std::size_t index) const {
+        auto split = detail::split(masks, offsets, index, indices{});
+        return get(split, root);
+    }
 };
 
 
