@@ -1,0 +1,29 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+
+Language: Cpp
+# Force pointers to the type for C++.
+DerivePointerAlignment: false
+PointerAlignment: Left
+AlignTrailingComments: true
+ColumnLimit: 105
+NamespaceIndentation: None
+KeepEmptyLinesAtTheStartOfBlocks: false
+BreakConstructorInitializers: AfterColon
+AlwaysBreakTemplateDeclarations: true
+
+MaxEmptyLinesToKeep: 2
+
+# spaces
+SpaceAfterTemplateKeyword: false
+SpaceBeforeRangeBasedForLoopColon: false
+SpaceBeforeInheritanceColon: false
+SpaceBeforeCtorInitializerColon: false
+SpacesInAngles: false
+SpacesInSquareBrackets: false
+SpaceBeforeParens: Never
+SpacesInParentheses: false
+
+ReflowComments: true
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+AccessModifierOffset: -4
