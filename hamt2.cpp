@@ -22,6 +22,11 @@ namespace detail {
   }
 
 
+  template<class T, std::size_t N>
+  static const T& get(const std::array<T, N>& values, std::size_t index) {
+    return values[index];
+  }
+
   template<class T, class U, std::size_t... Is>
   static std::array<T, sizeof...(Is)> set(std::array<T, sizeof...(Is)>&& values,
                                           std::size_t index, U&& value,
@@ -155,7 +160,7 @@ private:
   
   template<std::size_t D>
   static const node_type<D - 1>* child(const node_type<D>* self, std::size_t index) {
-    return static_cast<const node_type<D - 1>*>(self->values[index].get());
+    return static_cast<const node_type<D - 1>*>(detail::get(self->values, index).get());
   }
 
 
@@ -187,7 +192,8 @@ private:
       return make_node<D>(detail::set(self->values, split[D],
                                       set(split, child(self, split[D]), std::move(value)), indices)); 
     } else {
-      return make_node<D>(split[D], set(split, nullptr, std::move(value)), indices);
+      constexpr node_type<D - 1>* child = nullptr;
+      return make_node<D>(split[D], set(split, child, std::move(value)), indices);
     }
   }
 };
@@ -198,12 +204,17 @@ constexpr typename hamt<T, B, L>::index_array hamt<T, B, L>::masks;
 template<class T, std::size_t B, std::size_t L>
 constexpr typename hamt<T, B, L>::index_array hamt<T, B, L>::offsets;
 
+#include <iostream>
 
 int main(int, char**) {
   using hamt_type = hamt<double, 5, 5>;
   hamt_type x;
 
   x = x.set(0, 0);
-  x = x.set(2, 0);
+  x = x.set(2, 2);
+
+  std::clog << x.get(0) << std::endl;
+  std::clog << x.get(2) << std::endl;  
+  
   return 0;
 }
