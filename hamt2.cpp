@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -std=c++14 hamt2.cpp -o hamt" -*-
+// -*- compile-command: "c++ -std=c++14 hamt2.cpp -o hamt -lstdc++ -g" -*-
 
 #include <array>
 #include <memory>
@@ -22,17 +22,19 @@ namespace detail {
   }
 
 
-  template<class T, std::size_t... Is>
-  static std::array<T, sizeof...(Is)> set(std::array<T, sizeof...(Is)>&& firsts, std::size_t index,
-                                          T&& value) {
-    return {std::move(Is == index ? value : std::get<Is>(firsts))...};
+  template<class T, class U, std::size_t... Is>
+  static std::array<T, sizeof...(Is)> set(std::array<T, sizeof...(Is)>&& values,
+                                          std::size_t index, U&& value,
+                                          std::index_sequence<Is...>) {
+    return {std::move((Is == index) ? value : std::get<Is>(values))...};
   }
 
 
-  template<class T, std::size_t... Is>
-  static std::array<T, sizeof...(Is)> set(const std::array<T, sizeof...(Is)>& firsts, std::size_t index,
-                                          const T& value) {
-    return {(Is == index ? value : std::get<Is>(firsts))...};
+  template<class T, class U, std::size_t... Is>
+  static std::array<T, sizeof...(Is)> set(const std::array<T, sizeof...(Is)>& values,
+                                          std::size_t index, const U& value,
+                                          std::index_sequence<Is...>) {
+    return {((Is == index) ? value : std::get<Is>(values))...};
   }
 }
 
@@ -51,14 +53,14 @@ struct chunk: base {
 
 template<class T, std::size_t B, std::size_t L, std::size_t D>
 struct node: chunk<ref<base>, (1ul << B)> {
-  using node::chunk::node;
+  using node::chunk::chunk;
   // inner node
 };
 
 
 template<class T, std::size_t B, std::size_t L>
 struct node<T, B, L, 0>: chunk<T, (1ul << L)> {
-  using node::chunk::node;
+  using node::chunk::chunk;
   // leaf node
 };
 
@@ -68,40 +70,56 @@ template<class T, std::size_t B, std::size_t L>
 class hamt {
   static constexpr std::size_t bits = sizeof(std::size_t) * 8;
   static_assert(L <= bits, "size error");
-  static constexpr std::size_t depth = (bits - L) / B;
+  
+  static constexpr std::size_t inner_levels = (bits - L) / B;  
+  static constexpr std::size_t total_levels = 1 + inner_levels;
+  static_assert(L + inner_levels * B <= bits, "size error");
+  
+  template<std::size_t D> using node_type = node<T, B, L, D>;
 
-  using root_type = node<T, B, L, depth>;
+  // root node is toplevel
+  using root_type = node_type<total_levels - 1>;
   ref<root_type> root;
 
   public:
   bool empty() const { return !bool(root); }
 
   const T& get(std::size_t index) const {
-    const index_array split = hamt::split(masks, offsets, index, indices{});
+    const index_array split = hamt::split(masks, offsets, index, level_indices{});
     return get(split, root.get());
   }
 
-  hamt set(std::size_t index, const T& value) const {
-    const index_array split = hamt::split(masks, offsets, index, indices{});
-    return set(split, root.get());
+  hamt set(std::size_t index, T&& value) const {
+    const index_array split = hamt::split(masks, offsets, index, level_indices{});
+    return hamt::set(split, root.get(), std::move(value));
   }
 
-  hamt(ref<root_type> root): root(std::move(root)) {}
+  hamt(): hamt(nullptr) { }
   
 private:
-  using indices = std::make_index_sequence<depth>;
+  hamt(ref<root_type> root): root(std::move(root)) {}
 
+  using level_indices = std::make_index_sequence<total_levels>;
+  using index_array = std::array<std::size_t, total_levels>;
+  
   template<std::size_t D>
   static constexpr std::size_t mask() {
-    return ((1ul << (L + 1)) - 1) << (D * B);
+    if(D) {
+      return ((1ul << (B + 1)) - 1) << (L + (D - 1) * B);
+    } else {
+      return (1ul << (L + 1)) - 1;
+    }
   }
 
   template<std::size_t D>
   static constexpr std::size_t offset() {
-    return D ? L + (D - 1) * B : 0;
+    if(D) {
+      return L + (D - 1) * B;
+    } else {
+      return 0;
+    }
   }
 
-  using index_array = std::array<std::size_t, depth>;
 
   template<std::size_t... Ds>
   static constexpr index_array make_masks(std::index_sequence<Ds...>) {
@@ -121,57 +139,71 @@ private:
     return {((index & masks[Ds]) >> offsets[Ds])...};
   }
 
+  static constexpr index_array masks = make_masks(level_indices{});
+  static constexpr index_array offsets = make_offsets(level_indices{});
 
-  static constexpr index_array masks = make_masks(indices{});
-  static constexpr index_array offsets = make_offsets(indices{});
+  template<std::size_t D, class ... Args>
+  static auto make_node(Args&& ... args) {
+    return std::make_shared<node_type<D>>(std::forward<Args>(args)...);
+  }
 
-  static const T& get(const index_array& split, const node<T, B, L, 0>* self) {
-    return self->values[split[0]];
+  // child access
+  static const T& child(const node_type<0>* self, std::size_t index) {
+    return self->values[index];
+  }
+
+  
+  template<std::size_t D>
+  static const node_type<D - 1>* child(const node_type<D>* self, std::size_t index) {
+    return static_cast<const node_type<D - 1>*>(self->values[index].get());
+  }
+
+
+  // get
+  static const T& get(const index_array& split, const node_type<0>* self) {
+    return child(self, split[0]);
   }
   
   template<std::size_t D>
-  static const T& get(const index_array& split, const node<T, B, L, D>* self) {
-    const base* child = self->values[split[D]].get();
-    return get(split, static_cast<const node<T, B, L, D - 1>*>(child));
+  static const T& get(const index_array& split, const node_type<D>* self) {
+    return get(split, child(self, split[D]));
   }
 
 
-  static ref<node<T, B, L, 0>> make(const index_array& split, T&& value,
-                                                std::integral_constant<std::size_t, 0>) {
-    return std::make_shared<node<T, B, L, 0>>(split[0], std::move(value), std::make_index_sequence<L>{});
-  }
-
-  template<std::size_t D>
-  static ref<node<T, B, L, D>> make(const index_array& split, T&& value,
-                                    std::integral_constant<std::size_t, D>) {
-    return std::make_shared<node<T, B, L, D>>(split[D], make(split, std::move(value),
-                                                             std::integral_constant<std::size_t, D - 1>{}),
-                                              std::make_index_sequence<B>{});
-  }
-
-  static ref<node<T, B, L, 0>> set(const index_array& split, const node<T, B, L, 0>* self, T&& value) {
-    return std::make_shared<node<T, B, L, 0>>(detail::set(self->values, split[0], std::move(value),
-                                                          std::make_index_sequence<L>{}));
+  // set
+  static ref<node_type<0>> set(const index_array& split, const node_type<0>* self, T&& value) {
+    constexpr auto indices = std::make_index_sequence<(1 << L)>{};
+    if(self) {
+      return make_node<0>(detail::set(self->values, split[0], std::move(value), indices)); 
+    } else {
+      return make_node<0>(split[0], std::move(value), indices);
+    }
   }
     
   template<std::size_t D>
-  static ref<node<T, B, L, D>> set(const index_array& split, const node<T, B, L, D>* self, T&& value) {
-    ref<node<T, B, L, D - 1>> new_child;
-    if(auto child = self->values[split[D]].get()) {
-      new_child = set(split, static_cast<const node<T, B, L, D - 1>*>(child), std::move(value));
+  static ref<node_type<D>> set(const index_array& split, const node_type<D>* self, T&& value) {
+    constexpr auto indices = std::make_index_sequence<(1 << B)>{};    
+    if(self) {
+      return make_node<D>(detail::set(self->values, split[D],
+                                      set(split, child(self, split[D]), std::move(value)), indices)); 
     } else {
-      new_child = make<D - 1>(split, std::move(value));
+      return make_node<D>(split[D], set(split, nullptr, std::move(value)), indices);
     }
-
-    return std::make_shared<node<T, B, L, D>>(detail::set(self->values, split[D], std::move(new_child),
-                                                          std::make_index_sequence<B>{}));
   }
-  
 };
+
+template<class T, std::size_t B, std::size_t L>
+constexpr typename hamt<T, B, L>::index_array hamt<T, B, L>::masks;
+
+template<class T, std::size_t B, std::size_t L>
+constexpr typename hamt<T, B, L>::index_array hamt<T, B, L>::offsets;
 
 
 int main(int, char**) {
   using hamt_type = hamt<double, 5, 5>;
   hamt_type x;
+
+  x = x.set(0, 0);
+  x = x.set(2, 0);
   return 0;
 }
