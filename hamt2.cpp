@@ -43,32 +43,56 @@ namespace detail {
   }
 }
 
-template<class T, std::size_t N>
-struct chunk: base {
-  using values_type = std::array<T, N>;
-  values_type values;
-  
-  chunk(values_type values): values(std::move(values)) {}
 
-  template<std::size_t ... Is>
-  chunk(std::size_t index, T&& value, std::index_sequence<Is...>):
-    values{std::move(index == Is ? value : T{})...} {}
+template<class T>
+struct chunk: base {
+  const T values[0] = {};
 };
 
 
 template<class T, std::size_t B, std::size_t L, std::size_t D>
-struct node: chunk<ref<base>, (1ul << B)> {
-  using node::chunk::chunk;
-  // inner node
+struct node: chunk<ref<base>> {
+  static constexpr std::size_t size = 1ul << B;
+  using value_type = ref<base>;
+  virtual ref<node> set(std::size_t index, value_type&& value) const = 0;
 };
 
 
 template<class T, std::size_t B, std::size_t L>
-struct node<T, B, L, 0>: chunk<T, (1ul << L)> {
-  using node::chunk::chunk;
-  // leaf node
+struct node<T, B, L, 0>: chunk<T> {
+  static constexpr std::size_t size = 1ul << L;
+  using value_type = T;  
+  virtual ref<node> set(std::size_t index, value_type&& value) const = 0;
 };
 
+
+template<class T, std::size_t B, std::size_t L, std::size_t D>
+struct storage_node: node<T, B, L, D> {
+  using typename storage_node::node::value_type;
+  using storage_type = std::array<value_type, storage_node::size>;
+  using indices_type = std::make_index_sequence<storage_node::size>;
+  
+  storage_type storage;
+
+  
+  template<std::size_t ... Is>
+  storage_node(std::size_t index, value_type&& value, std::index_sequence<Is...>):
+    storage{std::move(index == Is ? value : value_type{})...} { }
+
+  storage_node(std::size_t index, value_type&& value):
+    storage_node(index, std::move(value), indices_type{}) { }
+  
+  template<std::size_t ... Is>
+  storage_node(std::size_t index, const value_type& value, const storage_type& source, std::index_sequence<Is...>):
+    storage{(index == Is ? value : source[Is])...} { }
+  
+  ref<node<T, B, L, D>> set(std::size_t index, value_type&& value) const override {
+    return std::make_shared<storage_node>(index, std::move(value), storage, std::make_index_sequence<storage_node::size>{});
+  }
+
+  storage_node(std::size_t index, const value_type& value, const storage_type& source): storage_node(index, value, source, indices_type{}) { }
+  
+};
 
 
 template<class T, std::size_t B, std::size_t L>
@@ -148,19 +172,18 @@ private:
   static constexpr index_array offsets = make_offsets(level_indices{});
 
   template<std::size_t D, class ... Args>
-  static auto make_node(Args&& ... args) {
-    return std::make_shared<node_type<D>>(std::forward<Args>(args)...);
+  static auto make_node(Args&&...args) {
+    return std::make_shared<storage_node<T, B, L, D>>(std::forward<Args>(args)...);
   }
 
   // child access
   static const T& child(const node_type<0>* self, std::size_t index) {
     return self->values[index];
   }
-
   
   template<std::size_t D>
   static const node_type<D - 1>* child(const node_type<D>* self, std::size_t index) {
-    return static_cast<const node_type<D - 1>*>(detail::get(self->values, index).get());
+    return static_cast<const node_type<D - 1>*>(self->values[index].get());
   }
 
 
@@ -179,9 +202,9 @@ private:
   static ref<node_type<0>> set(const index_array& split, const node_type<0>* self, T&& value) {
     constexpr auto indices = std::make_index_sequence<(1 << L)>{};
     if(self) {
-      return make_node<0>(detail::set(self->values, split[0], std::move(value), indices)); 
+      return self->set(split[0], std::move(value));
     } else {
-      return make_node<0>(split[0], std::move(value), indices);
+      return hamt::make_node<0>(split[0], std::move(value));
     }
   }
     
@@ -189,11 +212,10 @@ private:
   static ref<node_type<D>> set(const index_array& split, const node_type<D>* self, T&& value) {
     constexpr auto indices = std::make_index_sequence<(1 << B)>{};    
     if(self) {
-      return make_node<D>(detail::set(self->values, split[D],
-                                      set(split, child(self, split[D]), std::move(value)), indices)); 
+      return self->set(split[D], set(split, child(self, split[D]), std::move(value))); 
     } else {
       constexpr node_type<D - 1>* child = nullptr;
-      return make_node<D>(split[D], set(split, child, std::move(value)), indices);
+      return hamt::make_node<D>(split[D], set(split, child, std::move(value)), indices);
     }
   }
 };
