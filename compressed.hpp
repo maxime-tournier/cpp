@@ -14,15 +14,21 @@ protected:
   
 public:
   virtual ~base() {}
-  // std::size_t 
+  
+  std::size_t size() const {
+    return __builtin_popcount(mask); 
+  }
 };
 
 template<class T>
-struct array: base {
+class array: public base {
   using base::base;
-  
   const T data[0] = {};
-
+public:
+  const T& get(std::size_t index) const {
+    return data[sparse_index(this->mask, index)];
+  }
+  
   virtual std::shared_ptr<array> set(std::size_t index, T&& value) const = 0;
 };
 
@@ -55,27 +61,28 @@ struct storage: array<T> {
   using values_type = std::array<T, N>;
   values_type values;
 
-  // single
-  // template<std::size_t=N>
-  // storage(std::size_t index, T&& value): storage(1ul << index, std::move(value)) {
-  //   static_assert(N == 1, "size error");
-  // }
-
   // general
   template<class... Args>
   storage(std::size_t mask, Args&&... args):
     array<T>(mask),
     values{std::forward<Args>(args)...} {
-    // TODO asserts
+    static_assert(sizeof...(Args) == N, "size error");
   }
 
 
   template<std::size_t ... Is>
-  std::shared_ptr<array<T>> set(std::size_t index, T&& value, std::index_sequence<Is...>) const {
+  std::shared_ptr<array<T>> set(std::size_t index, T&& value,
+                                std::index_sequence<Is...>) const {
+    const std::size_t sparse = sparse_index(this->mask, index);
+    
     if(this->mask & (1ul << index)) {
-      return make_storage<T, M>(this->mask, ((Is == index) ? std::move(value) : T{values[Is]})...);
+      return make_storage<T, M>(this->mask,
+                                ((Is == sparse) ? std::move(value) : T{values[Is]})...);
     } else {
-      return make_storage<T, M>(this->mask, ((Is == index) ? std::move(value) : T{values[Is > index ? Is - 1 : Is]})..., T{values[N - 1]});     
+      // insert value into values: {values[Is]..., value, values[Is - 1]...}
+      return make_storage<T, M>(this->mask | (1ul << index),
+                                ((Is == sparse) ? std::move(value) : T{values[Is > sparse ? Is - 1 : Is]})...,
+                                ((sparse == N) ? std::move(value) : T{values[N - 1]}));
     }
   }
   
@@ -85,22 +92,6 @@ struct storage: array<T> {
   
 };
 
-
-// template<class T, std::size_t M,
-//          class ... Args>
-// static std::enable_if_t<(sizeof...(Args) < M),
-//                           std::shared_ptr<storage<T, M, sizeof...(Args)>>>
-// make_storage(std::size_t mask, Args&& ... args) {
-//   return std::make_shared<storage<T, M, sizeof...(Args)>>(mask, std::forward<Args>(args)...);
-// }
-
-// template<class T, std::size_t M,
-//          class ... Args>
-// static std::enable_if_t<(sizeof...(Args) >= M),
-//                         std::shared_ptr<storage<T, M, sizeof...(Args)>>>
-// make_storage(std::size_t mask, Args&& ... args) {
-//   throw std::logic_error("derp");
-// }
   
 
   
