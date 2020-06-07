@@ -18,6 +18,8 @@ public:
   std::size_t size() const {
     return __builtin_popcount(mask); 
   }
+
+  bool has(std::size_t index) const { return mask & (1ul << index); }
 };
 
 template<class T>
