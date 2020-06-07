@@ -1,6 +1,9 @@
+#ifndef COMPRESSED_HPP
+#define COMPRESSED_HPP
+
 #include <array>
 #include <memory>
-
+#include <cassert>
 
 namespace sparse {
 
@@ -42,7 +45,7 @@ template<class T, std::size_t M, std::size_t N>
 struct storage;
 
 template<class T, std::size_t M, class... Args>
-static std::enable_if_t<(sizeof...(Args) < M),
+static std::enable_if_t<(sizeof...(Args) <= M),
                         std::shared_ptr<storage<T, M, sizeof...(Args)>>>
 make_storage(std::size_t mask, Args&&... args) {
   return std::make_shared<storage<T, M, sizeof...(Args)>>(
@@ -50,7 +53,7 @@ make_storage(std::size_t mask, Args&&... args) {
 }
 
 template<class T, std::size_t M, class... Args>
-static std::enable_if_t<(sizeof...(Args) >= M), std::shared_ptr<array<T>>>
+static std::enable_if_t<(sizeof...(Args) > M), std::shared_ptr<array<T>>>
 make_storage(std::size_t mask, Args&&... args) {
   throw std::logic_error("size error");
 }
@@ -58,8 +61,8 @@ make_storage(std::size_t mask, Args&&... args) {
 
 template<class T, std::size_t M, std::size_t N>
 struct storage: array<T> {
-  static_assert(N > 0, "size error");
-  static_assert(N < M, "size error");
+  static_assert(N > 0, "empty array");
+  static_assert(N <= M, "size error");
 
   using values_type = std::array<T, N>;
   values_type values;
@@ -97,3 +100,5 @@ struct storage: array<T> {
 };
 
 } // namespace sparse
+
+#endif

@@ -213,7 +213,7 @@ static void test_ordered(std::size_t size) {
       values.emplace_back(i);
     }
     
-    return values.begin();
+    return values.size();
   }) << std::endl;
 
 
@@ -223,7 +223,7 @@ static void test_ordered(std::size_t size) {
       values.emplace(i, i);
     }
     
-    return values.begin();
+    return values.size();
   }) << std::endl;
 
   std::cout << "unordered_map: " << time([=] {
@@ -232,7 +232,7 @@ static void test_ordered(std::size_t size) {
       values.emplace(i, i);
     }
     
-    return values.begin();
+    return values.size();
   }) << std::endl;
   
   std::cout << "hamt: " << time([=] {
