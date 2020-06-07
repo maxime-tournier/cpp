@@ -28,6 +28,7 @@ class array: public base {
   const T data[0] = {};
 public:
   const T& get(std::size_t index) const {
+    assert(((1ul << index) & this->mask) && "index error");
     return data[sparse_index(this->mask, index)];
   }
   
@@ -44,7 +45,8 @@ template<class T, std::size_t M,
 static std::enable_if_t<(sizeof...(Args) < M),
                           std::shared_ptr<storage<T, M, sizeof...(Args)>>>
 make_storage(std::size_t mask, Args&& ... args) {
-  return std::make_shared<storage<T, M, sizeof...(Args)>>(mask, std::forward<Args>(args)...);
+  return std::make_shared<storage<T, M, sizeof...(Args)>>
+    (mask, std::forward<Args>(args)...);
 }
 
 template<class T, std::size_t M,
