@@ -29,14 +29,20 @@ public:
 template<class T>
 class array: public base {
   using base::base;
-  const T data[0] = {};
-
+  T data[0] = {};
 public:
+  
+  T& get(std::size_t index) {
+    assert(((1ul << index) & this->mask) && "index error");
+    return data[sparse::index(this->mask, index)];
+  }
+
   const T& get(std::size_t index) const {
     assert(((1ul << index) & this->mask) && "index error");
     return data[sparse::index(this->mask, index)];
   }
 
+  
   virtual std::shared_ptr<array> set(std::size_t index, T&& value) const = 0;
 };
 

@@ -73,13 +73,13 @@ class hamt: public traits<B, L> {
   using index_array = typename hamt::traits::index_array;
   using level_indices = typename hamt::traits::level_indices;
 
-  // casts
-  static const sparse::array<T>* as_leaf(const node_type& self) {
-    return static_cast<const sparse::array<T>*>(self.get());
+  // cast
+  static sparse::array<T>* as_leaf(const node_type& self) {
+    return static_cast<sparse::array<T>*>(self.get());
   }
 
-  static const sparse::array<node_type>* as_inner(const node_type& self) {
-    return static_cast<const sparse::array<node_type>*>(self.get());
+  static sparse::array<node_type>* as_inner(const node_type& self) {
+    return static_cast<sparse::array<node_type>*>(self.get());
   }
 
   // get
@@ -139,21 +139,18 @@ class hamt: public traits<B, L> {
   // emplace
   static node_type emplace(const index_array& split, node_type self,
                            T&& value, std::size_t level = hamt::inner_levels) {
-    if(!self.unique()) {
+    if(!self.unique() || !self->has(split[level])) {
       return set(split, self, std::move(value), level);
-    }
-    
-    if(!self->has(split[level])) {
-      return make(split, std::move(value), level);
     }
 
     if(!level) {
-      return as_leaf(self)->set(split[level], std::move(value));
+      as_leaf(self)->get(split[level]) = std::move(value);
     } else {
-      return as_inner(self)->set(split[level],
-                                 set(split, as_inner(self)->get(split[level]),
-                                     std::move(value), level - 1));
+      node_type& node = as_inner(self)->get(split[level]);
+      node = emplace(split, std::move(node), std::move(value), level - 1);
     }
+    
+    return self;
   }
 
   
@@ -166,7 +163,7 @@ class hamt: public traits<B, L> {
   }
 
 
-  hamt set(std::size_t index, T&& value) const {
+  hamt set(std::size_t index, T&& value) const& {
     const index_array split = hamt::split(index, level_indices{});
     if(!root) {
       return make(split, std::move(value));
@@ -175,6 +172,17 @@ class hamt: public traits<B, L> {
     return set(split, root, std::move(value));
   }
 
+
+  hamt set(std::size_t index, T&& value) && {
+    const index_array split = hamt::split(index, level_indices{});
+    if(!root) {
+      return make(split, std::move(value));
+    }
+
+    return emplace(split, std::move(root), std::move(value));
+  }
+
+  
   const T* find(std::size_t index) const {
     if(!root) {
       return nullptr;
@@ -241,6 +249,14 @@ static void test_ordered(std::size_t size) {
       values = values.set(i, i);
     }
   }) << std::endl;
+
+
+  std::cout << "hamt emplace: " << time([=] {
+    hamt<T, B, L> values;
+    for(std::size_t i = 0; i < size; ++i) {
+      values = std::move(values).set(i, i);
+    }
+  }) << std::endl;
   
 }
 
@@ -256,7 +272,7 @@ int main(int, char**) {
   std::clog << test.find(0) << std::endl;
   std::clog << test.find(1) << std::endl;
 
-  test_ordered<double, 5, 5>(100000);
+  test_ordered<double, 5, 4>(400000);
   
   return 0;
 }
