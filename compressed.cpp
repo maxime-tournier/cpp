@@ -84,67 +84,73 @@ constexpr typename traits<B, L>::index_array traits<B, L>::offsets;
 
 template<class T, std::size_t B, std::size_t L>
 class hamt: public traits<B, L> {
-  template<std::size_t D> using node_type = node<T, B, L, D>;
 
   // root node is toplevel
-  using root_type = node_type<hamt::total_levels - 1>;
-  root_type root;
-  hamt(root_type root): root(std::move(root)) { }
+  using node_type = ref<base>;
+  node_type root;
+  hamt(node_type root): root(std::move(root)) { }
   
   using index_array = typename hamt::traits::index_array;
   using level_indices = typename hamt::traits::level_indices;  
-  
-  // get
-  static const T& get(const index_array& split, const node_type<0>& self) {
-    return self.children->get(split[0]);
-  }
-  
-  template<std::size_t D>
-  static const T& get(const index_array& split, const node_type<D>& self) {
-    return get(split, self.children->get(split[D]));
-  }
 
+  template<std::size_t D=hamt::inner_levels>
+  struct go {
+    using next = go<D - 1>;
+    
+    static const array<node_type>* cast(const base* self) {
+      return static_cast<const array<node_type>*>(self);
+    }
 
-  // make
-  template<std::size_t D>
-  static node_type<D> make(const index_array& split, T&& value) {
-    using children_type = storage<node_type<D - 1>, (1ul << B), 1>;
+    static const T& get(const index_array& split, const node_type& self) {
+      return next::get(split, cast(self.get())->get(split[D]));
+    }
 
-    return {std::make_shared<children_type>(1ul << split[D],
-                                            make<D - 1>(split, std::move(value)))};
-  }
-            
-  template<>
-  static node_type<0> make<0>(const index_array& split, T&& value) {
-    using children_type = storage<T, (1ul << L), 1>;
-    return {std::make_shared<children_type>(1ul << split[0], std::move(value))};
+    static node_type make(const index_array& split, T&& value) {
+      using children_type = storage<node_type, (1ul << B), 1>;
+      
+      return std::make_shared<children_type>(1ul << split[D],
+                                             next::make(split, std::move(value)));
+    }
+
+    static node_type set(const index_array& split, const node_type& self, T&& value) {
+      if(self->has(split[D])) {
+        return cast(self.get())->set(split[D],
+                                     next::set(split,
+                                               cast(self.get())->get(split[D]),
+                                               std::move(value)));
+      } else {
+        return make(split, std::move(value));
+      }
+    }
   };
 
   
-  // set
-  static node_type<0> set(const index_array& split, const node_type<0>& self, T&& value) {
-    assert(self.children);
-    if(self.children->has(split[0])) {
-      return {self.children->set(split[0], std::move(value))};
-    } else {
-      return make<0>(split, std::move(value));
-    }
-  }
-  
-  
-  template<std::size_t D>
-  static node_type<D> set(const index_array& split, const node_type<D>& self, T&& value) {
-    assert(self.children);
-    if(self.children->has(split[D])) {
-      return {self.children->set(split[D],
-                                 set(split,
-                                     self.children->get(split[D]),
-                                     std::move(value)))};
-    } else {
-      return make<D>(split, std::move(value));
-    }
-  }
+  template<>
+  struct go<0> {
 
+    static const array<T>* cast(const base* self) {
+      return static_cast<const array<T>*>(self);
+    }
+    
+    static const T& get(const index_array& split, const node_type& self) {
+      return cast(self.get())->get(split[0]);
+    }
+
+    static node_type make(const index_array& split, T&& value) {
+      using children_type = storage<T, (1ul << L), 1>;
+      return std::make_shared<children_type>(1ul << split[0], std::move(value));
+    }
+
+    static node_type set(const index_array& split,
+                         const node_type& self, T&& value) {
+      if(self->has(split[0])) {
+        return cast(self.get())->set(split[0], std::move(value));
+      } else {
+        return make(split, std::move(value));
+      }
+    }
+  };
+  
 
   
 public:
@@ -152,13 +158,13 @@ public:
   
   const T& get(std::size_t index) const {
     const index_array split = hamt::split(index, level_indices{});
-    return get(split, root);
+    return go<>::get(split, root);
   }
 
 
   hamt set(std::size_t index, T&& value) const {
     const index_array split = hamt::split(index, level_indices{});
-    return {set(split, root, std::move(value))};
+    return {go<>::set(split, root, std::move(value))};
   }
   
 
