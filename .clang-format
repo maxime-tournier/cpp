@@ -6,7 +6,7 @@ Language: Cpp
 DerivePointerAlignment: false
 PointerAlignment: Left
 AlignTrailingComments: true
-ColumnLimit: 105
+ColumnLimit: 80
 NamespaceIndentation: None
 KeepEmptyLinesAtTheStartOfBlocks: false
 BreakConstructorInitializers: AfterColon
