@@ -9,12 +9,12 @@ int main(int, char**) {
   using namespace parser;
   // maybe<char> m = 'c';
 
-  std::string input = "foo";
-  range in = {input.data(), input.data() + input.size()};
+  std::stringstream ss;
+  ss << " foo";
   
   const auto parser = chr<std::isalnum>;
 
-  std::cout << parser::run(parser, in) << std::endl;
+  std::cout << parser::run(parser, ss) << std::endl;
   
   
   return 0;

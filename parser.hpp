@@ -48,14 +48,15 @@ namespace parser {
   template<class Parser>
   using value_type = typename std::result_of<Parser(range)>::type::value_type::value_type;
 
+  static constexpr std::size_t error_length = 24;
+  
   template<class Parser>
-  static value_type<Parser> run(Parser parser, range in,
-                                std::size_t size=24) {
+  static value_type<Parser> run(Parser parser, range in) {
     return match(parser(in),
                  [=](range where) -> value_type<Parser> {
                    std::stringstream ss;
                    ss << "parse error near \"";
-                   for(std::size_t i = 0; where && (i < size);
+                   for(std::size_t i = 0; where && (i < error_length);
                        ++i, where = where.next()) {
                      ss << where.get();
                    }
@@ -65,6 +66,12 @@ namespace parser {
                  [](const success<value_type<Parser>>& ok) {
                    return ok.value;
                  });
+  }
+
+  template<class Parser>
+  static auto run(Parser parser, std::istream& in) {
+    const std::string contents(std::istreambuf_iterator<char>(in), {});
+    return run(parser, range{contents.data(), contents.data() + contents.size()});
   }
   
 }
