@@ -26,6 +26,7 @@ public:
   bool has(std::size_t index) const { return mask & (1ul << index); }
 };
 
+  
 template<class T>
 class array: public base {
   using base::base;
@@ -58,6 +59,7 @@ make_storage(std::size_t mask, Args&&... args) {
       mask, std::forward<Args>(args)...);
 }
 
+  
 template<class T, std::size_t M, class... Args>
 static std::enable_if_t<(sizeof...(Args) > M), std::shared_ptr<array<T>>>
 make_storage(std::size_t mask, Args&&... args) {
@@ -103,6 +105,7 @@ struct storage: array<T> {
   std::shared_ptr<array<T>> set(std::size_t index, T&& value) const override {
     return set(index, std::move(value), std::make_index_sequence<N>{});
   }
+  
 };
 
 } // namespace sparse

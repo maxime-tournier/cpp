@@ -1,97 +1,74 @@
 #ifndef MAYBE_HPP
 #define MAYBE_HPP
 
-// a maybe monad
-template<class T> class maybe;
+#include <type_traits>
+#include <cassert>
+#include <new>
 
-namespace detail {
-
-// ensures T is a maybe<U>
-template<class T>
-struct require_maybe;
-
-template<class T>
-struct require_maybe< maybe<T> > {
-    using type = maybe<T>;
-};
-
-}
-
-struct none { };
-
+// maybe monad
 template<class T>
 class maybe {
-    typename std::aligned_union<0, T>::type storage;
-    const bool set;
-public:
-    using value_type = T;
-    
-    // monadic return (none/just)
-    maybe(none = {}) : set(false) { }
-    maybe(const T& value) : set(true) { new (&storage) T(value); }
-    maybe(T&& value) : set(true) { new (&storage) T(std::move(value)); }
-
-    maybe(maybe&& other) : set(other.set) {
-      if(set) new (&storage) T(std::move(other.get()));
-    }
-
-    maybe(const maybe& other) : set(other.set) {
-      if(set) new (&storage) T(other.get());
-    }
+  using storage_type = typename std::aligned_union<0, T>::type;
+  storage_type storage;
   
-    // unclear whether we actually need these at all
-    maybe& operator=(maybe&& other) = delete; 
-    maybe& operator=(const maybe& other) = delete;
-    
-    // monadic bind
-    template<class F>
-    using bind_type = typename std::result_of<F (const T& )>::type;
-    
-    template<class F>
-    typename detail::require_maybe< bind_type<F> >::type
-    operator>>(const F& f) const {
-        if(!set) return {};
-        return f(get());
+  const bool set;
+
+  public:
+  using value_type = T;
+
+  // monadic return (none/just)
+  maybe(): set(false) {}
+  maybe(T value): set(true) { new(&storage) T{std::move(value)}; }
+
+  maybe(maybe&& other): set(other.set) {
+    if(set) {
+      new(&storage) T{std::move(other.get())};
     }
+  }
 
-    // TODO bind from temporary
-    
-    ~maybe() { 
-        if(set) get().~T();
+  maybe(const maybe& other): set(other.set) {
+    if(set) {
+      new(&storage) T{other.get()};
     }
+  }
 
+  explicit operator bool() const { return set; }  
 
-    // monad escape
-    explicit operator bool () const { return set; }
-    
-    const T& get() const {
-        if(!set) throw std::runtime_error("accessing none");
-        return *reinterpret_cast<const T*>(&storage);
+  // unclear whether we actually need these at all
+  maybe& operator=(maybe&& other) = delete;
+  maybe& operator=(const maybe& other) = delete;
+
+  ~maybe() {
+    if(set) {
+      get().~T();
     }
+  }
 
-    T& get() {
-        if(!set) throw std::runtime_error("accessing none");
-        return *reinterpret_cast<T*>(&storage);
-    }
-
+  const T& get() const {
+    assert(set);
+    return *reinterpret_cast<const T*>(&storage);
+  }
+  
+private:
+  T& get() {
+    assert(set);
+    return *reinterpret_cast<T*>(&storage);
+  }
 };
 
-
-// convenience constructors
 template<class T>
-static maybe<T> just(const T& value) { return {value}; }
+static maybe<T> some(const T& value) { return value; }
 
-template<class T>
-static maybe<T> just(T&& value) { return {std::move(value)}; }
-
-
-// functor map
-template<class T, class F>
-static maybe<typename std::result_of<F(T)>::type> map(const maybe<T>& x, const F& f) {
-    if(x) return f(x.get());
-    return {};
+template<class A, class F>
+static auto map(const maybe<A>& self, F f) {
+  using result_type = decltype(f(self.get()));
+  
+  if(!self) {
+    return maybe<result_type>{};
+  }
+  
+  return some(f(self.get()));
 }
-
 
 
 #endif
