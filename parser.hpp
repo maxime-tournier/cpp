@@ -38,6 +38,13 @@ namespace parser {
   template<class T>
   using result = either<range, success<T>>;
 
+  template<class Parser>
+  using value_type =
+      typename std::result_of<Parser(range)>::type::value_type::value_type;
+
+  
+
+  ////////////////////////////////////////////////////////////////////////////////
   template<int (*pred) (int)>
   static result<char> chr(range in) {
     if(!in) return in;
@@ -45,13 +52,12 @@ namespace parser {
     return success<char>{in.get(), in.next()};
   };
 
-  template<class Parser>
-  using value_type = typename std::result_of<Parser(range)>::type::value_type::value_type;
-
+  ////////////////////////////////////////////////////////////////////////////////
   static constexpr std::size_t error_length = 24;
   
   template<class Parser>
   static value_type<Parser> run(Parser parser, range in) {
+    // TODO report line/col
     return match(parser(in),
                  [=](range where) -> value_type<Parser> {
                    std::stringstream ss;
@@ -71,7 +77,8 @@ namespace parser {
   template<class Parser>
   static auto run(Parser parser, std::istream& in) {
     const std::string contents(std::istreambuf_iterator<char>(in), {});
-    return run(parser, range{contents.data(), contents.data() + contents.size()});
+    return run(parser,
+               range{contents.data(), contents.data() + contents.size()});
   }
   
 }
