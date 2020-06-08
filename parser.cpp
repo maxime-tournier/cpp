@@ -10,12 +10,13 @@ int main(int, char**) {
   // maybe<char> m = 'c';
 
   std::stringstream ss;
-  ss << " foo";
+  ss << "cc foo";
   
-  const auto parser = chr<std::isalnum>;
+  // const auto parser = chr<std::isalnum>;
+  const auto parser = kleene(single<'c'>);
 
-  std::cout << parser::run(parser, ss) << std::endl;
-  
+  auto result = parser::run(parser, ss);
+  std::clog << result.size() << std::endl;
   
   return 0;
 }

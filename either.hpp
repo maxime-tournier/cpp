@@ -40,6 +40,17 @@ public:
   friend auto match(const either& self, Cases... cases) {
     return visit(self, overload<Cases...>{cases...});
   }
+
+  const Right* get() const {
+    if(!ok) return nullptr;
+    return reinterpret_cast<const Right*>(&storage);
+  }
+
+
+  Right* get() {
+    if(!ok) return nullptr;
+    return reinterpret_cast<Right*>(&storage);
+  }
   
 };
 
