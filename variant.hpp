@@ -1,335 +1,118 @@
 #ifndef VARIANT_HPP
 #define VARIANT_HPP
 
-#include <type_traits>
-#include <memory>
 #include <cassert>
-#include <stdexcept>
+#include <memory>
 
-template<class ... T> class variant;
+#include "overload.hpp"
 
 
-namespace impl {
-  template<std::size_t start, class ... T>
-  struct select;
+struct variant_base {
+  virtual ~variant_base() {}
+  variant_base(std::size_t index): index(index) {}
+  const std::size_t index;
+};
 
-  template<std::size_t start, class H, class ... T>
-  struct select<start, H, T...> : select<start + 1, T...> {
+template<class T>
+struct variant_derived: variant_base {
+  const T value;
 
-    using select<start + 1, T...>::index;
-    static inline constexpr std::size_t index(const H* ) { return start; }
-
-    using select<start + 1, T...>::cast;
-    static inline constexpr const H& cast(const H& value) { return value; }
-    static inline constexpr H&& cast(H&& value) { return std::move(value); }    
-    
-  };
-
-  
-  template<std::size_t start> struct select<start> {
-    static inline constexpr void index();
-    static inline constexpr void cast();    
-  };
-
-
-  template<class Variant, class Self, class Signature>
-  struct dispatch;
-
-  template<class ... T, class Self, class Visitor, class Ret, class ... Args>
-  struct dispatch<variant<T...>, Self, Ret (Visitor, Args...) > {
-  
-    template<class U>
-    static Ret call_thunk(Self& self, Visitor&& visitor, Args&& ... args) {
-      return std::forward<Visitor>(visitor)(self.template get<U>(), std::forward<Args>(args)...);
-    }
-  
-    using thunk_type = Ret (*)(Self& self, Visitor&& visitor, Args&& ... args);
-    static constexpr thunk_type table[] = { call_thunk<T>... };
-  };
-
-  template<class ... T, class Self, class Visitor,  class Ret, class ... Args>
-  constexpr typename dispatch<variant<T...>, Self, Ret (Visitor, Args...) >::thunk_type
-  dispatch<variant<T...>, Self, Ret (Visitor, Args...) >::table[];
-
-
-  template<class Expected, class Actual>
-  static bool check_type() {
-    assert((std::is_same<Expected, Actual>::value) );
-    return std::is_same<Expected, Actual>::value;
-  }
-
-  template<class U, class ... T>
-  static bool check_type(std::size_t index) {
-    using type = bool (*)();
-    static const type expand[] = {
-      &check_type<U, T>...
-    };
-
-    return expand[index]();
-  }
-}
-
-
-
-
-template<class ... T>
-class variant {
-
-  using storage_type = typename std::aligned_union<0, T...>::type;
-  storage_type storage;
-
-protected:
-  using index_type = std::size_t;
-  index_type index;
-
-private:
-  
-  using select_type = impl::select<0, T...>;
-
-
-  template<class U>
-  void construct(U&& value) {
-    new (&storage) typename std::decay<U>::type(std::forward<U>(value));
-  }
-  
-  struct copy_construct {
-    template<class U>
-    void operator()(U& self, const variant& other) const {
-      new (&self) U(other.template get<U>());
-    }
-  };
-
-
-  struct copy {
-    template<class U>
-    void operator()(U& self, const variant& other) const {
-      self = other.template get<U>();
-    }
-  };
-
-
-  struct move {
-    template<class U>
-    void operator()(U& self, variant&& other) const {
-      self = std::move(other.template get<U>());
-    }
-  };
-  
-  
-  struct move_construct {
-    template<class U>
-    void operator()(U& self, variant&& other) const {
-      new (&self) U(std::move(other.template get<U>()));
-    }
-  };
-
-
-  
-  struct destruct {
-    template<class U>
-    void operator()(U& self) const {
-      self.~U();
-    }
-  };
-
-
-  struct compare {
-
-    template<class U>
-    bool operator()(const U& self, const variant& other) const {
-      return self == other.get<U>();
-    }
-
-  };
-
-  struct less {
-
-    template<class U>
-    bool operator()(const U& self, const variant& other) const {
-      return self < other.get<U>();
-    }
-     
-  };
-  
-public:
-  std::size_t type() const { return index; }
-
-  struct bad_cast : std::runtime_error {
-    bad_cast() : std::runtime_error("bad_cast") { }
-  };
-
-  template<class U, index_type R = select_type::index( ((typename std::decay<U>::type*)0) ) >
-  static constexpr index_type type_index() { return R; }
-  
-  template<class U, index_type R = type_index<U>() >
-  U& cast() {
-    U& res = reinterpret_cast<U&>(storage);
-    if( R != index ) throw bad_cast();
-    return res;
-  }
-
-  
-  template<class U, index_type R = type_index<U>() >
-  const U& cast() const {
-    const U& res = reinterpret_cast<const U&>(storage);
-    if( R != index ) {
-      throw bad_cast();
-    }
-    return res;
-  }
-
-
-  template<class U, index_type R = type_index<U>()>
-  U& get() {
-    U& res = reinterpret_cast<U&>(storage);
-    assert( (impl::check_type<U, T...>(index)) );
-    return res;
-  } 
-
-
-  template<class U, index_type R = type_index<U>() >
-  const U& get() const {
-    const U& res = reinterpret_cast<const U&>(storage);
-    assert( (impl::check_type<U, T...>(index)) );    
-    return res;
-  }
-  
-
-  template<class U, index_type R = type_index<U>()>
-  U* get_if() {
-    if(!is<U>()) return nullptr;
-    return &get<U>();
-  } 
-
-  template<class U, index_type R = type_index<U>()>
-  const U* get_if() const {
-    if(!is<U>()) return nullptr;
-    return &get<U>();
-  } 
-  
-  
-
-  
-  template<class U, index_type R = type_index<U>() >
-  bool is() const noexcept {
-    return R == index;
-  }
-  
-  variant(const variant& other) noexcept 
-    : index(other.index) {
-    static constexpr bool skip[] = {std::is_trivially_copy_constructible<T>::value...};
-    
-    if(skip[index]) {
-      storage = other.storage;
-    } else {
-      apply( copy_construct(), other );
-    }
-  }
-
-  variant(variant&& other) noexcept
-    : index(other.index) {
-    static constexpr bool skip[] = {std::is_trivially_move_constructible<T>::value...};
-    
-    if(skip[index]) {
-      storage = std::move(other.storage);
-    } else {
-      apply( move_construct(), std::move(other) );
-    }
-  }
-  
-  ~variant() noexcept {
-    static constexpr bool dont_skip[] = {!std::is_trivially_destructible<T>::value...};
-    
-    if(dont_skip[index]) {
-      apply( destruct() );
-    }
-    
-  }
-
-
-  variant& operator=(const variant& other) noexcept {
-    if(index == other.index) {
-      apply(copy(), other);
-    } else {
-      this->~variant();
-      index = other.index;      
-      apply(copy_construct(), other);
-    }
-    
-    return *this;
-  }
-
-  bool operator==(const variant& other) const {
-    if(type() != other.type()) return false;
-    return map<bool>(compare(), other);
-  }
-
-  bool operator!=(const variant& other) const {
-    return !operator==(other);
-  }
-
-  
-  bool operator<(const variant& other) const {
-    return index < other.index || (index == other.index && map<bool>(less(), other));
-  }
-
-  
-  
-  variant& operator=(variant&& other)  noexcept{
-    
-    if(index == other.index) {
-      apply( move(), std::move(other) );
-    } else {
-      this->~variant();
-      index = other.index;
-      apply( move_construct(), std::move(other) );
-    }
-    
-    return *this;
-  }
-  
-  
-  template<class U, index_type R = type_index<U>() >
-  variant(U&& value) noexcept
-    : index( R ) {
-    construct( select_type::cast( std::forward<U>(value)) );
-  }
-
-
-  template<class Visitor, class ... Args>
-  void apply(Visitor&& visitor, Args&& ... args) {
-
-    impl::dispatch<variant, variant, void (Visitor, Args...)>::table[index]
-      (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
-    
-  }
-
-  template<class Visitor, class ... Args>
-  void apply(Visitor&& visitor, Args&& ... args) const {
-
-    impl::dispatch<variant, const variant, void (Visitor, Args...)>::table[index]
-      (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
-
-    
-  }
-
-
-  template<class Return, class Visitor, class ... Args>
-  Return map(Visitor&& visitor, Args&& ... args) const {
-
-    return impl::dispatch<variant, const variant, Return (Visitor, Args...) >::table[index]
-      (*this, std::forward<Visitor>(visitor), std::forward<Args>(args)...);
-    
-  }
-
-
+  template<class Arg>
+  variant_derived(std::size_t index, const Arg& arg):
+      variant_base(index), value(arg) {}
 };
 
 
+template<std::size_t I, class T>
+struct variant_item {
+  template<class Derived>
+  friend constexpr std::integral_constant<std::size_t, I>
+  get_index(const Derived*, const T&) {}
+
+  template<class Derived>
+  friend constexpr T get_type(const Derived*, std::index_sequence<I>);
+
+  template<class Derived>
+  friend std::shared_ptr<variant_base> construct(const Derived*,
+                                                 const T& value) {
+    return std::make_shared<variant_derived<T>>(I, value);
+  }
+};
+
+template<class Indices, class... Ts>
+struct variant_items;
 
 
+template<std::size_t... Is, class... Ts>
+struct variant_items<std::index_sequence<Is...>, Ts...>
+    : variant_item<Is, Ts>... {
+  template<class T>
+  using index =
+      decltype(get_index((variant_items*)nullptr, std::declval<const T&>()));
+
+  template<std::size_t J>
+  using type =
+      decltype(get_type((variant_items*)nullptr, std::index_sequence<J>{}));
+};
 
 
+// el-cheapo immutablo varianto
+template<class... Ts>
+class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
+  using indices_type = std::index_sequence_for<Ts...>;
+
+  using data_type = std::shared_ptr<variant_base>;
+  data_type data;
+
+  public:
+  variant(const variant&) = default;
+  variant(variant&&) = default;
+
+  variant& operator=(const variant&) = default;
+  variant& operator=(variant&&) = default;
+
+  template<class Arg>
+  variant(const Arg& value): data(construct(this, value)) {}
+
+  std::size_t type() const { return data->index; }
+
+  template<class T, std::size_t index = variant::template index<T>::value>
+  const T& get() const {
+    assert(data->index == index && "type error");
+    return static_cast<variant_derived<T>*>(data.get())->value;
+  }
+
+  template<class T, std::size_t index = variant::template index<T>::value>
+  const T* as() const {
+    if(data->index != index)
+      return nullptr;
+    return &get<T>();
+  }
+
+  template<class Visitor, class... Args>
+  friend auto visit(const variant& self, const Visitor& visitor,
+                    Args&&... args) {
+    using result_type = std::common_type_t<decltype(
+        visitor(self.get<Ts>(), std::forward<Args>(args)...))...>;
+
+    using thunk_type =
+        result_type (*)(const variant&, const Visitor& visitor, Args&&...);
+    // TODO should be constexpr
+    static const thunk_type thunks[] = {[](const variant& self,
+                                           const Visitor& visitor,
+                                           Args&&... args) -> result_type {
+      return visitor(self.get<Ts>(), std::forward<Args>(args)...);
+    }...};
+
+    return thunks[self.data->index](self, visitor, std::forward<Args>(args)...);
+  };
+
+
+  template<class... Cases>
+  friend auto match(const variant& self, const Cases&... cases) {
+    return visit(self, overload<Cases...>(cases...));
+  };
+};
 
 
 #endif

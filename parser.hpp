@@ -2,9 +2,13 @@
 #define PARSER_HPP
 
 #include "either.hpp"
+
 #include <vector>
+#include <deque>
+#include <functional>
 
 #include <cassert>
+#include <cstdlib>
 #include <sstream>
 
 namespace parser {
@@ -49,37 +53,79 @@ namespace parser {
       typename std::result_of<Parser(range)>::type::value_type::value_type;
 
 
+  template<class T>
+  using any = std::function<result<T>(range in)>;
+  
   ////////////////////////////////////////////////////////////////////////////////
   // combinators
-
+  
   template<class T>
-  static auto pure(T value) {
+  static auto unit(T value) {
     return [value=std::move(value)](range in) -> result<T> {
-      return value;
+      return make_success(value, in);
     };
   };
+  
 
   template<class Parser, class Func>
-  static auto map(Parser parser, Func func) {
+  static auto map(Func func, Parser parser) {
     return [parser=std::move(parser),
             func=std::move(func)](range in) {
       using value_type = typename std::result_of<Func(value<Parser>)>::type;
       using result_type = result<value_type>;
       return match(parser(in),
             [](range fail) -> result_type { return fail; },
-            [](const auto& ok) -> result_type {
-              return make_success(f(ok.value), ok.rest);
+            [&](const auto& ok) -> result_type {
+              return make_success(func(ok.value), ok.rest);
             });
     };
   };
 
 
+  template<class Parser, class Func>
+  static auto bind(Parser parser, Func func) {
+    return [parser=std::move(parser),
+            func=std::move(func)](range in) {
+      using parser_type = typename std::result_of<Func(value<Parser>)>::type;
+      using value_type = value<parser_type>;
+      using result_type = result<value_type>;
+      return match(parser(in),
+            [](range fail) -> result_type { return fail; },
+            [&](const auto& ok) -> result_type {
+              // TODO move into func
+              return func(ok.value)(ok.rest);
+            });
+    };
+  };
+
+  template<class Parser, class Func>
+  static auto operator>>=(Parser parser, Func func) {
+    return bind(parser, func);
+  };
+
+  template<class LHS, class RHS>
+  static auto operator>>(LHS lhs, RHS rhs) {
+    return lhs >>= [rhs = std::move(rhs)](auto) { return rhs; };
+  };
+
+
+  template<class Parser>
+  static auto drop(Parser parser) {
+    return [parser=std::move(parser)](auto value) {
+      return parser >> unit(std::move(value));
+    };
+  }
+
+  template<class Parser>
+  static auto ref(const Parser& parser) {
+    return [parser](range in) { return parser(in); };
+  }
   
   template<class Parser>
   static auto kleene(Parser parser) {
     return [parser = std::move(parser)](range in)
-      -> result<std::vector<value<Parser>>> {
-      std::vector<value<Parser>> values;
+      -> result<std::deque<value<Parser>>> {
+      std::deque<value<Parser>> values;
       while(auto result = parser(in).get()) {
         values.emplace_back(std::move(result->value));
         in = result->rest;
@@ -88,11 +134,55 @@ namespace parser {
       return make_success(std::move(values), in);
     };
   };
+
+
+  template<class Parser>
+  static auto plus(Parser parser) {
+    return parser >>= [parser](auto first) {
+      return kleene(parser) >>= [first](auto rest) {
+        rest.emplace_front(std::move(first));
+        return unit(rest);
+      };
+    };
+  };
   
 
+  template<class LHS, class RHS>
+  static auto coproduct(LHS lhs, RHS rhs) {
+    return [lhs = std::move(lhs),
+            rhs = std::move(rhs)](range in) {
+      if(auto res = lhs(in)) {
+        return res;
+      } else return rhs(in);
+    };
+  };
+
+
+  template<class LHS, class RHS>
+  static auto operator|(LHS lhs, RHS rhs) {
+    return coproduct(std::move(lhs), std::move(rhs));
+  }
+
+  template<class Parser, class Separator>
+  static auto list(Parser parser, Separator separator) {
+    return parser >>= [=](auto first) {
+      return kleene(separator >> parser) >>= [first=std::move(first)](auto rest) {
+        rest.emplace_front(first);
+        return unit(rest);
+      };
+    };
+  };
+
+
+  template<class Parser, class Separator>
+  static auto operator%(Parser parser, Separator separator) {
+    return list(std::move(parser), std::move(separator));
+  }
+  
+  
   ////////////////////////////////////////////////////////////////////////////////
   // concrete parsers
-  
+
   template<int (*pred) (int)>
   static result<char> _char(range in) {
     if(!in) return in;
@@ -104,14 +194,65 @@ namespace parser {
   static int equals(int x) { return x == c; }
 
   template<char c>
-  static int any(int) { return true; }
-  
-  template<char c>
   static result<char> single(range in) {
     return _char<equals<c>>(in);
   }
 
+  // numbers
+  static result<double> _double(range in) {
+    if(!in) return in;
+    char* end;
+    const double res = std::strtod(in.first, &end);
+    if(end == in.first) return in;
+    return make_success(res, range{end, in.last});
+  }
+
+  static result<float> _float(range in) {
+    if(!in) return in;
+    char* end;
+    const float res = std::strtof(in.first, &end);
+    if(end == in.first) return in;
+    return make_success(res, range{end, in.last});
+  }
   
+  static result<long> _long(range in) {
+    if(!in) return in;
+    char* end;
+    const long res = std::strtol(in.first, &end, 10);
+    if(end == in.first) return in;
+    return make_success(res, range{end, in.last});
+  }
+
+  static result<unsigned long> _unsigned_long(range in) {
+    if(!in) return in;
+    char* end;
+    const unsigned long res = std::strtoul(in.first, &end, 10);
+    if(end == in.first) return in;
+    return make_success(res, range{end, in.last});
+  }
+
+  
+  template<class Parser>
+  static auto skip(Parser parser) {
+    return [parser=std::move(parser)](range in) -> result<bool> {
+      for(auto res = parser(in); res; in = res.get()->rest) {
+        // skip
+      }
+      return make_success(true, in);
+    };
+  }
+  
+
+  template<class Parser, class Skipper>
+  static auto token(Parser parser, Skipper skipper) {
+    return skip(skipper) >> parser;
+  }
+
+  template<class Parser>
+  static auto token(Parser parser) {
+    return skip(_char<std::isspace>) >> parser;
+  }
+
   
   ////////////////////////////////////////////////////////////////////////////////
   static constexpr std::size_t error_length = 24;
