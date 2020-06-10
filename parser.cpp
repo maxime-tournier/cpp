@@ -17,6 +17,9 @@ struct sexpr: variant<long, double, std::string, std::deque<sexpr>> {
   friend std::ostream& operator<<(std::ostream& out, const sexpr& self) {
     match(self,
           [&](const auto& value) { out << value << typeid(value).name(); },
+          [&](const std::string& value) {
+            out << '\"' << value << '\"';
+          },
           [&](const list& values) {
             out << '(';
             bool first = true;
@@ -41,17 +44,31 @@ int main(int argc, char** argv) {
   using namespace parser;
   // maybe<char> m = 'c';
 
-  const auto lparen = debug("lparen", token(single<'('>));
-  const auto rparen = debug("rparen", token(single<')'>));  
+  const auto lparen = debug("lparen", token(single('(')));
+  const auto rparen = debug("rparen", token(single(')')));
 
+  const auto quote = single('"'); 
+  const auto not_quote = _char >>= guard([](char x) { return x != '"'; });
+  
+  const auto backslash = single('\\');      
+
+  const auto escaped = backslash >> _char;
+  
+  const auto chars = kleene(escaped | not_quote) >>= [](auto chars) {
+    std::string value(chars.begin(), chars.end());
+    return unit(sexpr(std::move(value)));
+  };
+  
+  const auto string = token(quote) >> chars >>= drop(quote); 
+  
   const auto cast = [](auto value) { return sexpr(value); };
-
+  
   const auto number = longest(map(_long, cast),
                               map(_double, cast));
 
-  const auto space = _char<std::isspace>;
-
-  const auto atom = debug("atom", number);
+  const auto space = pred(std::isspace);
+  
+  const auto atom = debug("atom", number | string);
   
   const auto list = [=](auto parser) {
     auto inner = debug("inner", (map(((parser % space) | unit(sexpr::list{})), cast)));

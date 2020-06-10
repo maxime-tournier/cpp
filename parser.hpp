@@ -99,8 +99,10 @@ namespace parser {
       return match(parser(in),
             [](error err) -> result_type { return err; },
             [&](const auto& ok) -> result_type {
-              // TODO move into func
-              return func(ok.value)(ok);
+              if(auto res = func(ok.value)(ok)) {
+                return res;
+              }
+              return error(in);
             });
     };
   };
@@ -115,7 +117,20 @@ namespace parser {
     return lhs >>= [rhs = std::move(rhs)](auto) { return rhs; };
   };
 
-
+  template<class Pred>
+  static auto guard(Pred pred) {
+    return [pred=std::move(pred)](auto value) {
+      using value_type = decltype(value);
+      
+      return [pred, value=std::move(value)](range in) -> result<value_type> {
+        if(pred(value)) {
+          return make_success(value, in);
+        }
+        return error(in);
+      };
+    };
+  };
+  
   template<class Parser>
   static auto drop(Parser parser) {
     return [parser=std::move(parser)](auto value) {
@@ -241,21 +256,20 @@ namespace parser {
   ////////////////////////////////////////////////////////////////////////////////
   // concrete parsers
 
-  template<int (*pred) (int)>
   static result<char> _char(range in) {
     if(!in) return error(in);
-    if(!pred(in.get())) return error(in);
     return make_success(in.get(), in.next());
   };
 
-  template<char c>
-  static int equals(int x) { return x == c; }
-
-  template<char c>
-  static result<char> single(range in) {
-    return _char<equals<c>>(in);
+  static auto single(char c) {
+    return _char >>= guard([c](char x) { return x == c; });
   }
 
+  static auto pred(int (*pred)(int)) {
+    return _char >>= guard(pred);
+  }
+
+  
   // numbers
   static result<double> _double(range in) {
     if(!in) return error(in);
@@ -292,7 +306,7 @@ namespace parser {
   
   template<class Parser>
   static auto token(Parser parser) {
-    return skip(_char<std::isspace>) >> parser;
+    return skip(pred(std::isspace)) >> parser;
   }
 
   static result<bool> eos(range in) {
