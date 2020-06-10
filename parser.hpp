@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <sstream>
 
+#include <iostream>
+
 namespace parser {
 
   struct range {
@@ -68,7 +70,7 @@ namespace parser {
   
 
   template<class Parser, class Func>
-  static auto map(Func func, Parser parser) {
+  static auto map(Parser parser, Func func) {
     return [parser=std::move(parser),
             func=std::move(func)](range in) {
       using value_type = typename std::result_of<Func(value<Parser>)>::type;
@@ -118,7 +120,7 @@ namespace parser {
 
   template<class Parser>
   static auto ref(const Parser& parser) {
-    return [parser](range in) { return parser(in); };
+    return [&](range in) { return parser(in); };
   }
   
   template<class Parser>
@@ -178,6 +180,40 @@ namespace parser {
   static auto operator%(Parser parser, Separator separator) {
     return list(std::move(parser), std::move(separator));
   }
+
+
+  template<class Parser>
+  static auto skip(Parser parser) {
+    return [parser=std::move(parser)](range in) -> result<bool> {
+      while(auto res = parser(in)) {
+        in = res.get()->rest;
+      }
+      return make_success(true, in);
+    };
+  }
+  
+
+  template<class Parser, class Skipper>
+  static auto token(Parser parser, Skipper skipper) {
+    return skip(skipper) >> parser;
+  }
+
+  template<class Parser>
+  static auto debug(std::string name, Parser parser) {
+    return [name=std::move(name),
+            parser=std::move(parser)](range in) {
+      std::clog << "> " << name << ": \"" << in.first << "\"\n" ;
+      auto res = parser(in);
+      if(res) {
+        std::clog << "< " << name << " ok: \"" << res.get()->rest.first << "\"\n" ;     
+      } else {
+        std::clog << "< " << name << " failed\n";
+      }
+
+      return res;
+    };
+  }
+
   
   
   ////////////////////////////////////////////////////////////////////////////////
@@ -233,26 +269,17 @@ namespace parser {
 
   
   template<class Parser>
-  static auto skip(Parser parser) {
-    return [parser=std::move(parser)](range in) -> result<bool> {
-      for(auto res = parser(in); res; in = res.get()->rest) {
-        // skip
-      }
-      return make_success(true, in);
-    };
-  }
-  
-
-  template<class Parser, class Skipper>
-  static auto token(Parser parser, Skipper skipper) {
-    return skip(skipper) >> parser;
-  }
-
-  template<class Parser>
   static auto token(Parser parser) {
     return skip(_char<std::isspace>) >> parser;
   }
 
+  static result<bool> eos(range in) {
+    if(in.first == in.last) {
+      return make_success(true, in);
+    }
+
+    return in;
+  }
   
   ////////////////////////////////////////////////////////////////////////////////
   static constexpr std::size_t error_length = 24;
