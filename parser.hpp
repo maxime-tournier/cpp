@@ -42,7 +42,9 @@ namespace parser {
     success(T value, range rest): range(rest), value(std::move(value)) { }
   };
 
-  struct error: range { using range::range; };
+  struct error: range {
+    error(range at): range(at) { }
+  };
     
   
   template<class T>
@@ -51,7 +53,7 @@ namespace parser {
   }
   
   template<class T>
-  using result = either<range, success<T>>;
+  using result = either<error, success<T>>;
 
   template<class Parser>
   using value =
@@ -79,9 +81,9 @@ namespace parser {
       using value_type = typename std::result_of<Func(value<Parser>)>::type;
       using result_type = result<value_type>;
       return match(parser(in),
-            [](range fail) -> result_type { return fail; },
+            [](error err) -> result_type { return err; },
             [&](const auto& ok) -> result_type {
-              return make_success(func(ok.value), ok.rest);
+              return make_success(func(ok.value), ok);
             });
     };
   };
@@ -95,10 +97,10 @@ namespace parser {
       using value_type = value<parser_type>;
       using result_type = result<value_type>;
       return match(parser(in),
-            [](range fail) -> result_type { return fail; },
+            [](error err) -> result_type { return err; },
             [&](const auto& ok) -> result_type {
               // TODO move into func
-              return func(ok.value)(ok.rest);
+              return func(ok.value)(ok);
             });
     };
   };
@@ -133,7 +135,7 @@ namespace parser {
       std::deque<value<Parser>> values;
       while(auto result = parser(in).get()) {
         values.emplace_back(std::move(result->value));
-        in = result->rest;
+        in = *result;
       }
 
       return make_success(std::move(values), in);
@@ -189,7 +191,7 @@ namespace parser {
   static auto skip(Parser parser) {
     return [parser=std::move(parser)](range in) -> result<bool> {
       while(auto res = parser(in)) {
-        in = res.get()->rest;
+        in = *res.get();
       }
       return make_success(true, in);
     };
@@ -208,7 +210,7 @@ namespace parser {
       std::clog << "> " << name << ": \"" << in.first << "\"\n" ;
       auto res = parser(in);
       if(res) {
-        std::clog << "< " << name << " ok: \"" << res.get()->rest.first << "\"\n" ;     
+        std::clog << "< " << name << " ok: \"" << res.get()->first << "\"\n" ;     
       } else {
         std::clog << "< " << name << " failed\n";
       }
@@ -228,7 +230,7 @@ namespace parser {
       if(!as_rhs) return as_lhs;
       if(!as_lhs) return as_rhs;
 
-      if(as_lhs.get()->rest.first >= as_rhs.get()->rest.first) {
+      if(as_lhs.get()->first >= as_rhs.get()->first) {
         return as_lhs;
       } else {
         return as_rhs;
@@ -241,9 +243,9 @@ namespace parser {
 
   template<int (*pred) (int)>
   static result<char> _char(range in) {
-    if(!in) return in;
-    if(!pred(in.get())) return in;
-    return success<char>{in.get(), in.next()};
+    if(!in) return error(in);
+    if(!pred(in.get())) return error(in);
+    return make_success(in.get(), in.next());
   };
 
   template<char c>
@@ -256,34 +258,34 @@ namespace parser {
 
   // numbers
   static result<double> _double(range in) {
-    if(!in) return in;
+    if(!in) return error(in);
     char* end;
     const double res = std::strtod(in.first, &end);
-    if(end == in.first) return in;
+    if(end == in.first) return error(in);
     return make_success(res, range{end, in.last});
   }
 
   static result<float> _float(range in) {
-    if(!in) return in;
+    if(!in) return error(in);
     char* end;
     const float res = std::strtof(in.first, &end);
-    if(end == in.first) return in;
+    if(end == in.first) return error(in);
     return make_success(res, range{end, in.last});
   }
   
   static result<long> _long(range in) {
-    if(!in) return in;
+    if(!in) return error(in);
     char* end;
     const long res = std::strtol(in.first, &end, 10);
-    if(end == in.first) return in;
+    if(end == in.first) return error(in);
     return make_success(res, range{end, in.last});
   }
 
   static result<unsigned long> _unsigned_long(range in) {
-    if(!in) return in;
+    if(!in) return error(in);
     char* end;
     const unsigned long res = std::strtoul(in.first, &end, 10);
-    if(end == in.first) return in;
+    if(end == in.first) return error(in);
     return make_success(res, range{end, in.last});
   }
 
@@ -298,7 +300,7 @@ namespace parser {
       return make_success(true, in);
     }
 
-    return in;
+    return error(in);
   }
   
   ////////////////////////////////////////////////////////////////////////////////
