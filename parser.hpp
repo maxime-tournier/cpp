@@ -36,12 +36,15 @@ namespace parser {
   };
 
   template<class T>
-  struct success {
+  struct success: range {
     using value_type = T;
     T value;
-    range rest;
+    success(T value, range rest): range(rest), value(std::move(value)) { }
   };
 
+  struct error: range { using range::range; };
+    
+  
   template<class T>
   static success<T> make_success(T value, range rest) {
     return {std::move(value), rest};
@@ -214,7 +217,24 @@ namespace parser {
     };
   }
 
-  
+
+  template<class LHS, class RHS>
+  static auto longest(LHS lhs, RHS rhs) {
+    return [lhs=std::move(lhs),
+            rhs=std::move(rhs)](range in) {
+      auto as_lhs = lhs(in);
+      auto as_rhs = rhs(in);
+
+      if(!as_rhs) return as_lhs;
+      if(!as_lhs) return as_rhs;
+
+      if(as_lhs.get()->rest.first >= as_rhs.get()->rest.first) {
+        return as_lhs;
+      } else {
+        return as_rhs;
+      }
+    };
+  };
   
   ////////////////////////////////////////////////////////////////////////////////
   // concrete parsers

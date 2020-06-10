@@ -45,13 +45,9 @@ int main(int argc, char** argv) {
   const auto rparen = debug("rparen", token(single<')'>));  
 
   const auto cast = [](auto value) { return sexpr(value); };
-  
-  const auto number = map(_double, [](double value) -> sexpr {
-    if(std::ceil(value) == value) {
-      return long(value);
-    } else {
-      return double(value);
-    }});
+
+  const auto number = longest(map(_long, cast),
+                              map(_double, cast));
 
   const auto space = _char<std::isspace>;
 
