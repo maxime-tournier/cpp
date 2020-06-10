@@ -23,6 +23,8 @@ namespace parser {
       return first != last;
     }
 
+    std::size_t size() const { return last - first; }
+
     char get() const {
       assert(bool(*this));      
       return *first;
@@ -269,6 +271,18 @@ namespace parser {
     return _char >>= guard(pred);
   }
 
+
+  static auto keyword(std::string value) {
+    return [value = std::move(value)](range in) -> result<bool> {
+      if(in.size() < value.size()) return error(in);
+      
+      if(value.compare(0, value.size(), in.first) == 0) {
+        return make_success(true, range{in.first + value.size(), in.last});
+      }
+      
+      return error(in);
+    };
+  }
   
   // numbers
   static result<double> _double(range in) {

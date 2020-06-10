@@ -1,320 +1,281 @@
 // #define PARSE_ENABLE_DEBUG
-#include "parse.hpp"
+#include "parser.hpp"
 
-#include <iostream>
 #include <fstream>
-
-
+#include <iostream>
 
 namespace obj {
-
-  using real = double;
-
-  struct vec3 { real x, y, z; };
-
-  struct vertex : vec3 {
-    friend std::ostream& operator<<(std::ostream& out, const vertex& self) {
-      return out << "v" << " " << self.x << " " << self.y << " " << self.z;
-    }
-  };
   
-  struct normal : vec3 {
+using real = double;
 
-    friend std::ostream& operator<<(std::ostream& out, const normal& self) {
-      return out << "vn" << " " << self.x << " " << self.y << " " << self.z;
+struct vec3 {
+  real x, y, z;
+};
+
+struct vertex: vec3 {
+  using vec3::operator=;
+  
+  friend std::ostream& operator<<(std::ostream& out, const vertex& self) {
+    return out << "v " << self.x << " " << self.y << " " << self.z;
+  }
+};
+
+struct normal: vec3 {
+  using vec3::operator=;
+  
+  friend std::ostream& operator<<(std::ostream& out, const normal& self) {
+    return out << "vn " << self.x << " " << self.y << " " << self.z;
+  }
+};
+
+struct face {
+  
+  struct element {
+    std::size_t vertex;
+    std::size_t texcoord;
+    std::size_t normal;
+
+    friend std::ostream& operator<<(std::ostream& out, const element& self) {
+      out << self.vertex;
+
+      if(self.texcoord != -1 || self.normal != -1) {
+        out << "/";
+      }
+      
+      if(self.texcoord != -1) {
+        out << self.texcoord;
+      }
+      
+      if(self.normal != -1) {
+        out << "/" << self.normal;
+      }
+
+      return out;
     }
-
   };
 
-  struct face {
-    
-    struct element {
-      int vertex;
-      int texcoord;
-      int normal;
+  std::deque<element> elements;
 
-      friend std::ostream& operator<<(std::ostream& out, const element& self) {
-        out << self.vertex;
+  friend std::ostream& operator<<(std::ostream& out, const face& self) {
+    out << 'f';
 
-        if(self.texcoord >= 0 || self.normal >= 0) out << "/";
-        if(self.texcoord >= 0) out << self.texcoord;
-        if(self.normal >= 0) out << "/" << self.normal;
-
-        return out;
-      }
+    for(const auto& element: self.elements) {
+      out << ' ' << element;
     };
 
-    element e1, e2, e3;
-    std::vector<element> rest;
+    return out;
+  }
+};
 
-    template<class F>
-    void each(F f) const {
-      f(e1); f(e2); f(e3);
-      for(const element& e : rest) { f(e); }
+
+struct geometry {
+  std::vector<vertex> vertices;
+  std::vector<normal> normals;
+  std::vector<face> faces;
+
+  // TODO materials
+
+  friend std::ostream& operator<<(std::ostream& out, const geometry& self) {
+    for(const auto& v: self.vertices) {
+      out << v << '\n';
     }
-    
-    
-    friend std::ostream& operator<<(std::ostream& out, const face& self) {
-      out << 'f';
-      
-      self.each([&](const element& e) {
-          out << ' ' << e;
-        });
-      
-      return out;
+
+    for(const auto& n: self.normals) {
+      out << n << '\n';
     }
-  };
 
-
-  struct geometry {
-    std::vector<vertex> vertices;
-    std::vector<normal> normals;
-    std::vector<face> faces;
-
-    // TODO materials
-    
-    friend std::ostream& operator<<(std::ostream& out, const geometry& self) {
-      for(const vertex& v : self.vertices) {
-        out << v << '\n';
-      }
-      
-      for(const normal& n : self.normals) {
-        out << n << '\n';
-      }
-
-      for(const face& f : self.faces) {
-        out << f << '\n';
-      }
-
-      return out;
+    for(const auto& f: self.faces) {
+      out << f << '\n';
     }
-    
-  };
 
-  struct group {
-    std::string name;
-    geometry geo;
-    
-    friend std::ostream& operator<<(std::ostream& out, const group& self) {
-      out << "g" << " " << self.name << '\n';
-      return out << self.geo;
+    return out;
+  }
+};
+
+struct group {
+  std::string name;
+  geometry geo;
+
+  friend std::ostream& operator<<(std::ostream& out, const group& self) {
+    out << "g"
+        << " " << self.name << '\n';
+    return out << self.geo;
+  }
+};
+
+
+struct object {
+  std::string name;
+  geometry geo;
+  std::vector<group> groups;
+
+  friend std::ostream& operator<<(std::ostream& out, const object& self) {
+    out << "o "<< self.name << '\n';
+    out << self.geo;
+
+    for(const auto& g: self.groups) {
+      out << g;
     }
-    
-  };
+
+    return out;
+  }
+};
+
+struct file {
+  geometry geo;
+  std::deque<group> groups;
+  std::deque<object> objects;
   
+  friend std::ostream& operator<<(std::ostream& out, const file& self) {
+    out << self.geo;
 
-  struct object {
-    std::string name;
-    geometry geo;
-    std::vector<group> groups;
-    
-    friend std::ostream& operator<<(std::ostream& out, const object& self) {
-      out << "o" << " " << self.name << '\n';
-      out << self.geo;
-      
-      for(const group& g : self.groups) {
-        out << g;
-      }
-
-      return out;
+    for(const auto& grp: self.groups) {
+      out << grp;
     }
 
-  };
-  
-  struct file {
-    geometry geo;
-    std::vector<group> groups;
-    std::vector<object> objects;
-
-    friend std::ostream& operator<<(std::ostream& out, const file& self) {
-
-      out << self.geo;
-
-      for(const group& grp : self.groups) {
-        out << grp;
-      }
-
-      for(const object& obj : self.objects) {
-        out << obj;
-      }
-
-      return out;
+    for(const auto& obj: self.objects) {
+      out << obj;
     }
 
+    return out;
+  }
 
+
+  friend std::istream& operator>>(std::istream& in, file& self) {
+    in >> std::noskipws;
+
+    using namespace parser;
+
+    static const auto space = pred(std::isblank);
+
+    static const auto endl = single('\n');
+    static const auto not_endl = pred([](int x) -> int { return x != '\n'; });
+
+    static const auto comment = single('#') >> skip(not_endl) >> endl;
     
-    friend std::istream& operator>>(std::istream& in, file& self) {
-      in >> std::noskipws;
-
-      using namespace parse;
-
-      static const auto space = chr(std::isblank);
-      static const auto endl = chr<'\n'>();      
-
-      static const auto comment = (chr<'#'>(), token(endl, !endl));
-      
-      static const auto skip = space | comment;
-
-      static const auto g = tokenize(skip) << str("g");
-      static const auto o = tokenize(skip) << str("o");      
-      static const auto v = tokenize(skip) << str("v");
-      static const auto vn = tokenize(skip) << str("vn");
-      static const auto f = tokenize(skip) << str("f");
-      static const auto mtllib = tokenize(skip) << str("mtllib");      
-      
-      static const auto name = tokenize(skip) << +chr(std::isgraph);
-
-      static const auto newline = tokenize(skip) << endl;
-
-
-      static const auto group_def = (g, name) >> drop(newline);
-      static const auto object_def = (o, name) >> drop(newline);      
-      static const auto mtllib_def = (mtllib, name) >> drop(newline);
-      
-      static const auto num = tokenize(skip) << lit<real>();
-
-      static const auto vec3 = num >> [](real&& x) {
-        return num >> [&](real&& y) {
-          return num >> [&](real&& z) {
-            return pure(obj::vec3{x, y, z});
-          };
-        };
-      };
+    static const auto separator = space | comment;
     
-      static const auto vertex_def = debug("vertex") <<= (v, vec3) >> [](obj::vec3&& v) {
-        return pure( static_cast<obj::vertex&&>(v) );
-      } >> drop(newline);
+    static const auto g = token(keyword("g"), separator);
+    static const auto o = token(keyword("o"), separator);
+    static const auto v = token(keyword("v"), separator);
+    static const auto vn = token(keyword("vn"), separator);
+    static const auto f = token(keyword("f"), separator);
+    static const auto mtllib = token(keyword("mtllib"), separator);
+    
+    static const auto name = token(plus(pred(std::isgraph)));
+    static const auto newline = token(endl);
 
-      static const auto normal_def = debug("normal") <<= (vn, vec3) >> [](obj::vec3&& v) {
-        return pure( static_cast<obj::normal&&>(v) );
-      } >> drop(newline);
-
-      
-      static const auto integer = tokenize(skip) << lit<int>();
-      static const auto slash = str("/", [](char c) { 
-          return c == '/' || std::isdigit(c);
-        });
-      
-      static const auto face_element = integer >> [&](int&& vertex) {
-        return slash >> [&](const char*) {
-          return integer >> [&](int&& texcoord) {
-            // vertex/texcoord...
-            return (slash, integer) >> [&](int&& normal) {
-              // vertex/texcoord/normal
-              return pure( face::element{vertex, texcoord, normal} );
-            } | pure( face::element{vertex, texcoord, -1} );
-            
-          } | slash >> [&](const char* ) {
-            // vertex/normal
-            return integer >> [&](int&& normal) {
-              return pure( face::element{vertex, -1, normal} );
-            };
-          };
-        } | pure( face::element{vertex, -1, -1} );
-        
+    static const auto section = [](auto what) {
+      return what >> name >>= drop(newline);
+    };
+    
+    static const auto number = token(_double);
+    static const auto index = token(_unsigned_long);
+    
+    static const auto vec3 = number >>= [=](real x) {
+      return number >>= [=](real y) {
+        return number >>= [=](real z) {
+          return unit(obj::vec3{x, y, z}); };
       };
+    };
+    
+    static const auto vertex_def = v >> vec3 >>= [](obj::vec3 v) {
+      return unit(obj::vertex() = v) >>= drop(newline);
+    };
 
+    static const auto normal_def = vn >> vec3 >>= [](obj::vec3 v) {
+      return unit(obj::normal() = v) >>= drop(newline);
+    };
 
-      static const auto face_def = debug("face") <<=
-        (f, face_element) >> [](face::element&& e1) {
-        return face_element >> [&](face::element&& e2) {
-          return face_element >> [&](face::element&& e3) {
-            
-            return *face_element >> [&](std::vector<face::element>&& rest) {
-              return pure( obj::face{e1, e2, e3, std::move(rest)} );
-            };            
-          };
-        };
-      } >> drop(newline);
-
-      const auto geometry = debug("geometry") <<=
-        pure( obj::geometry() ) >> [](obj::geometry&& self) {
-        
-        const auto line = debug("line") <<=
-        vertex_def >> [&](obj::vertex&& v) {
-          self.vertices.emplace_back(std::move(v));
-          return pure(true);
-        } | normal_def >> [&](obj::normal&& n) {
-          self.normals.emplace_back(std::move(n));
-          return pure(true);
-        } | face_def >> [&](obj::face&& f) {
-          self.faces.emplace_back(std::move(f));
-          return pure(true);
-        } | mtllib_def >> [&](std::vector<char>&& name) {
-          return pure(true);
-        } | (newline, pure(true));
-        
-        // TODO don't build std::vector of bools here
-        return *line >> [&](std::vector<bool>&& ) {
-          return pure(std::move(self));
-        };
-        
-      };
-      
-
-      static const auto group = debug("group") <<=
-        group_def >> [&](std::vector<char>&& name) {
-        return geometry >> [&](obj::geometry&& geo) {
-          obj::group self;
-          self.name = {name.begin(), name.end()};
-          self.geo = std::move(geo);
-          return pure(self);
+    static const auto slash = token(single('/'));
+    
+    static const auto element = index >>= [=](std::size_t vertex) {
+      return slash >> index >>= [=](std::size_t texcoord) {
+        return slash >> index >>= [=](std::size_t normal) {
+          return unit(face::element{vertex, texcoord, normal});
         };
       };
+    };
+
+    static const auto face_def = f >> kleene(element) >>= drop(newline);
+    
+    // const auto geometry =  pure(obj::geometry()) >> [](obj::geometry&& self) {
+    //       const auto line =
+    //           debug("line") <<= vertex_def >> [&](obj::vertex&& v) {
+    //             self.vertices.emplace_back(std::move(v));
+    //             return pure(true);
+    //           } | normal_def >> [&](obj::normal&& n) {
+    //             self.normals.emplace_back(std::move(n));
+    //             return pure(true);
+    //           } | face_def >> [&](obj::face&& f) {
+    //             self.faces.emplace_back(std::move(f));
+    //             return pure(true);
+    //           } | mtllib_def >> [&](std::vector<char>&& name) {
+    //             return pure(true);
+    //           } | (newline, pure(true));
+
+    //       // TODO don't build std::vector of bools here
+    //       return *line >>
+    //              [&](std::vector<bool>&&) { return pure(std::move(self)); };
+    //     };
 
 
-      static const auto object = debug("object") <<=
-        object_def >> [&](std::vector<char>&& name) {
-        return geometry >> [&](obj::geometry&& geo) {
-          return *group >> [&](std::vector<obj::group>&& groups) {
-            
-            obj::object self;
-            self.name = {name.begin(), name.end()};
-            self.geo = std::move(geo);
-            self.groups = std::move(groups);
-            
-            return pure(self);
-          };
-
-        };
-      };
+    // static const auto group = debug("group") <<=
+    //     group_def >> [&](std::vector<char>&& name) {
+    //       return geometry >> [&](obj::geometry&& geo) {
+    //         obj::group self;
+    //         self.name = {name.begin(), name.end()};
+    //         self.geo = std::move(geo);
+    //         return pure(self);
+    //       };
+    //     };
 
 
-      static const auto file = debug("file") <<=
-        geometry >> [&](obj::geometry&& geo) {
-        return *group >> [&](std::vector<obj::group>&& groups) {
-          return *object >> [&](std::vector<obj::object>&& objects) {
-            obj::file self;
-            self.geo = std::move(geo);
-            self.groups = std::move(groups);
-            self.objects = std::move(objects);
+    // static const auto object = debug("object") <<=
+    //     object_def >> [&](std::vector<char>&& name) {
+    //       return geometry >> [&](obj::geometry&& geo) {
+    //         return *group >> [&](std::vector<obj::group>&& groups) {
+    //           obj::object self;
+    //           self.name = {name.begin(), name.end()};
+    //           self.geo = std::move(geo);
+    //           self.groups = std::move(groups);
 
-            return pure(self);
-          };
-        };
-        
-      };
-
-      static const auto parser = file;
-
-      if( auto result = parser(in) ) {
-        self = std::move(result.get());
-      } else {
-        throw std::runtime_error("parse error");
-      }
-      
-      return in;
-    }
-
-  };
-
-}
+    //           return pure(self);
+    //         };
+    //       };
+    //     };
 
 
+    // static const auto file = debug("file") <<=
+    //     geometry >> [&](obj::geometry&& geo) {
+    //       return *group >> [&](std::vector<obj::group>&& groups) {
+    //         return *object >> [&](std::vector<obj::object>&& objects) {
+    //           obj::file self;
+    //           self.geo = std::move(geo);
+    //           self.groups = std::move(groups);
+    //           self.objects = std::move(objects);
+
+    //           return pure(self);
+    //         };
+    //       };
+    //     };
+
+    // static const auto parser = file;
+
+    // if(auto result = parser(in)) {
+    //   self = std::move(result.get());
+    // } else {
+    //   throw std::runtime_error("parse error");
+    // }
+
+    return in;
+  }
+};
+
+} // namespace obj
 
 
 int main(int argc, char** argv) {
-
   obj::file f;
 
   if(argc < 2) {
@@ -322,7 +283,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  std::ifstream in(argv[1]); 
+  std::ifstream in(argv[1]);
   if(!in.good()) {
     std::cerr << "file open error" << std::endl;
     return 1;
@@ -330,7 +291,7 @@ int main(int argc, char** argv) {
 
   std::stringstream ss;
   ss << in.rdbuf();
-  
+
   try {
     ss >> f;
   } catch(std::runtime_error& e) {
