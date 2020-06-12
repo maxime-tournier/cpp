@@ -97,11 +97,9 @@ static auto map(Parser parser, Func func) {
   return [parser = std::move(parser), func = std::move(func)](range in) {
     using value_type = typename std::result_of<Func(value<Parser>)>::type;
     using result_type = result<value_type>;
-    return match(parser(in),
-                 [](error err) -> result_type { return err; },
-                 [&](success<value<Parser>>& ok) -> result_type {
-                   return make_success(func(std::move(ok.value)), ok);
-                 });
+    return map(parser(in), [&](success<value<Parser>>&& self) {
+      return make_success(func(std::move(self.value)), self);
+    });
   };
 };
 
@@ -112,14 +110,13 @@ static auto bind(Parser parser, Func func) {
     using parser_type = typename std::result_of<Func(value<Parser>)>::type;
     using value_type = value<parser_type>;
     using result_type = result<value_type>;
-    return match(parser(in),
-                 [](error err) -> result_type { return err; },
-                 [&](success<value<Parser>>& ok) -> result_type {
-                   if(auto res = func(std::move(ok.value))(ok)) {
-                     return res;
-                   }
-                   return error(in);
-                 });
+    return parser(in) >>= [&](success<value<Parser>>&& self) -> result_type {
+      const range in = self;
+      if(auto res = func(std::move(self.value))(in)) {
+        return res;
+      }
+      return error(in);
+    };
   };
 };
 

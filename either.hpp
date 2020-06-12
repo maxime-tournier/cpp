@@ -82,20 +82,77 @@ public:
     assert(!ok);
     return cast<Left>();
   };
+
   
+  template<class Func>
+  friend auto map(either&& self, Func func) {
+    using value_type = typename std::result_of<Func(Right)>::type;
+    using result_type = either<Left, value_type>;
+    
+    return match(self,
+                 [](Left& left) -> result_type {
+                   return std::move(left);
+                 },
+                 [&](Right& right) -> result_type {
+                   return func(std::move(right));
+                 });
+  }
+
+  template<class Func>
+  friend auto map(const either& self, Func func) {
+    using value_type = typename std::result_of<Func(Right)>::type;
+    using result_type = either<Left, value_type>;
+    
+    return match(self,
+                 [](const Left& left) -> result_type {
+                   return left;
+                 },
+                 [&](const Right& right) -> result_type {
+                   return func(right);
+                 });
+  }
+  
+
+  template<class Func>
+  static auto bind(either&& self, Func func) {
+    using result_type = typename std::result_of<Func(Right)>::type;
+    
+    return match(self,
+                 [](Left& left) -> result_type {
+                   return std::move(left);
+                 },
+                 [&](Right& right) -> result_type {
+                   return func(std::move(right));
+                 });
+  }
+
+  template<class Func>
+  static auto bind(const either& self, Func func) {
+    using result_type = typename std::result_of<Func(Right)>::type;
+    
+    return match(self,
+                 [](Left& left) -> result_type {
+                   return std::move(left);
+                 },
+                 [&](Right& right) -> result_type {
+                   return func(std::move(right));
+                 });
+  }
+  
+
+  // monad bind
+  template<class Func>
+  friend auto operator>>=(either&& self, Func func) {
+    return bind(std::move(self), std::move(func));
+  }
+
+  template<class Func>
+  friend auto operator>>=(const either& self, Func func) {
+    return bind(self, std::move(func));
+  }
+
 };
 
-
-// template<class A, class F>
-// static auto map(const maybe<A>& self, F f) {
-//   using result_type = decltype(f(self.get()));
-  
-//   if(!self) {
-//     return maybe<result_type>{};
-//   }
-  
-//   return some(f(self.get()));
-// }
 
 
 #endif
