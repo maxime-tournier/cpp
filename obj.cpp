@@ -31,6 +31,7 @@ struct normal: vec3 {
 struct face {
   
   struct element {
+    std::size_t data[0];
     std::size_t vertex;
     std::size_t texcoord;
     std::size_t normal;
@@ -69,12 +70,12 @@ struct face {
 
 
 struct geometry {
-  std::vector<vertex> vertices;
-  std::vector<normal> normals;
-  std::vector<face> faces;
+  std::deque<vertex> vertices;
+  std::deque<normal> normals;
+  std::deque<texcoord> texcoords;  
+  std::deque<face> faces;
 
   // TODO materials
-
   friend std::ostream& operator<<(std::ostream& out, const geometry& self) {
     for(const auto& v: self.vertices) {
       out << v << '\n';
@@ -146,78 +147,81 @@ struct file {
 
     using namespace parser;
 
-    static const auto space = pred(std::isblank);
+    const auto space = pred(std::isblank);
 
-    static const auto endl = single('\n');
-    static const auto not_endl = pred([](int x) -> int { return x != '\n'; });
+    const auto endl = single('\n');
+    const auto not_endl = pred([](int x) -> int { return x != '\n'; });
 
-    static const auto comment = single('#') >> skip(not_endl) >> endl;
+    const auto comment = single('#') >> skip(not_endl) >> endl;
+    const auto separator = space | comment;
     
-    static const auto separator = space | comment;
+    const auto g = token(keyword("g"), separator);
+    const auto o = token(keyword("o"), separator);
+    const auto v = token(keyword("v"), separator);
+    const auto vn = token(keyword("vn"), separator);
+    const auto f = token(keyword("f"), separator);
+    const auto mtllib = token(keyword("mtllib"), separator);
     
-    static const auto g = token(keyword("g"), separator);
-    static const auto o = token(keyword("o"), separator);
-    static const auto v = token(keyword("v"), separator);
-    static const auto vn = token(keyword("vn"), separator);
-    static const auto f = token(keyword("f"), separator);
-    static const auto mtllib = token(keyword("mtllib"), separator);
-    
-    static const auto name = token(plus(pred(std::isgraph)));
-    static const auto newline = token(endl);
+    const auto name = token(plus(pred(std::isgraph)));
+    const auto newline = token(endl);
 
-    static const auto section = [](auto what) {
+    const auto section = [](auto what) {
       return what >> name >>= drop(newline);
     };
     
-    static const auto number = token(_double);
-    static const auto index = token(_unsigned_long);
+    const auto number = token(_double);
     
-    static const auto vec3 = number >>= [=](real x) {
+    const auto vec3 = number >>= [=](real x) {
       return number >>= [=](real y) {
         return number >>= [=](real z) {
           return unit(obj::vec3{x, y, z}); };
       };
     };
     
-    static const auto vertex_def = v >> vec3 >>= [](obj::vec3 v) {
+    const auto vertex_def = v >> vec3 >>= [](obj::vec3 v) {
       return unit(obj::vertex() = v) >>= drop(newline);
     };
 
-    static const auto normal_def = vn >> vec3 >>= [](obj::vec3 v) {
+    const auto normal_def = vn >> vec3 >>= [](obj::vec3 v) {
       return unit(obj::normal() = v) >>= drop(newline);
     };
 
-    static const auto slash = token(single('/'));
+    const auto index = token(_unsigned_long);
+    const auto slash = token(single('/'));
     
-    static const auto element = index >>= [=](std::size_t vertex) {
-      return slash >> index >>= [=](std::size_t texcoord) {
-        return slash >> index >>= [=](std::size_t normal) {
-          return unit(face::element{vertex, texcoord, normal});
+    const auto element = ((index | unit(0ul)) % slash) >>= [](auto indices) {
+      element e;
+      for(std::size_t i = 0; i < 3; ++i) {
+        e.data[i] = i <= indices.size() ? indices[i] : 0;
+      }
+
+      return unit(e);
+    };
+    
+    // TODO check there's at least three elements?
+    const auto face_def = f >> plus(element) >>= drop(newline);
+
+    const auto geometry = unit(obj::geometry{}) >>= [](obj::geometry geo) {
+
+      const auto append_to = [&](auto& where) {
+        return [&](auto value) {
+          where.emplace_back(value);
+          return unit(true);
         };
       };
+      
+      const auto vertex = vertex_def >>= append_to(geo.vertices);
+      const auto normal = normal_def >>= append_to(geo.normals);
+      const auto texcoord = texcoord_def >>= append_to(geo.texcoords);            
+      const auto face = face_def >>= append_to(geo.faces);
+
+      // TODO mtllib, parameters
+      
+      const auto line = vertex | normal | texcoord | face;
+        
+      return skip(line) >> unit(std::move(geo));
     };
-
-    static const auto face_def = f >> kleene(element) >>= drop(newline);
     
-    // const auto geometry =  pure(obj::geometry()) >> [](obj::geometry&& self) {
-    //       const auto line =
-    //           debug("line") <<= vertex_def >> [&](obj::vertex&& v) {
-    //             self.vertices.emplace_back(std::move(v));
-    //             return pure(true);
-    //           } | normal_def >> [&](obj::normal&& n) {
-    //             self.normals.emplace_back(std::move(n));
-    //             return pure(true);
-    //           } | face_def >> [&](obj::face&& f) {
-    //             self.faces.emplace_back(std::move(f));
-    //             return pure(true);
-    //           } | mtllib_def >> [&](std::vector<char>&& name) {
-    //             return pure(true);
-    //           } | (newline, pure(true));
-
-    //       // TODO don't build std::vector of bools here
-    //       return *line >>
-    //              [&](std::vector<bool>&&) { return pure(std::move(self)); };
-    //     };
 
 
     // static const auto group = debug("group") <<=
@@ -246,6 +250,12 @@ struct file {
     //     };
 
 
+    const auto file = geometry >>= [](auto geo) {
+      obj::file file;
+      file.geo = std::move(geo);
+      return unit(std::move(file));
+    };
+    
     // static const auto file = debug("file") <<=
     //     geometry >> [&](obj::geometry&& geo) {
     //       return *group >> [&](std::vector<obj::group>&& groups) {

@@ -89,7 +89,7 @@ static auto map(Parser parser, Func func) {
     using result_type = result<value_type>;
     return match(parser(in),
                  [](error err) -> result_type { return err; },
-                 [&](const auto& ok) -> result_type {
+                 [&](auto& ok) -> result_type {
                    return make_success(func(ok.value), ok);
                  });
   };
@@ -104,8 +104,8 @@ static auto bind(Parser parser, Func func) {
     using result_type = result<value_type>;
     return match(parser(in),
                  [](error err) -> result_type { return err; },
-                 [&](const auto& ok) -> result_type {
-                   if(auto res = func(ok.value)(ok)) {
+                 [&](auto& ok) -> result_type {
+                   if(auto res = func(std::move(ok.value))(ok)) {
                      return res;
                    }
                    return error(in);

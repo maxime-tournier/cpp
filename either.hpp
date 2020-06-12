@@ -13,6 +13,12 @@ template<class Left, class Right>
 class either {
   typename std::aligned_union<0, Left, Right>::type storage;
   const bool ok;
+
+  template<class T, class Derived>
+  friend T& cast(Derived* self) {
+    return *reinterpret_cast<T*>(&self->storage);
+  }
+  
 public:
   using value_type = Right;
   
@@ -27,20 +33,20 @@ public:
 
   explicit operator bool() const { return ok; }
 
-  template<class Cont>
-  friend auto visit(const either& self, Cont cont) {
+  template<class Self, class Cont>
+  friend auto visit(Self&& self, Cont cont) {
     if(self.ok) {
-      return cont(*reinterpret_cast<const Right*>(&self.storage));
+      return cont(std::forward<Self>(self).right());
     } else {
-      return cont(*reinterpret_cast<const Left*>(&self.storage));
+      return cont(std::forward<Self>(self).left());
     }
   }
 
-  template<class ... Cases>
-  friend auto match(const either& self, Cases... cases) {
-    return visit(self, overload<Cases...>{cases...});
+  template<class Self, class ... Cases>
+  friend auto match(Self&& self, Cases... cases) {
+    return visit(std::forward<Self>(self), overload<Cases...>{cases...});
   }
-
+  
   const Right* get() const {
     if(!ok) return nullptr;
     return reinterpret_cast<const Right*>(&storage);
@@ -51,6 +57,26 @@ public:
     if(!ok) return nullptr;
     return reinterpret_cast<Right*>(&storage);
   }
+
+  const Right& right() const& {
+    assert(ok);
+    return cast<const Right>(this);
+  };
+  
+  Right& right() {
+    assert(ok);
+    return cast<Right>(this);
+  };
+
+  const Left& left() const {
+    assert(!ok);
+    return cast<const Left>(this);
+  };
+  
+  Left& left() {
+    assert(!ok);
+    return cast<Left>(this);
+  };
   
 };
 
