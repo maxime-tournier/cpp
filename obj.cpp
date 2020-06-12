@@ -1,4 +1,4 @@
-// #define PARSE_ENABLE_DEBUG
+// -*- compile-command: "c++ -std=c++14 obj.cpp -o obj -lstdc++ -lm -g" -*-
 #include "parser.hpp"
 
 #include <fstream>
@@ -8,12 +8,16 @@ namespace obj {
   
 using real = double;
 
+struct texcoord {
+  real u, v;
+};
+
 struct vec3 {
   real x, y, z;
 };
 
 struct vertex: vec3 {
-  using vec3::operator=;
+  vertex(vec3 self): vec3(self) { }
   
   friend std::ostream& operator<<(std::ostream& out, const vertex& self) {
     return out << "v " << self.x << " " << self.y << " " << self.z;
@@ -21,7 +25,7 @@ struct vertex: vec3 {
 };
 
 struct normal: vec3 {
-  using vec3::operator=;
+  normal(vec3 self): vec3(self) { }
   
   friend std::ostream& operator<<(std::ostream& out, const normal& self) {
     return out << "vn " << self.x << " " << self.y << " " << self.z;
@@ -157,15 +161,18 @@ struct file {
     
     const auto g = token(keyword("g"), separator);
     const auto o = token(keyword("o"), separator);
+
     const auto v = token(keyword("v"), separator);
     const auto vn = token(keyword("vn"), separator);
+    const auto vt = token(keyword("vt"), separator);
+    
     const auto f = token(keyword("f"), separator);
     const auto mtllib = token(keyword("mtllib"), separator);
     
     const auto name = token(plus(pred(std::isgraph)));
     const auto newline = token(endl);
 
-    const auto section = [](auto what) {
+    const auto section = [=](auto what) {
       return what >> name >>= drop(newline);
     };
     
@@ -178,19 +185,26 @@ struct file {
       };
     };
     
-    const auto vertex_def = v >> vec3 >>= [](obj::vec3 v) {
-      return unit(obj::vertex() = v) >>= drop(newline);
+    const auto vertex_def = v >> vec3 >>= [=](obj::vec3 v) {
+      return unit(obj::vertex(v)) >>= drop(newline);
     };
 
-    const auto normal_def = vn >> vec3 >>= [](obj::vec3 v) {
-      return unit(obj::normal() = v) >>= drop(newline);
+    const auto normal_def = vn >> vec3 >>= [=](obj::vec3 v) {
+      return unit(obj::normal(v)) >>= drop(newline);
     };
 
+    const auto texcoord_def = vt >> number >>= [=](auto u) {
+      return number >>= [=](auto v) {
+        return unit(obj::texcoord{u, v}) >>= drop(newline);
+      };
+    };
+
+    
     const auto index = token(_unsigned_long);
     const auto slash = token(single('/'));
     
     const auto element = ((index | unit(0ul)) % slash) >>= [](auto indices) {
-      element e;
+      face::element e;
       for(std::size_t i = 0; i < 3; ++i) {
         e.data[i] = i <= indices.size() ? indices[i] : 0;
       }
@@ -199,9 +213,11 @@ struct file {
     };
     
     // TODO check there's at least three elements?
-    const auto face_def = f >> plus(element) >>= drop(newline);
+    const auto face_def = f >> plus(element) >>= [=](auto elements) {
+      return unit(face{std::move(elements)}) >>= drop(newline);
+    };
 
-    const auto geometry = unit(obj::geometry{}) >>= [](obj::geometry geo) {
+    const auto geometry = unit(obj::geometry{}) >>= [=](obj::geometry geo) {
 
       const auto append_to = [&](auto& where) {
         return [&](auto value) {
@@ -212,12 +228,12 @@ struct file {
       
       const auto vertex = vertex_def >>= append_to(geo.vertices);
       const auto normal = normal_def >>= append_to(geo.normals);
-      const auto texcoord = texcoord_def >>= append_to(geo.texcoords);            
+      const auto texcoord = texcoord_def >>= append_to(geo.texcoords);
       const auto face = face_def >>= append_to(geo.faces);
 
       // TODO mtllib, parameters
       
-      const auto line = vertex | normal | texcoord | face;
+      const auto line = debug("line", vertex | normal | texcoord | face);
         
       return skip(line) >> unit(std::move(geo));
     };
@@ -277,7 +293,9 @@ struct file {
     // } else {
     //   throw std::runtime_error("parse error");
     // }
+    const auto parser = file >>= drop(eos);
 
+    self = run(parser, in);
     return in;
   }
 };
@@ -288,22 +306,19 @@ struct file {
 int main(int argc, char** argv) {
   obj::file f;
 
-  if(argc < 2) {
+  if(argc <= 1) {
     std::cerr << "usage: " << argv[0] << " <objfile>" << std::endl;
     return 1;
   }
 
   std::ifstream in(argv[1]);
-  if(!in.good()) {
-    std::cerr << "file open error" << std::endl;
+  if(!in) {
+    std::cerr << "cannot read: " << argv[1] << std::endl;
     return 1;
   }
 
-  std::stringstream ss;
-  ss << in.rdbuf();
-
   try {
-    ss >> f;
+    in >> f;
   } catch(std::runtime_error& e) {
     std::cerr << e.what() << std::endl;
     return 1;

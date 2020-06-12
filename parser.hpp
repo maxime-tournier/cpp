@@ -33,7 +33,17 @@ struct range {
     assert(bool(*this));
     return {first + 1, last};
   }
+
 };
+
+  
+static void peek(range self, std::ostream& out, std::size_t count=42) {
+  for(std::size_t i = 0; self && (i < count);
+            ++i, self = self.next()) {
+    out << self.get();
+  }
+}
+  
 
 // successful parse  
 template<class T>
@@ -89,8 +99,8 @@ static auto map(Parser parser, Func func) {
     using result_type = result<value_type>;
     return match(parser(in),
                  [](error err) -> result_type { return err; },
-                 [&](auto& ok) -> result_type {
-                   return make_success(func(ok.value), ok);
+                 [&](success<value<Parser>>& ok) -> result_type {
+                   return make_success(func(std::move(ok.value)), ok);
                  });
   };
 };
@@ -104,7 +114,7 @@ static auto bind(Parser parser, Func func) {
     using result_type = result<value_type>;
     return match(parser(in),
                  [](error err) -> result_type { return err; },
-                 [&](auto& ok) -> result_type {
+                 [&](success<value<Parser>>& ok) -> result_type {
                    if(auto res = func(std::move(ok.value))(ok)) {
                      return res;
                    }
@@ -233,14 +243,20 @@ static auto token(Parser parser, Skipper skipper) {
   return skip(skipper) >> parser;
 }
 
-// debug parser  
+// debug parser
 template<class Parser>
-static auto debug(std::string name, Parser parser) {
-  return [name = std::move(name), parser = std::move(parser)](range in) {
-    std::clog << "> " << name << ": \"" << in.first << "\"\n";
+static auto debug(std::string name, Parser parser,
+                  std::ostream& out = std::clog) {
+  return [name = std::move(name), parser = std::move(parser), &out](range in) {
+    out << "> " << name << ": \"";
+    peek(in, out);
+    out << "\"\n";
+    
     auto res = parser(in);
     if(res) {
-      std::clog << "< " << name << " ok: \"" << res.get()->first << "\"\n";
+      out << "< " << name << " ok: \"";
+      peek(*res.get(), out);
+      out << "\"\n";
     } else {
       std::clog << "< " << name << " failed\n";
     }
@@ -290,7 +306,7 @@ static auto pred(int (*pred)(int)) { return _char >>= guard(pred); }
   
 // parse a given char  
 static auto single(char c) {
-  return pred([c](char x) { return x == c; })
+  return pred([c](char x) { return x == c; });
 }
 
 // parse a fixed keyword 
@@ -369,18 +385,16 @@ static constexpr std::size_t error_length = 24;
 template<class Parser>
 static value<Parser> run(Parser parser, range in) {
   // TODO report line/col
-  return match(parser(in),
+  return match(
+      parser(in),
       [=](range where) -> value<Parser> {
         std::stringstream ss;
         ss << "parse error near \"";
-        for(std::size_t i = 0; where && (i < error_length);
-            ++i, where = where.next()) {
-          ss << where.get();
-        }
+        peek(where, ss);
         ss << "\"";
         throw std::runtime_error(ss.str());
       },
-      [](const success<value<Parser>>& ok) { return ok.value; });
+      [](success<value<Parser>>& ok) { return std::move(ok.value); });
 }
 
 template<class Parser>

@@ -14,9 +14,14 @@ class either {
   typename std::aligned_union<0, Left, Right>::type storage;
   const bool ok;
 
-  template<class T, class Derived>
-  friend T& cast(Derived* self) {
-    return *reinterpret_cast<T*>(&self->storage);
+  template<class T>
+  T& cast() {
+    return *reinterpret_cast<T*>(&storage);
+  }
+
+  template<class T>
+  const T& cast() const {
+    return *reinterpret_cast<const T*>(&storage);
   }
   
 public:
@@ -58,24 +63,24 @@ public:
     return reinterpret_cast<Right*>(&storage);
   }
 
-  const Right& right() const& {
+  const Right& right() const {
     assert(ok);
-    return cast<const Right>(this);
+    return cast<Right>();
   };
   
   Right& right() {
     assert(ok);
-    return cast<Right>(this);
+    return cast<Right>();
   };
 
   const Left& left() const {
     assert(!ok);
-    return cast<const Left>(this);
+    return cast<Left>();
   };
   
   Left& left() {
     assert(!ok);
-    return cast<Left>(this);
+    return cast<Left>();
   };
   
 };
