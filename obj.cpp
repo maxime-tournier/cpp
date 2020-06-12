@@ -157,13 +157,13 @@ struct file {
     const auto endl = single('\n');
     const auto not_endl = pred([](int x) -> int { return x != '\n'; });
 
-    const auto comment = debug("comment", single('#') >> skip(not_endl) >> endl);
+    const auto comment = single('#') >> skip(not_endl) >> endl;
     const auto separator = space | comment;
     
     const auto g = token(keyword("g"), space);
     const auto o = token(keyword("o"), space);
 
-    const auto v = token(debug("*", keyword("v")), space);
+    const auto v = token(keyword("v"), space);
     const auto vn = token(keyword("vn"), space);
     const auto vt = token(keyword("vt"), space);
     
@@ -204,7 +204,7 @@ struct file {
     const auto index = token(_unsigned_long);
     const auto slash = token(single('/'));
     
-    const auto element = ((index | unit(0ul)) % slash) >>= [](auto indices) {
+    const auto element = (index % slash) >>= [](auto indices) {
       face::element e;
       for(std::size_t i = 0; i < 3; ++i) {
         e.data[i] = i <= indices.size() ? indices[i] : 0;
@@ -227,15 +227,15 @@ struct file {
         };
       };
       
-      const auto vertex = debug("v", vertex_def >>= append_to(geo.vertices));
-      const auto normal = debug("vn", normal_def >>= append_to(geo.normals));
-      const auto texcoord = debug("vt", texcoord_def >>= append_to(geo.texcoords));
-      const auto face = debug("f", face_def >>= append_to(geo.faces));
+      const auto vertex = vertex_def >>= append_to(geo.vertices);
+      const auto normal = normal_def >>= append_to(geo.normals);
+      const auto texcoord = texcoord_def >>= append_to(geo.texcoords);
+      const auto face = face_def >>= append_to(geo.faces);
 
       // TODO mtllib, parameters
       
-      const auto line = debug("line", token(vertex | normal | texcoord | face,
-                                            pred(std::isspace) | comment));
+      const auto line = token(vertex | normal | texcoord | face,
+                              pred(std::isspace) | comment);
         
       return skip(line) >> unit(std::move(geo));
     };
@@ -312,15 +312,17 @@ int main(int argc, char** argv) {
     std::cerr << "usage: " << argv[0] << " <objfile>" << std::endl;
     return 1;
   }
-
-  std::ifstream in(argv[1]);
+  const std::string filename = argv[1];
+  
+  std::ifstream in(filename);
   if(!in) {
-    std::cerr << "cannot read: " << argv[1] << std::endl;
+    std::cerr << "cannot read: " << filename << std::endl;
     return 1;
   }
 
   try {
     in >> f;
+    std::cout << "read " << filename << std::endl;
   } catch(std::runtime_error& e) {
     std::cerr << e.what() << std::endl;
     return 1;

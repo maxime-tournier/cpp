@@ -312,10 +312,11 @@ static auto single(char c) {
 // parse a fixed keyword 
 static auto keyword(std::string value) {
   return [value = std::move(value)](range in) -> result<bool> {
-    if(in.size() < value.size())
+    if(in.size() < value.size()) {
       return error(in);
+    }
 
-    if(value.compare(0, value.size(), in.first) == 0) {
+    if(value.compare(0, value.size(), in.first, value.size()) == 0) {
       return make_success(true, range{in.first + value.size(), in.last});
     }
 
