@@ -98,6 +98,17 @@ edit_cache/fast: edit_cache
 
 .PHONY : edit_cache/fast
 
+# Special rule for the target test
+test:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running tests..."
+	/usr/local/Cellar/cmake/3.17.3/bin/ctest --force-new-ctest-process $(ARGS)
+.PHONY : test
+
+# Special rule for the target test
+test/fast: test
+
+.PHONY : test/fast
+
 # The main all target
 all: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/max/Documents/cpp/CMakeFiles /Users/max/Documents/cpp/CMakeFiles/progress.marks
@@ -131,17 +142,30 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named parser
+# Target rules for targets named compressed
 
 # Build rule for target.
-parser: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 parser
-.PHONY : parser
+compressed: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 compressed
+.PHONY : compressed
 
 # fast build rule for target.
-parser/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/parser.dir/build.make CMakeFiles/parser.dir/build
-.PHONY : parser/fast
+compressed/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/compressed.dir/build.make CMakeFiles/compressed.dir/build
+.PHONY : compressed/fast
+
+#=============================================================================
+# Target rules for targets named tests
+
+# Build rule for target.
+tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests
+.PHONY : tests
+
+# fast build rule for target.
+tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/build
+.PHONY : tests/fast
 
 #=============================================================================
 # Target rules for targets named obj
@@ -157,17 +181,17 @@ obj/fast:
 .PHONY : obj/fast
 
 #=============================================================================
-# Target rules for targets named compressed
+# Target rules for targets named parser
 
 # Build rule for target.
-compressed: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 compressed
-.PHONY : compressed
+parser: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 parser
+.PHONY : parser
 
 # fast build rule for target.
-compressed/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/compressed.dir/build.make CMakeFiles/compressed.dir/build
-.PHONY : compressed/fast
+parser/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/parser.dir/build.make CMakeFiles/parser.dir/build
+.PHONY : parser/fast
 
 #=============================================================================
 # Target rules for targets named sparse
@@ -213,6 +237,21 @@ obj.s:
 .PHONY : obj.s
 
 # target to build an object file
+parser-test.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/parser-test.o
+.PHONY : parser-test.o
+
+# target to preprocess a source file
+parser-test.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/parser-test.i
+.PHONY : parser-test.i
+
+# target to generate assembly for a file
+parser-test.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/parser-test.s
+.PHONY : parser-test.s
+
+# target to build an object file
 parser.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/parser.dir/build.make CMakeFiles/parser.dir/parser.o
 .PHONY : parser.o
@@ -235,16 +274,21 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... test"
 	@echo "... compressed"
 	@echo "... obj"
 	@echo "... parser"
 	@echo "... sparse"
+	@echo "... tests"
 	@echo "... compressed.o"
 	@echo "... compressed.i"
 	@echo "... compressed.s"
 	@echo "... obj.o"
 	@echo "... obj.i"
 	@echo "... obj.s"
+	@echo "... parser-test.o"
+	@echo "... parser-test.i"
+	@echo "... parser-test.s"
 	@echo "... parser.o"
 	@echo "... parser.i"
 	@echo "... parser.s"

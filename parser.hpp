@@ -380,8 +380,6 @@ static result<bool> eos(range in) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static constexpr std::size_t error_length = 24;
-
 template<class Parser>
 static value<Parser> run(Parser parser, range in) {
   // TODO report line/col

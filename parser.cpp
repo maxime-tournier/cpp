@@ -75,7 +75,6 @@ struct sexpr: variant<long, double, std::string, std::deque<sexpr>> {
 
 
 
-
 int main(int argc, char** argv) {
   if(argc <= 1) {
     std::cerr << "usage: " << argv[0] << " STRING" << std::endl;
@@ -97,3 +96,5 @@ int main(int argc, char** argv) {
   }
 
 }
+
+

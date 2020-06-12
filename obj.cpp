@@ -151,27 +151,28 @@ struct file {
 
     using namespace parser;
 
-    const auto space = pred(std::isblank);
+    // const auto space = pred(std::isblank);
+    const auto space = pred(std::isblank);    
 
     const auto endl = single('\n');
     const auto not_endl = pred([](int x) -> int { return x != '\n'; });
 
-    const auto comment = single('#') >> skip(not_endl) >> endl;
+    const auto comment = debug("comment", single('#') >> skip(not_endl) >> endl);
     const auto separator = space | comment;
     
-    const auto g = token(keyword("g"), separator);
-    const auto o = token(keyword("o"), separator);
+    const auto g = token(keyword("g"), space);
+    const auto o = token(keyword("o"), space);
 
-    const auto v = token(keyword("v"), separator);
-    const auto vn = token(keyword("vn"), separator);
-    const auto vt = token(keyword("vt"), separator);
+    const auto v = token(debug("*", keyword("v")), space);
+    const auto vn = token(keyword("vn"), space);
+    const auto vt = token(keyword("vt"), space);
     
-    const auto f = token(keyword("f"), separator);
-    const auto mtllib = token(keyword("mtllib"), separator);
+    const auto f = token(keyword("f"), space);
+    const auto mtllib = token(keyword("mtllib"), space);
     
-    const auto name = token(plus(pred(std::isgraph)));
-    const auto newline = token(endl);
-
+    const auto name = token(plus(pred(std::isgraph)), space);
+    const auto newline = token(endl, space);
+    
     const auto section = [=](auto what) {
       return what >> name >>= drop(newline);
     };
@@ -226,14 +227,15 @@ struct file {
         };
       };
       
-      const auto vertex = vertex_def >>= append_to(geo.vertices);
-      const auto normal = normal_def >>= append_to(geo.normals);
-      const auto texcoord = texcoord_def >>= append_to(geo.texcoords);
-      const auto face = face_def >>= append_to(geo.faces);
+      const auto vertex = debug("v", vertex_def >>= append_to(geo.vertices));
+      const auto normal = debug("vn", normal_def >>= append_to(geo.normals));
+      const auto texcoord = debug("vt", texcoord_def >>= append_to(geo.texcoords));
+      const auto face = debug("f", face_def >>= append_to(geo.faces));
 
       // TODO mtllib, parameters
       
-      const auto line = debug("line", vertex | normal | texcoord | face);
+      const auto line = debug("line", token(vertex | normal | texcoord | face,
+                                            pred(std::isspace) | comment));
         
       return skip(line) >> unit(std::move(geo));
     };
