@@ -1,11 +1,16 @@
 #ifndef GL_HPP
 #define GL_HPP
 
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#else
+#ifdef _WIN32
+  #include <windows.h>
+#endif
+#include <GL/gl.h>
+#endif
+
 #include "finally.hpp"
-
-#include <QApplication>
-#include <QOpenGLWidget>
-
 #include <iostream>
 
 namespace gl {
@@ -48,10 +53,12 @@ struct traits<std::array<GLfloat, N>> {
 
 static void error_check() {
   GLenum err = glGetError();
-  if(err == GL_NO_ERROR)
+  if(err == GL_NO_ERROR) {
     return;
-  std::cerr << "error: " << err << std::endl;
+  }
 
+  std::cerr << "error: " << err << std::endl;
+  
   error_check();
 }
 
@@ -160,6 +167,9 @@ struct geometry {
   }
 };
 
+  
+
+  
 } // namespace gl
 
 
