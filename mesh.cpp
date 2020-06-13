@@ -18,6 +18,7 @@ struct mesh {
   vector<vec2> texcoords;
 };
 
+
 struct rigid {
   quat orient;
   vec3 pos;
@@ -30,12 +31,30 @@ struct rigid {
     return res;
   }
 
+  static rigid translation(vec3 t) {
+    return translation(t.x(), t.y(), t.z());
+  }
+
+  static rigid rotation(quat q) {
+    rigid res;
+    res.orient = q;
+    return res;
+  }
+  
   rigid operator*(const rigid& other) const {
     rigid res;
     res.orient = orient * other.orient;
     res.pos = pos + orient * other.pos;
     return res;
   }
+
+  rigid inv() const {
+    rigid res;
+    res.orient = orient.conjugate();
+    res.pos = -(res.orient * pos);
+    return res;
+  }
+  
 };
 
 
@@ -43,6 +62,7 @@ namespace gl {
 
 struct camera {
   rigid frame;
+  vec3 pivot;
   
   real fovy = M_PI / 3;
   real ratio = 1.0;
@@ -103,14 +123,43 @@ struct camera {
     return finally([this] { disable(); });
   }
 
-  auto move(vec2 pos) {
-    rigid init = frame;
+  auto pan(vec2 pos) {
+    const rigid init = frame;
     return [init, pos, this](vec2 current) {
-      vec2 delta = current - pos;
-      frame = init * rigid::translation(delta.x(), delta.y(), 0);
-      std::clog << frame.pos << std::endl;
+      const vec2 delta = current - pos;
+      frame = init * rigid::translation(delta.x(), delta.y(), 0).inv();
     };
   }
+
+  auto trackball(vec2 pos) {
+    const rigid init = frame;
+    return [init, pos, this](vec2 current) {
+      const vec2 delta = current - pos;
+      const rigid t = rigid::translation(pivot);
+      
+      const vec3 omega =
+        (pivot - init.pos).cross(init.orient * vec3(delta.x(), delta.y(), 0));
+      
+      const real theta = omega.norm();
+      const real eps = 1e-8;
+      const real sinc = (theta < eps) ? 1.0 / 2.0 : std::sin(theta / 2) / theta;
+      
+      quat q;
+      q.w() = std::cos(theta / 2);
+      q.vec() = omega * sinc;
+      
+      frame = t * rigid::rotation(q) * t.inv() * init;
+    };
+  }
+
+
+  // auto zoom(vec2 pos) {
+  //   rigid init = frame;
+  //   return [init, pos, this](vec2 current) {
+  //     vec2 delta = current - pos;
+  //   };
+  // }
+  
   
 };
   
@@ -153,16 +202,25 @@ struct Viewer: QOpenGLWidget {
   std::function<void(vec2)> mouse_move;
 
   vec2 coord(QPoint pos) const {
-    return {pos.x() / real(width()),
-            pos.y() / real(height())};
+    return {2 * ((pos.x() / real(width())) - 0.5),
+            2 * ((-pos.y() / real(height())) - 0.5)};
   }
   
   void mousePressEvent(QMouseEvent* event) override {
     if(event->buttons() & Qt::LeftButton) {
-      mouse_move = cam.move(coord(event->pos()));
+      mouse_move = cam.pan(coord(event->pos()));
       update();
+      return;
     }
+
+    if(event->buttons() & Qt::RightButton) {
+      mouse_move = cam.trackball(coord(event->pos()));
+      update();
+      return;
+    }
+    
   }
+  
   void mouseReleaseEvent(QMouseEvent* event) override {
     mouse_move = 0;
   }

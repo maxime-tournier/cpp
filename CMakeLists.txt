@@ -25,12 +25,10 @@ target_compile_definitions(mesh PUBLIC QT_NO_KEYWORDS)
 
 
 # tests
-option(BUILD_TESTS "" ON)
+find_package(GTest)
 
-if(BUILD_TESTS) 
+if(GTest_FOUND) 
   enable_testing()
-
-  find_package(GTest REQUIRED)
   
   add_executable(tests
 				 parser-test.cpp)
