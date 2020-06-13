@@ -3,7 +3,6 @@
 #include <QApplication>
 
 #include <QOpenGLWidget>
-#include <QOpenGLShaderProgram>
 
 #include "eigen.hpp"
 #include <array>
@@ -92,7 +91,6 @@ struct camera {
 struct Viewer: QOpenGLWidget {
   gl::geometry geo;
   gl::camera cam;
-  QOpenGLShaderProgram program;
   
   void initializeGL() override {
     static std::vector<std::array<GLfloat, 3>> positions = {
@@ -110,14 +108,15 @@ struct Viewer: QOpenGLWidget {
     cam.pos.z() = 2;
   }
 
-  // void resizeGL(int width, int height) override {
-  //   glViewport(0, 0, width, height);
-  // }
+  void resizeGL(int width, int height) override {
+    glViewport(0, 0, width, height);
+    cam.ratio = real(width) / real(height);
+  }
 
   void paintGL() override {
     const auto cam = this->cam.use();
-    
     const auto geo = this->geo.use();
+    
     glDrawArrays(GL_TRIANGLES, 0, 6);
   }
   
