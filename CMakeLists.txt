@@ -1,3 +1,6 @@
+project(cpp)
+cmake_minimum_required(VERSION 3.10)
+
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize-address-use-after-scope")
 
 add_subdirectory(sparse)
@@ -11,6 +14,12 @@ target_link_libraries(parser m)
 
 add_executable(obj obj.cpp)
 
+
+find_package(Qt5 COMPONENTS Widgets)
+find_package(Eigen3)
+find_package(OpenGL)
+add_executable(mesh mesh.cpp)
+target_link_libraries(mesh Qt5::Widgets Eigen3::Eigen OpenGL::GL)
 
 option(BUILD_TESTS "" ON)
 
