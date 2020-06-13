@@ -3,6 +3,7 @@
 #include <QApplication>
 
 #include <QOpenGLWidget>
+#include <QMouseEvent>
 
 #include "eigen.hpp"
 #include <array>
@@ -17,13 +18,32 @@ struct mesh {
   vector<vec2> texcoords;
 };
 
+struct rigid {
+  quat orient;
+  vec3 pos;
+
+  rigid(): orient(1, 0, 0, 0), pos(0, 0, 0) {}
+
+  static rigid translation(real x, real y, real z) {
+    rigid res;
+    res.pos = {x, y, z};
+    return res;
+  }
+
+  rigid operator*(const rigid& other) const {
+    rigid res;
+    res.orient = orient * other.orient;
+    res.pos = pos + orient * other.pos;
+    return res;
+  }
+};
+
 
 namespace gl {
 
 struct camera {
-  vec3 pos;
-  quat orient;
-
+  rigid frame;
+  
   real fovy = M_PI / 3;
   real ratio = 1.0;
   real znear = 0, zfar = 10;
@@ -49,10 +69,10 @@ struct camera {
   mat4x4 modelview() const {
     mat4x4 res;
 
-    const mat3x3 RT = orient.conjugate().matrix();
+    const mat3x3 RT = frame.orient.conjugate().matrix();
     
     res <<
-      RT.cast<GLfloat>(), -(RT * pos).cast<GLfloat>(),
+      RT.cast<GLfloat>(), -(RT * frame.pos).cast<GLfloat>(),
       0, 0, 0, 1;
 
     return res;
@@ -82,6 +102,15 @@ struct camera {
     enable();
     return finally([this] { disable(); });
   }
+
+  auto move(vec2 pos) {
+    rigid init = frame;
+    return [init, pos, this](vec2 current) {
+      vec2 delta = current - pos;
+      frame = init * rigid::translation(delta.x(), delta.y(), 0);
+      std::clog << frame.pos << std::endl;
+    };
+  }
   
 };
   
@@ -105,7 +134,7 @@ struct Viewer: QOpenGLWidget {
     geo.vertex.data(positions);
     geo.color.data(positions);
 
-    cam.pos.z() = 2;
+    cam.frame.pos.z() = 2;
   }
 
   void resizeGL(int width, int height) override {
@@ -119,7 +148,30 @@ struct Viewer: QOpenGLWidget {
     
     glDrawArrays(GL_TRIANGLES, 0, 6);
   }
+
+
+  std::function<void(vec2)> mouse_move;
+
+  vec2 coord(QPoint pos) const {
+    return {pos.x() / real(width()),
+            pos.y() / real(height())};
+  }
   
+  void mousePressEvent(QMouseEvent* event) override {
+    if(event->buttons() & Qt::LeftButton) {
+      mouse_move = cam.move(coord(event->pos()));
+      update();
+    }
+  }
+  void mouseReleaseEvent(QMouseEvent* event) override {
+    mouse_move = 0;
+  }
+  
+  void mouseMoveEvent(QMouseEvent* event) override {
+    if(!mouse_move) return;
+    mouse_move(coord(event->pos()));
+    update();
+  }    
 };
 
 int main(int argc, char** argv) {
