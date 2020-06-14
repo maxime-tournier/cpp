@@ -70,6 +70,7 @@ struct face {
 
     return out;
   }
+  
 };
 
 
@@ -97,6 +98,7 @@ struct geometry {
   }
 };
 
+  
 struct group {
   std::string name;
   geometry geo;
@@ -240,8 +242,6 @@ struct file {
       return skip(line) >> unit(std::move(geo));
     };
     
-
-
     // static const auto group = debug("group") <<=
     //     group_def >> [&](std::vector<char>&& name) {
     //       return geometry >> [&](obj::geometry&& geo) {
