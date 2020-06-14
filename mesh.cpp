@@ -11,8 +11,6 @@
 #include "camera.hpp"
 
 
-using namespace math;
-
 struct mesh {
   vector<vec3> vertices;
   vector<vec3> normals;

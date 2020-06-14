@@ -7,19 +7,18 @@
 namespace gl {
 
 struct camera {
-  math::rigid frame;
-  math::vec3 pivot;
+  rigid frame;
+  vec3 pivot;
   
-  math::real fovy = M_PI / 3;
-  math::real ratio = 1.0;
-  math::real znear = 0, zfar = 10;
+  real fovy = M_PI / 3;
+  real ratio = 1.0;
+  real znear = 0, zfar = 10;
 
-  using mat4x4 = math::matrix<GLfloat, 4, 4>;
+  using mat4x4 = matrix<GLfloat, 4, 4>;
   
   mat4x4 projection() const {
     mat4x4 res;
     
-    using namespace math;
     const real half_fovy = fovy / 2;
     const real f = std::cos(half_fovy) / std::sin(half_fovy);
     const real zsum = zfar + znear;
@@ -36,8 +35,6 @@ struct camera {
   mat4x4 modelview() const {
     mat4x4 res;
 
-    using namespace math;
-    
     const mat3x3 RT = frame.orient.conjugate().matrix();
     
     res <<
@@ -72,8 +69,7 @@ struct camera {
     return finally([this] { disable(); });
   }
 
-  auto pan(math::vec2 pos) {
-    using namespace math;
+  auto pan(vec2 pos) {
     const rigid init = frame;
     return [init, pos, this](vec2 current) {
       const vec2 delta = current - pos;
@@ -81,8 +77,7 @@ struct camera {
     };
   }
 
-  auto trackball(math::vec2 pos) {
-    using namespace math;
+  auto trackball(vec2 pos) {
     const rigid init = frame;
     return [init, pos, this](vec2 current) {
       const vec2 delta = current - pos;

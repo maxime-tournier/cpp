@@ -4,8 +4,6 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
-namespace math {
-  
 template<class T, int M = Eigen::Dynamic, int N = Eigen::Dynamic>
 using matrix = Eigen::Matrix<T, M, N>;
 
@@ -67,10 +65,6 @@ struct rigid {
   }
   
 };
-
-
-  
-} // namespace eigen
 
 
 
