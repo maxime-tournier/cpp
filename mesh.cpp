@@ -171,6 +171,7 @@ struct Viewer: QOpenGLWidget {
   gl::camera cam;
   
   void initializeGL() override {
+    gl::init();
     static std::vector<std::array<GLfloat, 3>> positions = {
       {0, 0, 0},
       {1, 0, 0},
