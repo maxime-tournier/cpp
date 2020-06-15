@@ -39,7 +39,7 @@ public:
   explicit operator bool() const { return ok; }
 
   template<class Self, class Cont>
-  friend auto visit(Self&& self, Cont cont) {
+  static auto visit(Self&& self, Cont cont) {
     if(self.ok) {
       return cont(std::forward<Self>(self).right());
     } else {
@@ -47,10 +47,32 @@ public:
     }
   }
 
+  template<class Cont>
+  friend auto visit(either&& self, Cont cont) {
+    return either::visit(std::move(self), std::move(cont));
+  }
+
+  template<class Cont>
+  friend auto visit(const either& self, Cont cont) {
+    return either::visit(self, std::move(cont));
+  }
+  
+  
   template<class Self, class ... Cases>
-  friend auto match(Self&& self, Cases... cases) {
+  static auto match(Self&& self, Cases... cases) {
     return visit(std::forward<Self>(self), overload<Cases...>{cases...});
   }
+
+  template<class ... Cases>
+  friend auto match(either&& self, Cases&&... cases) {
+    return match(std::move(self), std::forward<Cases>(cases)...);
+  }
+
+  template<class ... Cases>
+  friend auto match(const either& self, Cases&&... cases) {
+    return match(self, std::forward<Cases>(cases)...);
+  }
+  
   
   const Right* get() const {
     if(!ok) return nullptr;

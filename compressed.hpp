@@ -4,6 +4,7 @@
 #include <array>
 #include <memory>
 #include <cassert>
+#include <stdexcept>
 
 namespace sparse {
 

@@ -11,6 +11,10 @@
 #endif
 
 #include "finally.hpp"
+
+#include <array>
+#include <cassert>
+
 #include <iostream>
 
 namespace gl {
