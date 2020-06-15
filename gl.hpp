@@ -1,14 +1,7 @@
 #ifndef GL_HPP
 #define GL_HPP
 
-#ifdef __APPLE__
-#include <OpenGL/gl.h>
-#else
-#ifdef _WIN32
-  #include <windows.h>
-#endif
-#include <GL/gl.h>
-#endif
+#include <GL/glew.h>
 
 #include "finally.hpp"
 

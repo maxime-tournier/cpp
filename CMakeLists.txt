@@ -18,9 +18,11 @@ add_executable(obj obj.cpp)
 # mesh viewer
 find_package(Qt5 COMPONENTS Widgets)
 find_package(Eigen3)
+cmake_policy(SET CMP0072 NEW)
 find_package(OpenGL)
+find_package(GLEW)
 add_executable(mesh mesh.cpp)
-target_link_libraries(mesh Qt5::Widgets Eigen3::Eigen OpenGL::GL)
+target_link_libraries(mesh Qt5::Widgets Eigen3::Eigen OpenGL::GL GLEW::glew)
 target_compile_definitions(mesh PUBLIC QT_NO_KEYWORDS)
 
 
