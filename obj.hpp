@@ -129,12 +129,13 @@ struct object {
 };
 
 struct file {
-  geometry geo;
+  
+  obj::geometry geometry;
   std::deque<group> groups;
   std::deque<object> objects;
   
   friend std::ostream& operator<<(std::ostream& out, const file& self) {
-    out << self.geo;
+    out << self.geometry;
 
     for(const auto& grp: self.groups) {
       out << grp;
@@ -270,7 +271,7 @@ struct file {
 
     const auto file = geometry >>= [](auto geo) {
       obj::file file;
-      file.geo = std::move(geo);
+      file.geometry = std::move(geo);
       return unit(std::move(file));
     };
     

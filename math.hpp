@@ -13,6 +13,8 @@ using vector = matrix<T, M, 1>;
 using real = double;
 
 using vec = vector<real>;
+
+using vec4 = vector<real, 4>;
 using vec3 = vector<real, 3>;
 using vec2 = vector<real, 2>;
 using vec1 = vector<real, 1>;

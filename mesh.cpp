@@ -6,19 +6,20 @@
 #include <QMouseEvent>
 
 #include <array>
+#include <fstream>
 
 #include "math.hpp"
 #include "camera.hpp"
+
+#include "obj.hpp"
 
 
 struct mesh {
   vector<vec3> vertices;
   vector<vec3> normals;
-  
   vector<vec2> texcoords;
+  vector<vec4> colors;
 };
-
-
 
 
 
@@ -65,13 +66,13 @@ struct Viewer: QOpenGLWidget {
   }
   
   void mousePressEvent(QMouseEvent* event) override {
-    if(event->buttons() & Qt::LeftButton) {
+    if(event->buttons() & Qt::RightButton) {
       mouse_move = cam.pan(coord(event->pos()));
       update();
       return;
     }
 
-    if(event->buttons() & Qt::RightButton) {
+    if(event->buttons() & Qt::LeftButton) {
       mouse_move = cam.trackball(coord(event->pos()));
       update();
       return;
@@ -87,7 +88,8 @@ struct Viewer: QOpenGLWidget {
     if(!mouse_move) return;
     mouse_move(coord(event->pos()));
     update();
-  }    
+  }
+  
 };
 
 
@@ -95,5 +97,18 @@ int main(int argc, char** argv) {
   QApplication app(argc, argv);
   Viewer widget;
   widget.show();
+
+  if(argc <= 1) {
+    return 1;
+  }
+
+  std::ifstream in(argv[1]);
+  if(!in) {
+    return 1;
+  }
+  
+  obj::file file;
+  in >> file;
+
   return app.exec();
 }
