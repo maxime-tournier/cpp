@@ -1,11 +1,40 @@
 #include <thread>
 #include <condition_variable>
 #include <mutex>
+#include <vector>
 
 #include "maybe.hpp"
 
 namespace event {
 
+  template<class A>
+  class any {
+    struct base {
+      virtual ~base() { }
+
+      virtual maybe<A> poll() = 0;
+      virtual A wait() = 0;
+    };
+
+    template<class E>
+    struct derived: base {
+      E impl;
+      derived(E impl): impl(std::move(e)) { }
+      
+      maybe<A> poll() override { return impl.poll(); }
+      A wait() override { return impl.wait(); }      
+    };
+    
+    std::unique_ptr<base> impl;
+  public:
+    template<class E>
+    any(E e): impl(std::make_unique<derived<E>(std::move(e))) { } 
+    
+    maybe<A> poll() { return impl->poll(); }
+    A wait() { return impl->wait(); }    
+  };
+
+  
   template<class T>
   class queue {
     struct list: std::unique_ptr<std::pair<T, list>> { };
@@ -29,7 +58,7 @@ namespace event {
     struct sender {
       A* source;
       std::condition_variable* resume;
-      bool* finished;      
+      bool* done;
     };
     
     queue<sender> sendq;
@@ -37,54 +66,45 @@ namespace event {
     struct receiver {
       A* target;      
       std::condition_variable* resume;
+      bool* done;
     };
 
     queue<receiver> recvq;
   };
 
+  template<class A>
+  static std::shared_ptr<A> make_channel() {
+    return std::make_shared<channel<A>>();
+  }
 
   template<class A>
-  struct event {
-    virtual maybe<A> poll() = 0;
-    virtual A wait() = 0;
-  };
-  
-  template<class A>
-  struct send: event<void> {
-    std::shared_ptr<channel<A>> chan;
-
-    std::mutex mutex;
-    std::condition_variable cv;
-  };
-
-
-  template<class A>
-  struct recv: event<A> {
+  struct recv {
     std::shared_ptr<channel<A>> chan;
 
     std::mutex mutex;
     std::condition_variable cv;
 
-    maybe<A> poll() override {
-      // atomically try pop one sender in the queue
+    maybe<A> poll() {
+      // atomically try pop one sender from the queue
       if(auto ready = chan->sendq.pop()) {
         maybe<A> result = std::move(*ready.get().source);
         
-        // reset source pointer, completing the transaction
-        ready.get().done = nullptr;        
+        // complete the transaction
+        ready.get().done = true;
         
         // resume sender
         ready.get().resume->notify_one();
+        
         return result;
       }
       
       return {};
     }
 
-    A wait() override {
+    A wait() {
       // allocate target value
-      maybe<A> result;
-
+      A result;
+      
       bool done = false;
       
       // add ourselves to the recv queue
@@ -94,13 +114,95 @@ namespace event {
       
       std::unique_lock<std::mutex> lock(mutex);
       cv.wait(lock, [&] { return done; });
+
+      return result;
     }
   };
 
+  struct unit {};
 
+  template<class A>
+  struct send {
+    A value;
+    std::shared_ptr<channel<A>> chan;
+    
+    std::mutex mutex;
+    std::condition_variable cv;
+
+    maybe<unit> poll()  {
+      // atomically try pop one receiver from the queue
+      if(auto ready = chan->recvq.pop()) {
+        *ready.get().target = std::move(value);
+        
+        // complete the transaction
+        ready.get().done = true;
+        
+        // resume receiver
+        ready.get().resume->notify_one();
+        
+        return unit{};
+      }
+      
+      return {};
+    }
+
+    unit wait() {
+      bool done = false;
+      
+      // add ourselves to the send queue
+      chan->recvq.push({&value, &cv, &done});
+      
+      // TODO recheck?
+      
+      std::unique_lock<std::mutex> lock(mutex);
+      cv.wait(lock, [&] { return done; });
+
+      return {};
+    }
+    
+  };
+
+
+  template<class Ev, class Func>
+  struct map_type {
+    Ev source;
+    const Func func;
+
+    auto poll() {
+      return map(source.poll(), func);
+    }
+
+    auto wait() {
+      return func(source.wait());
+    }
+  };
+
+  template<class Ev, class Func>
+  static map_type<Ev, Func> map(Ev ev, Func func) {
+    return {std::move(ev), std::move(func)};
+  }
 
   
+  template<class A>
+  struct choose {
+    std::vector<any<A>> events;
+    
+    maybe<A> poll() {
+      // TODO randomize 
+      for(const auto& event: events) {
+        if(auto ready = event.poll()) {
+          return ready;
+        }
+      }
+    }
 
+    A wait() {
+      // ????
+
+    }
+    
+  };
+  
   
 }
 

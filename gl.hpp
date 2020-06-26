@@ -16,10 +16,11 @@ namespace gl {
 static void init() {
   GLenum err = glewInit();
   if(GLEW_OK != err) {
-    /* Problem: glewInit failed, something is seriously wrong. */
     throw std::runtime_error((const char*)glewGetErrorString(err));
   }
 }
+
+  
 
 template<GLenum kind>
 struct buffer {
