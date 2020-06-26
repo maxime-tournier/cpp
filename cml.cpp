@@ -221,7 +221,7 @@ struct choose {
 
 
 template<class Event>
-static auto sync(Event event) {
+static auto sync(Event&& event) {
   if(auto value = event.poll()) {
     return value.get();
   }
