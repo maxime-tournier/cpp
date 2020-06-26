@@ -175,8 +175,6 @@ struct geometry {
 };
 
   
-
-  
 } // namespace gl
 
 
