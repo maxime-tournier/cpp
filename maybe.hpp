@@ -13,7 +13,7 @@ class maybe {
   
   const bool set;
 
-  public:
+public:
   using value_type = T;
 
   // monadic return (none/just)
@@ -49,7 +49,6 @@ class maybe {
     return *reinterpret_cast<const T*>(&storage);
   }
   
-private:
   T& get() {
     assert(set);
     return *reinterpret_cast<T*>(&storage);
