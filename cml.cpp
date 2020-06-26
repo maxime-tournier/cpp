@@ -240,8 +240,17 @@ int main(int, char**) {
   
   auto chan = make_channel<int>();
 
-  std::thread([=] {
+  std::thread t1([=] {
     std::cout << sync(recv<int>(chan)) << std::endl;
   });
   
+  std::thread t2([=] {
+    sync(send<int>(chan, 14));
+  });
+
+
+  t1.join();
+  t2.join();
+  
+  return 0;
 }
