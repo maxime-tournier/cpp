@@ -46,7 +46,9 @@ class queue {
   using lock_type = std::unique_lock<std::mutex>;
 
   public:
-  maybe<T> pop() {
+
+  template<class Alt>
+  maybe<T> pop(Alt alt) {
     const lock_type lock(mutex);
     if(data) {
       maybe<T> result = data->first;
@@ -54,6 +56,7 @@ class queue {
       return result;
     }
 
+    alt();
     return {};
   }
 
@@ -63,24 +66,26 @@ class queue {
   }
 };
 
+
+    
+  
 // channel
 template<class A>
 struct channel {
-  struct sender {
-    A* source;
-    std::condition_variable* resume;
-    bool* done;
+
+  enum {
+    WAITING,
+    CLAIMED,
+    SYNCHED
   };
-
-  queue<sender> sendq;
-
-  struct receiver {
-    A* target;
-    std::condition_variable* resume;
-    bool* done;
+  
+  struct side {
+    A payload;
+    std::condition_variable resume;
+    std::atomic<std::size_t> state;
   };
-
-  queue<receiver> recvq;
+  
+  queue<side*> sendq, recvq;
 };
 
 template<class A>
@@ -92,24 +97,21 @@ template<class A>
 class recv {
   using channel_type = std::shared_ptr<channel<A>>;
   channel_type chan;
-
-  std::mutex mutex;
-  std::condition_variable cv;
 public:
   recv(recv&&) = default;
   recv(channel_type chan): chan(std::move(chan)) { }
   
   maybe<A> poll() {
     // atomically try pop one sender from the queue
-    if(auto ready = chan->sendq.pop()) {
-      maybe<A> result = std::move(*ready.get().source);
+    if(auto some = chan->sendq.pop()) {
+      maybe<A> result = std::move(*some.get().source);
 
       // complete the transaction
-      *ready.get().done = true;
+      *some.get().done = true;
 
       // resume sender
-      ready.get().resume->notify_one();
-
+      some.get().resume->notify_one();
+      
       return result;
     }
 
@@ -117,20 +119,46 @@ public:
   }
 
   A wait() {
-    // allocate target value
-    A result;
+    side my;
 
-    bool done = false;
+    my.state = WAITING;
+    std::mutex mutex;
+    
+    // publish ourselves to the recv queue
+    chan->recvq.push(&my);
 
-    // add ourselves to the recv queue
-    chan->recvq.push({&result, &cv, &done});
-
-    // TODO recheck?
-
+    // recheck send queue
+    while(auto some = chan->sendq.pop()) {
+      // attempt to claim transaction
+      std::size_t expected = WAITING;
+      if(my.state.compare_exchange_strong(expected, CLAIMED)) {
+        // success, complete transaction
+        my.result = std::move(some.get()->payload);
+        
+        // resume other side
+        some.get()->resume.notify_one();
+        
+        // TODO unpublish ourselves from the recvq, atomically
+        
+        return my.result;
+      } else if(expected == SYNCHED) {
+        // somebody else completed transaction, yay
+        
+        // put back other end
+        chand->sendq.push(some.get());
+        
+        return my.result;
+      } else {
+        // somebody else is claiming translation, put back other end
+        chand->sendq.push(some.get());
+      }
+    }
+    
+    // wait
     std::unique_lock<std::mutex> lock(mutex);
-    cv.wait(lock, [&] { return done; });
-
-    return result;
+    cv.wait(lock, [&] { return my.state == SYNCHED; });
+    
+    return my.result;
   }
 };
 
