@@ -93,6 +93,30 @@ static std::shared_ptr<channel<A>> make_channel() {
   return std::make_shared<channel<A>>();
 }
 
+  /* 
+  - primitive: dequeue waiting with transition
+  - once it's been dequeued, nobody else can change its state
+  - optimistic phase:
+      - dequeue(W->S), then complete tx
+  - pessimistic:
+    - publish ourselves as waiting, now our state may change
+    - recheck
+      - try claim our side (W->C)
+        - success: now our state may no longer change
+          - dequeue(W->S) then:
+            - success: 
+                - commit our side (C->S), unpublish ourselves
+                - complete tx
+            - else:
+              - rollback (C -> W)
+              - recheck
+        - else:
+          - S: somebody else completed us (hence dequeued us)
+             - complete tx
+          - C: somebody else is claiming us, retry (cannot happen?)
+  */
+  
+  
 template<class A>
 class recv {
   using channel_type = std::shared_ptr<channel<A>>;
@@ -102,7 +126,7 @@ public:
   recv(channel_type chan): chan(std::move(chan)) { }
   
   maybe<A> poll() {
-    // atomically try pop one sender from the queue
+    // atomically try pop one waiting sender from the queue
     if(auto some = chan->sendq.pop()) {
       maybe<A> result = std::move(*some.get().source);
 
@@ -127,29 +151,37 @@ public:
     // publish ourselves to the recv queue
     chan->recvq.push(&my);
 
-    // recheck send queue
+    // recheck send queue to avoid starving
     while(auto some = chan->sendq.pop()) {
-      // attempt to claim transaction
+      // attempt to claim our side of transaction
       std::size_t expected = WAITING;
       if(my.state.compare_exchange_strong(expected, CLAIMED)) {
-        // success, complete transaction
-        my.result = std::move(some.get()->payload);
+
+        // now attempt to complete transaction
+        std::size_t expected = WAITING;        
+        if(some.get()->state.compare_exchange_strong(expected, SYNCHED)) {
+          // success, complete transaction
+          my.result = std::move(some.get()->payload);
         
-        // resume other side
-        some.get()->resume.notify_one();
+          // resume other side
+          some.get()->resume.notify_one();
         
-        // TODO unpublish ourselves from the recvq, atomically
-        
-        return my.result;
+          // TODO unpublish ourselves from the recvq, atomically
+          
+          return my.result;
+        } else {
+          
+        }
       } else if(expected == SYNCHED) {
-        // somebody else completed transaction, yay
+        // some other sender completed our transaction, rollback this one and
+        // return
         
         // put back other end
         chand->sendq.push(some.get());
         
         return my.result;
       } else {
-        // somebody else is claiming translation, put back other end
+        // some other sender is claiming our transaction, rollback
         chand->sendq.push(some.get());
       }
     }
