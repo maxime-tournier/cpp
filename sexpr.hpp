@@ -3,9 +3,9 @@
 
 #include "parser.hpp"
 #include "variant.hpp"
+#include "symbol.hpp"
 
-
-struct sexpr: variant<long, double, std::string, std::deque<sexpr>> {
+struct sexpr: variant<long, double, std::string, symbol, std::deque<sexpr>> {
   using sexpr::variant::variant;
   using list = std::deque<sexpr>;
 
@@ -54,8 +54,20 @@ struct sexpr: variant<long, double, std::string, std::deque<sexpr>> {
                                 map(_double, cast));
 
     const auto space = pred(std::isspace);
-  
-    const auto atom = number | string;
+
+    const auto first = pred(std::isalpha);
+    const auto next = pred(std::isalnum);
+    
+    const auto symbol = first >>= [=](char first) {
+      return kleene(next) >>= [=](auto nexts) {
+        nexts.emplace_front(first);
+        std::string repr(nexts.begin(), nexts.end());
+        struct symbol s(repr.c_str());
+        return unit(sexpr(s));
+      };
+    };
+    
+    const auto atom = number | string | symbol;
   
     const auto list = [=](auto parser) {
       auto inner = map(((parser % space) | unit(sexpr::list{})), cast);

@@ -14,6 +14,9 @@ add_executable(compressed compressed.cpp)
 add_executable(parser parser.cpp)
 target_link_libraries(parser m)
 
+add_executable(ast ast.cpp)
+target_link_libraries(ast readline)
+
 add_executable(obj obj.cpp)
 # add_executable(cml cml.cpp)
 

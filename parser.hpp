@@ -9,6 +9,8 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <cstring>
+
 #include <sstream>
 
 #include <iostream>
@@ -408,6 +410,12 @@ static value<Parser> run(Parser parser, range in) {
       },
       [](success<value<Parser>>& ok) { return std::move(ok.value); });
 }
+
+template<class Parser>
+static value<Parser> run(Parser parser, const char* in) {
+  return run(parser, range{in, in + std::strlen(in)});
+}
+
 
 template<class Parser>
 static auto run(Parser parser, std::istream& in) {
