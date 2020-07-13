@@ -5,8 +5,8 @@
  
  (c++-mode . ((c-basic-offset . 2)
               (indent-tabs-mode . nil)
-              (c-offset-alist . ((innamespace . 0)
-                                 (inlambda . 0)))
+              (c-file-offsets (innamespace . 0)
+                              (inlambda . 0))
               )
            )
  )

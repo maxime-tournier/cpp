@@ -283,6 +283,22 @@ static auto longest(LHS lhs, RHS rhs) {
   };
 };
 
+// fixpoint (result type needs to be given because c++)
+template<class T, class Def>
+struct fixpoint {
+  const Def def;
+  
+  result<T> operator()(parser::range in) const {
+    return def(*this)(in);
+  }
+};
+
+template<class T, class Def>
+static fixpoint<T, Def> fix(Def def) {
+  return {def};
+}
+  
+
 ////////////////////////////////////////////////////////////////////////////////
 // concrete parsers
 

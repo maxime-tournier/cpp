@@ -1,6 +1,7 @@
-project(cpp)
+project(cpp CXX)
 cmake_minimum_required(VERSION 3.10)
 
+# set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES stdc++)
 set(ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${ASAN_FLAGS}" )
 
@@ -14,7 +15,7 @@ add_executable(parser parser.cpp)
 target_link_libraries(parser m)
 
 add_executable(obj obj.cpp)
-add_executable(cml cml.cpp)
+# add_executable(cml cml.cpp)
 
 # mesh viewer
 option(BUILD_MESH "" OFF)
