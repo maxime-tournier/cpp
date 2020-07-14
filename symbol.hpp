@@ -15,6 +15,8 @@ struct symbol {
   friend std::ostream& operator<<(std::ostream& out, symbol self) {
     return out << self.repr;
   }
+
+  bool operator<(symbol other) const { return repr < other.repr; }
 };
 
 #endif

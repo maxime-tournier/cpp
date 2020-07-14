@@ -173,6 +173,19 @@ public:
     return bind(self, std::move(func));
   }
 
+
+  // functor map
+  template<class Func>
+  friend auto operator|=(const either& self, Func func) {
+    return map(self, std::move(func));
+  }
+
+  template<class Func>
+  friend auto operator|=(either&& self, Func func) {
+    return map(std::move(self), std::move(func));
+  }
+
+  
 };
 
 

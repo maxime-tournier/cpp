@@ -27,3 +27,6 @@ SpacesInParentheses: false
 ReflowComments: true
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 AccessModifierOffset: -4
+
+BinPackArguments: false
+AlignAfterOpenBracket: Align

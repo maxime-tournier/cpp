@@ -44,7 +44,7 @@ struct sexpr: variant<long, double, std::string, symbol, list<sexpr>> {
   
     const auto chars = kleene(escaped | not_quote) >>= [](auto chars) {
       std::string value(chars.begin(), chars.end());
-      return unit(sexpr(std::move(value)));
+      return pure(sexpr(std::move(value)));
     };
   
     const auto string = token(quote) >> chars >>= drop(quote); 
@@ -64,14 +64,14 @@ struct sexpr: variant<long, double, std::string, symbol, list<sexpr>> {
         nexts.emplace_front(first);
         std::string repr(nexts.begin(), nexts.end());
         struct symbol s(repr.c_str());
-        return unit(sexpr(s));
+        return pure(sexpr(s));
       };
     };
     
     const auto atom = number | string | symbol;
   
     const auto list = [=](auto parser) {
-      auto inner = ((parser % space) | unit(std::deque<sexpr>{})) |= [](auto items) {
+      auto inner = ((parser % space) | pure(std::deque<sexpr>{})) |= [](auto items) {
         // TODO use move iterator
         return sexpr(make_list(items.begin(), items.end()));
       };

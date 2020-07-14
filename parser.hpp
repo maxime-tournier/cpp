@@ -2,6 +2,7 @@
 #define PARSER_HPP
 
 #include "either.hpp"
+#include "unit.hpp"
 
 #include <deque>
 #include <functional>
@@ -87,7 +88,7 @@ using any = std::function<result<T>(range in)>;
 
 // monad unit
 template<class T>
-static auto unit(T value) {
+static auto pure(T value) {
   return [value = std::move(value)](range in) -> result<T> {
     return make_success(value, in);
   };
@@ -158,7 +159,7 @@ static auto guard(Pred pred) {
 template<class Parser>
 static auto drop(Parser parser) {
   return [parser = std::move(parser)](auto value) {
-    return parser >> unit(std::move(value));
+    return parser >> pure(std::move(value));
   };
 }
 
@@ -189,7 +190,7 @@ static auto plus(Parser parser) {
   return parser >>= [parser](auto first) {
     return kleene(parser) >>= [first](auto rest) {
       rest.emplace_front(std::move(first));
-      return unit(rest);
+      return pure(rest);
     };
   };
 };
@@ -219,7 +220,7 @@ static auto list(Parser parser, Separator separator) {
     return kleene(separator >> parser) >>=
            [first = std::move(first)](auto rest) {
              rest.emplace_front(first);
-             return unit(rest);
+             return pure(rest);
            };
   };
 };
@@ -234,11 +235,11 @@ static auto operator%(Parser parser, Separator separator) {
 // skip parser: parse zero-or-more without collecting  
 template<class Parser>
 static auto skip(Parser parser) {
-  return [parser = std::move(parser)](range in) -> result<bool> {
+  return [parser = std::move(parser)](range in) -> result<unit> {
     while(auto res = parser(in)) {
       in = *res.get();
     }
-    return make_success(true, in);
+    return make_success(unit{}, in);
   };
 }
 
@@ -332,13 +333,13 @@ static auto single(char c) {
 
 // parse a fixed keyword 
 static auto keyword(std::string value) {
-  return [value = std::move(value)](range in) -> result<bool> {
+  return [value = std::move(value)](range in) -> result<unit> {
     if(in.size() < value.size()) {
       return error(in);
     }
 
     if(value.compare(0, value.size(), in.first, value.size()) == 0) {
-      return make_success(true, range{in.first + value.size(), in.last});
+      return make_success(unit{}, range{in.first + value.size(), in.last});
     }
 
     return error(in);
@@ -393,9 +394,9 @@ static auto token(Parser parser) {
 }
 
 // end of stream parser  
-static result<bool> eos(range in) {
+static result<unit> eos(range in) {
   if(in.first == in.last) {
-    return make_success(true, in);
+    return make_success(unit{}, in);
   }
 
   return error(in);

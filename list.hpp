@@ -20,14 +20,24 @@ struct cons {
   }
 
   template<class X, class Func>
-  friend X foldr(const X& x, list<T> self, const Func& func) {
+  friend X foldr(list<T> self, X x, const Func& func) {
     if(!self) {
       return x;
     } else {
-      return func(self->head, foldr(std::move(x), self->tail, func));
+      return func(self->head, foldr(self->tail, std::move(x), func));
     }
   }
 
+  template<class X, class Func>
+  friend X foldl(X x, list<T> self, const Func& func) {
+    if(!self) {
+      return x;
+    } else {
+      return foldl(func(std::move(x), self->head), self->tail, func);
+    }
+  }
+
+  
   struct iterator {
     list<T> data;
     void operator++() { data = data->tail; }
@@ -36,7 +46,13 @@ struct cons {
   };
   
   friend iterator begin(list<T> self) { return {self}; }
-  friend iterator end(list<T> self) { return {nullptr}; }  
+  friend iterator end(list<T> self) { return {nullptr}; }
+
+  template<class What>
+  friend list<T> operator||(list<T> self, What what) {
+    if(self) return self;
+    throw std::runtime_error(what);
+  }
 };
 
 

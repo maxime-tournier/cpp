@@ -185,21 +185,21 @@ struct file {
     const auto vec3 = number >>= [=](real x) {
       return number >>= [=](real y) {
         return number >>= [=](real z) {
-          return unit(obj::vec3{x, y, z}); };
+          return pure(obj::vec3{x, y, z}); };
       };
     };
     
     const auto vertex_def = v >> vec3 >>= [=](obj::vec3 v) {
-      return unit(obj::vertex(v)) >>= drop(newline);
+      return pure(obj::vertex(v)) >>= drop(newline);
     };
 
     const auto normal_def = vn >> vec3 >>= [=](obj::vec3 v) {
-      return unit(obj::normal(v)) >>= drop(newline);
+      return pure(obj::normal(v)) >>= drop(newline);
     };
 
     const auto texcoord_def = vt >> number >>= [=](auto u) {
       return number >>= [=](auto v) {
-        return unit(obj::texcoord{u, v}) >>= drop(newline);
+        return pure(obj::texcoord{u, v}) >>= drop(newline);
       };
     };
 
@@ -213,20 +213,20 @@ struct file {
         e.data[i] = i <= indices.size() ? indices[i] : 0;
       }
 
-      return unit(e);
+      return pure(e);
     };
     
     // TODO check there's at least three elements?
     const auto face_def = f >> plus(element) >>= [=](auto elements) {
-      return unit(face{std::move(elements)}) >>= drop(newline);
+      return pure(face{std::move(elements)}) >>= drop(newline);
     };
 
-    const auto geometry = unit(obj::geometry{}) >>= [=](obj::geometry geo) {
+    const auto geometry = pure(obj::geometry{}) >>= [=](obj::geometry geo) {
 
       const auto append_to = [&](auto& where) {
         return [&](auto value) {
           where.emplace_back(value);
-          return unit(true);
+          return pure(true);
         };
       };
       
@@ -240,7 +240,7 @@ struct file {
       const auto line = token(vertex | normal | texcoord | face,
                               pred(std::isspace) | comment);
         
-      return skip(line) >> unit(std::move(geo));
+      return skip(line) >> pure(std::move(geo));
     };
     
     // static const auto group = debug("group") <<=
@@ -272,7 +272,7 @@ struct file {
     const auto file = geometry >>= [](auto geo) {
       obj::file file;
       file.geometry = std::move(geo);
-      return unit(std::move(file));
+      return pure(std::move(file));
     };
     
     // static const auto file = debug("file") <<=
