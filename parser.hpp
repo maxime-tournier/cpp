@@ -407,10 +407,10 @@ static value<Parser> run(Parser parser, range in) {
   // TODO report line/col
   return match(
       parser(in),
-      [=](range where) -> value<Parser> {
+      [=](error err) -> value<Parser> {
         std::stringstream ss;
         ss << "parse error near \"";
-        peek(where, ss);
+        peek(err, ss);
         ss << "\"";
         throw std::runtime_error(ss.str());
       },

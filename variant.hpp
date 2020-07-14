@@ -25,9 +25,8 @@ struct variant_derived: variant_base {
 template<std::size_t I, class T>
 struct variant_item {
   template<class Derived>
-  friend constexpr std::integral_constant<std::size_t, I>
-  get_index(const Derived*, const T&) {}
-
+  friend constexpr std::size_t get_index(const Derived*, const T*) { return I; }
+  
   template<class Derived>
   friend constexpr T get_type(const Derived*, std::index_sequence<I>);
 
@@ -46,12 +45,13 @@ template<std::size_t... Is, class... Ts>
 struct variant_items<std::index_sequence<Is...>, Ts...>
     : variant_item<Is, Ts>... {
   template<class T>
-  using index =
-      decltype(get_index((variant_items*)nullptr, std::declval<const T&>()));
+  static constexpr std::size_t index() {
+    return get_index((const variant_items*)nullptr, (const T*)(nullptr));
+  }
 
   template<std::size_t J>
   using type =
-      decltype(get_type((variant_items*)nullptr, std::index_sequence<J>{}));
+      decltype(get_type((const variant_items*)nullptr, std::index_sequence<J>{}));
 };
 
 
@@ -70,18 +70,20 @@ class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
   variant& operator=(const variant&) = default;
   variant& operator=(variant&&) = default;
 
-  template<class Arg>
-  variant(const Arg& value): data(construct(this, value)) {}
+  template<class T,
+           class=std::enable_if_t<!std::is_base_of<variant, T>::value>,
+           std::size_t index = variant::template index<T>()>
+  variant(const T& value): data(construct(this, value)) {}
 
   std::size_t type() const { return data->index; }
 
-  template<class T, std::size_t index = variant::template index<T>::value>
+  template<class T, std::size_t index = variant::template index<T>()>
   const T& get() const {
     assert(data->index == index && "type error");
     return static_cast<variant_derived<T>*>(data.get())->value;
   }
 
-  template<class T, std::size_t index = variant::template index<T>::value>
+  template<class T, std::size_t index = variant::template index<T>()>
   const T* as() const {
     if(data->index != index)
       return nullptr;

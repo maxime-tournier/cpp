@@ -116,6 +116,16 @@ struct fixpoint {
 template<class T, class Def>
 static fixpoint<T, Def> fix(Def def) { return {def}; }
 
+
+static const auto run = [](auto parser, sexpr::list args) {
+  if(auto result = parser(args)) {
+    return result.right().value;
+  } else {
+    throw std::runtime_error(result.left());
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
 static const auto check_args = fix<list<var>>([](auto self) {
   return (empty >> pure(list<var>{}))
     | ((pop >>= expect<symbol>) >>= [=](symbol name) {
@@ -165,7 +175,7 @@ expr check(sexpr e) {
             [=](symbol first) -> expr {
               const auto it = special.find(first);
               if(it != special.end()) {
-                return it->second(self->tail);
+                return run(it->second, self->tail);
               }
               return check_app(first, self->tail);
             },

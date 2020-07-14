@@ -18,6 +18,7 @@ add_executable(ast ast.cpp)
 target_link_libraries(ast readline)
 
 add_executable(obj obj.cpp)
+
 # add_executable(cml cml.cpp)
 
 # mesh viewer
@@ -40,7 +41,8 @@ if(GTest_FOUND)
   enable_testing()
   
   add_executable(tests
-				 parser-test.cpp)
+	parser-test.cpp
+    variant.cpp)
   
   target_link_libraries(tests GTest::GTest GTest::Main)
   gtest_discover_tests(tests)
