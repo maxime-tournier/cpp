@@ -14,6 +14,18 @@ expr check(sexpr e) {
                  return var{self};
                },
                [](sexpr::list self) -> expr {
+                 if(self.empty()) {
+                   throw std::runtime_error("empty list in application");
+                 }
+
+                 match(self.front(),
+                       [](symbol first) {
+
+                       },
+                       [](sexpr func) {
+                         
+                       });
+                 
                  throw std::runtime_error("not implemented");
                });
 }
@@ -33,6 +45,10 @@ struct parse_error: std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
+struct syntax_error: std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
 
 template<class Cont>
 static void handle(Cont cont, std::ostream& err=std::cerr) try {
@@ -45,18 +61,20 @@ static void handle(Cont cont, std::ostream& err=std::cerr) try {
 int main(int, char**) {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
   const auto parse = [&](const char* input) {
-    return rethrow_as<parse_error>([&]{
-      return run(parser, input);
-    });
   };
-  
-  
+
+
   repl([&](const char* input) {
     return handle([&] {
-      const auto s = parse(input);
+      const auto s = rethrow_as<parse_error>([&] {
+        return parser::run(parser, input);
+      });
+
       std::clog << s << std::endl;
 
-      const auto e = ast::check(s);
+      const auto e = rethrow_as<syntax_error>([&]{
+        return ast::check(s);
+      });
     });
   });
   
