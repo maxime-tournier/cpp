@@ -10,6 +10,12 @@ namespace ast {
 
 expr check(sexpr e);
 
+struct syntax_error: std::runtime_error {
+  syntax_error(std::string what): std::runtime_error("syntax error: " + what) { }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// sexpr list parser monad
 template<class T>
 struct success {
   T value;
@@ -121,7 +127,7 @@ static const auto run = [](auto parser, sexpr::list args) {
   if(auto result = parser(args)) {
     return result.right().value;
   } else {
-    throw std::runtime_error("syntax error: " + result.left());
+    throw syntax_error(result.left());
   }
 };
 
@@ -133,6 +139,8 @@ static auto fail(std::string what) {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+
+// check function arguments
 static const auto check_args = fix<list<var>>([](auto self) {
   return (empty >> pure(list<var>{}))
     | ((pop >>= expect<symbol>) >>= [=](symbol name) {
@@ -141,8 +149,9 @@ static const auto check_args = fix<list<var>>([](auto self) {
       };
     });
 });
-                            
-static const auto check_fn =
+
+// check function definition
+static const auto check_abs =
   ((pop >>= expect<sexpr::list>) >>= [](sexpr::list args) {
     return pop >>= [=](sexpr body) {
       return empty >> [=](sexpr::list) -> result<expr> {
@@ -158,7 +167,7 @@ static const auto check_fn =
 using special_type = std::function<result<expr>(sexpr::list)>;
 
 static const std::map<symbol, special_type> special = {
-  {"fn", check_fn}
+  {"fn", check_abs}
 };
 
 static expr check_app(sexpr func, sexpr::list args) {
@@ -174,7 +183,7 @@ expr check(sexpr e) {
       [](symbol self) -> expr { return var{self}; },
       [](sexpr::list self) -> expr {
         if(!self) {
-          throw std::runtime_error("empty list in application");
+          throw syntax_error("empty list in application");
         }
         return match(
             self->head,
@@ -192,48 +201,23 @@ expr check(sexpr e) {
 }
 
 
-template<class Exception, class Cont>
-static auto rethrow_as(Cont cont) try {
-  return cont();
-} catch(std::exception& e) {
-  throw Exception(e.what());
-}
-
-
-struct parse_error: std::runtime_error {
-  using std::runtime_error::runtime_error;
-};
-
-struct syntax_error: std::runtime_error {
-  using std::runtime_error::runtime_error;
-};
-
-
 template<class Cont>
 static void handle(Cont cont, std::ostream& err=std::cerr) try {
   return cont();
 } catch(std::exception& e) {
-  err << e.what() << std::endl;;
+  err << e.what() << std::endl;
 };
 
 
 int main(int, char**) {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
-  const auto parse = [&](const char* input) {
-  };
-
-
+  
   repl([&](const char* input) {
     return handle([&] {
-      const auto s = rethrow_as<parse_error>([&] {
-        return parser::run(parser, input);
-      });
-
+      const auto s = parser::run(parser, input);
       std::clog << s << std::endl;
 
-      const auto e = rethrow_as<syntax_error>([&]{
-        return ast::check(s);
-      });
+      const auto e = ast::check(s);
     });
   });
   
