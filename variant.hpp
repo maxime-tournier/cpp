@@ -25,8 +25,10 @@ struct variant_derived: variant_base {
 template<std::size_t I, class T>
 struct variant_item {
   template<class Derived>
-  friend constexpr std::size_t get_index(const Derived*, const T*) { return I; }
-  
+  friend constexpr std::size_t get_index(const Derived*, const T*) {
+    return I;
+  }
+
   template<class Derived>
   friend constexpr T get_type(const Derived*, std::index_sequence<I>);
 
@@ -45,8 +47,9 @@ template<std::size_t... Is, class... Ts>
 struct variant_items<std::index_sequence<Is...>, Ts...>
     : variant_item<Is, Ts>... {
   template<class T>
-  static constexpr std::size_t index = get_index((const variant_items*)nullptr, (const T*)(nullptr));
-  
+  static constexpr std::size_t index = get_index((const variant_items*)nullptr,
+                                                 (const T*)(nullptr));
+
   template<std::size_t J>
   using type =
       decltype(get_type((const variant_items*)nullptr, std::index_sequence<J>{}));
@@ -81,9 +84,10 @@ class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
   }
 
   template<class T, std::size_t index = variant::template index<T>>
-  const T* as() const {
-    if(data->index != index)
+  const T* cast() const {
+    if(data->index != index) {
       return nullptr;
+    }
     return &get<T>();
   }
 
@@ -110,6 +114,20 @@ class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
   friend auto match(const variant& self, const Cases&... cases) {
     return visit(self, overload<Cases...>(cases...));
   };
+
+
+  bool operator==(const variant& other) const {
+    if(type() != other.type()) {
+      return false;
+    }
+
+    return match(*this, [&](const auto& self) {
+      using type = typename std::decay<decltype(self)>::type;
+      return self == other.get<type>();
+    });
+  }
+  
+  
 };
 
 
