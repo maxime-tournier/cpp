@@ -105,6 +105,12 @@ static auto map(Parser parser, Func func) {
   };
 };
 
+template<class Parser, class Func>
+static auto operator|=(Parser parser, Func func) {
+  return map(parser, func);
+};
+
+
 // monad bind
 template<class Parser, class Func>
 static auto bind(Parser parser, Func func) {

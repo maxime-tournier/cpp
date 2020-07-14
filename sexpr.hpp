@@ -4,10 +4,11 @@
 #include "parser.hpp"
 #include "variant.hpp"
 #include "symbol.hpp"
+#include "list.hpp"
 
-struct sexpr: variant<long, double, std::string, symbol, std::deque<sexpr>> {
+struct sexpr: variant<long, double, std::string, symbol, list<sexpr>> {
   using sexpr::variant::variant;
-  using list = std::deque<sexpr>;
+  using list = list<sexpr>;
 
   friend std::ostream& operator<<(std::ostream& out, const sexpr& self) {
     match(self,
@@ -70,7 +71,11 @@ struct sexpr: variant<long, double, std::string, symbol, std::deque<sexpr>> {
     const auto atom = number | string | symbol;
   
     const auto list = [=](auto parser) {
-      auto inner = map(((parser % space) | unit(sexpr::list{})), cast);
+      auto inner = ((parser % space) | unit(std::deque<sexpr>{})) |= [](auto items) {
+        // TODO use move iterator
+        return sexpr(make_list(items.begin(), items.end()));
+      };
+      
       return lparen >> inner >>= drop(rparen);
     };
 

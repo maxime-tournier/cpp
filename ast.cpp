@@ -14,11 +14,11 @@ expr check(sexpr e) {
                  return var{self};
                },
                [](sexpr::list self) -> expr {
-                 if(self.empty()) {
+                 if(self) {
                    throw std::runtime_error("empty list in application");
                  }
 
-                 match(self.front(),
+                 match(self->head,
                        [](symbol first) {
 
                        },
