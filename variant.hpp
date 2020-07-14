@@ -45,10 +45,8 @@ template<std::size_t... Is, class... Ts>
 struct variant_items<std::index_sequence<Is...>, Ts...>
     : variant_item<Is, Ts>... {
   template<class T>
-  static constexpr std::size_t index() {
-    return get_index((const variant_items*)nullptr, (const T*)(nullptr));
-  }
-
+  static constexpr std::size_t index = get_index((const variant_items*)nullptr, (const T*)(nullptr));
+  
   template<std::size_t J>
   using type =
       decltype(get_type((const variant_items*)nullptr, std::index_sequence<J>{}));
@@ -71,19 +69,18 @@ class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
   variant& operator=(variant&&) = default;
 
   template<class T,
-           class=std::enable_if_t<!std::is_base_of<variant, T>::value>,
-           std::size_t index = variant::template index<T>()>
+           class=std::enable_if_t<!std::is_base_of<variant, T>::value>>
   variant(const T& value): data(construct(this, value)) {}
 
   std::size_t type() const { return data->index; }
 
-  template<class T, std::size_t index = variant::template index<T>()>
+  template<class T, std::size_t index = variant::template index<T>>
   const T& get() const {
     assert(data->index == index && "type error");
     return static_cast<variant_derived<T>*>(data.get())->value;
   }
 
-  template<class T, std::size_t index = variant::template index<T>()>
+  template<class T, std::size_t index = variant::template index<T>>
   const T* as() const {
     if(data->index != index)
       return nullptr;

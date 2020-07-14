@@ -121,8 +121,15 @@ static const auto run = [](auto parser, sexpr::list args) {
   if(auto result = parser(args)) {
     return result.right().value;
   } else {
-    throw std::runtime_error(result.left());
+    throw std::runtime_error("syntax error: " + result.left());
   }
+};
+
+template<class T>
+static auto fail(std::string what) {
+  return [=](sexpr::list) -> result<T> {
+    return what;
+  };
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -136,9 +143,9 @@ static const auto check_args = fix<list<var>>([](auto self) {
 });
                             
 static const auto check_fn =
-  (pop >>= expect<sexpr::list>) >>= [](sexpr::list args) {
+  ((pop >>= expect<sexpr::list>) >>= [](sexpr::list args) {
     return pop >>= [=](sexpr body) {
-      return [=](sexpr::list) -> result<expr> {
+      return empty >> [=](sexpr::list) -> result<expr> {
         return (check_args |= [=](list<var> args) -> expr {
           return foldr(args, check(body), [](var arg, expr body) -> expr {
             return abs{arg, body};
@@ -146,7 +153,7 @@ static const auto check_fn =
         })(args);
       };
     };
-  };
+  }) | fail<expr>("(fn (`sym`...) `expr`)");
 
 using special_type = std::function<result<expr>(sexpr::list)>;
 
@@ -169,7 +176,6 @@ expr check(sexpr e) {
         if(!self) {
           throw std::runtime_error("empty list in application");
         }
-
         return match(
             self->head,
             [=](symbol first) -> expr {
@@ -207,7 +213,7 @@ template<class Cont>
 static void handle(Cont cont, std::ostream& err=std::cerr) try {
   return cont();
 } catch(std::exception& e) {
-  err << "error: " << e.what() << std::endl;;
+  err << e.what() << std::endl;;
 };
 
 
