@@ -14,10 +14,15 @@ struct ctor;
 struct kind_constant {
   symbol name;
   kind_constant(symbol name): name(name) { }
+
+  static ref<kind_constant> make(symbol name);  
 };
 
 struct kind: variant<ref<kind_constant>, ctor> {
   using kind::variant::variant;
+
+  kind operator>>=(kind other) const;
+  bool operator==(kind other) const;
 };
 
 extern const kind term, row;
@@ -32,29 +37,19 @@ struct ctor {
 };
 
 
-static kind operator>>=(kind lhs, kind rhs) {
-  return ctor{lhs, rhs};
-}
 
-static bool operator==(kind lhs, kind rhs) {
-  if(lhs.type() != rhs.type()) {
-    return false;
-  }
-  return match(
-      lhs,
-      [&](ctor lhs) {
-        return std::tie(lhs.from, lhs.to) ==
-               std::tie(rhs.get<ctor>().from, rhs.get<ctor>().to);
-      },
-      [](auto) { return true; });
-}
 
 
 struct type_constant {
   symbol name;
   struct kind kind;
+
   type_constant(symbol name, struct kind kind): name(name), kind(kind) { }
+
+  static ref<type_constant> make(symbol name, struct kind kind);
 };
+
+
 
 
 struct var {
@@ -73,7 +68,7 @@ struct mono: variant<ref<type_constant>, ref<var>, app> {
   friend mono operator>>=(mono lhs, mono rhs);
 };
 
-extern const mono func;
+extern const mono func, unit, boolean, integer, number, string;
 
 struct app {
   mono ctor;
@@ -83,6 +78,7 @@ struct app {
   struct kind kind() const;
 };
 
+struct context { };
 
 }
 
