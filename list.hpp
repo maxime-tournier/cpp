@@ -40,8 +40,8 @@ struct cons {
   
   struct iterator {
     list<T> data;
-    void operator++() { data = data->tail; }
-    bool operator!=(iterator other) { return data == other.data; }
+    iterator& operator++() { data = data->tail; return *this; }
+    bool operator!=(iterator other) { return data != other.data; }
     auto& operator*() const { return data->head; }
   };
   

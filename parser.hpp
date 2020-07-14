@@ -172,12 +172,11 @@ static auto ref(const Parser& parser) {
 // kleen star parser (zero-or-more). note: always succeeds  
 template<class Parser>
 static auto kleene(Parser parser) {
-  return [parser = std::move(parser)](
-             range in) -> result<std::deque<value<Parser>>> {
+  return [parser = std::move(parser)](range in) -> result<std::deque<value<Parser>>> {
     std::deque<value<Parser>> values;
-    while(auto result = parser(in).get()) {
-      values.emplace_back(std::move(result->value));
-      in = *result;
+    while(auto result = parser(in)) {
+      values.emplace_back(std::move(result.get()->value));
+      in = *result.get();
     }
 
     return make_success(std::move(values), in);

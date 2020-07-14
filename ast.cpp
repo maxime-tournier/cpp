@@ -156,7 +156,7 @@ expr check(sexpr e) {
       [](auto self) -> expr { return lit{self}; },
       [](symbol self) -> expr { return var{self}; },
       [](sexpr::list self) -> expr {
-        if(self) {
+        if(!self) {
           throw std::runtime_error("empty list in application");
         }
 

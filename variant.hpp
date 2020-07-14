@@ -17,9 +17,8 @@ template<class T>
 struct variant_derived: variant_base {
   const T value;
 
-  template<class Arg>
-  variant_derived(std::size_t index, const Arg& arg):
-      variant_base(index), value(arg) {}
+  variant_derived(std::size_t index, const T& value):
+      variant_base(index), value(value) {}
 };
 
 
