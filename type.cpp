@@ -1,10 +1,8 @@
-#include "infer.hpp"
+#include "type.hpp"
 #include "ast.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////
-namespace infer {
-
-
+namespace type {
 
 const kind term = kind_constant::make("*");
 const kind row = kind_constant::make("@");
@@ -40,14 +38,29 @@ bool kind::operator==(kind other) const {
                  std::tie(other.get<ctor>().from, other.get<ctor>().to);
         },
         [](auto) { return true; });
-  }
+}
+
+std::ostream& operator<<(std::ostream& out, kind self) {
+  match(self,
+        [&](ref<kind_constant> self) { out << self->name; },
+        [&](ctor self) { out << self.from << " -> " << self.to; });
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out, mono self) {
+  match(self,
+        [&](ref<type_constant> self) { out << self->name; },
+        [](auto) { throw std::runtime_error("unimplemented"); });
+  return out;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 struct type_error: std::runtime_error {
   type_error(std::string what): std::runtime_error("type error: " + what) { }
 };
 
-mono infer(context ctx, ast::expr e) {
+mono infer(context ctx, const ast::expr& e) {
   return match(e,
                [](ast::lit self) {
                  return match(self,
@@ -65,7 +78,3 @@ mono infer(context ctx, ast::expr e) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-int main(int, char**) {
-
-  return 0;
-};

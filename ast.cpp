@@ -8,8 +8,6 @@
 
 namespace ast {
 
-expr check(sexpr e);
-
 struct syntax_error: std::runtime_error {
   syntax_error(std::string what): std::runtime_error("syntax error: " + what) { }
 };
@@ -176,7 +174,7 @@ static expr check_app(sexpr func, sexpr::list args) {
   });
 }
 
-expr check(sexpr e) {
+expr check(const sexpr& e) {
   return match(
       e,
       [](auto self) -> expr { return lit{self}; },
@@ -201,27 +199,27 @@ expr check(sexpr e) {
 }
 
 
-template<class Cont>
-static void handle(Cont cont, std::ostream& err=std::cerr) try {
-  return cont();
-} catch(std::exception& e) {
-  err << e.what() << std::endl;
-};
+// template<class Cont>
+// static void handle(Cont cont, std::ostream& err=std::cerr) try {
+//   return cont();
+// } catch(std::exception& e) {
+//   err << e.what() << std::endl;
+// };
 
 
-int main(int, char**) {
-  const auto parser = sexpr::parser() >>= drop(parser::eos);
+// int main(int, char**) {
+//   const auto parser = sexpr::parser() >>= drop(parser::eos);
   
-  repl([&](const char* input) {
-    return handle([&] {
-      const auto s = parser::run(parser, input);
-      std::clog << s << std::endl;
+//   repl([&](const char* input) {
+//     return handle([&] {
+//       const auto s = parser::run(parser, input);
+//       std::clog << s << std::endl;
 
-      const auto e = ast::check(s);
-    });
-  });
+//       const auto e = ast::check(s);
+//     });
+//   });
   
-  return 0;
-}
+//   return 0;
+// }
 
 

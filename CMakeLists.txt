@@ -14,11 +14,9 @@ add_executable(compressed compressed.cpp)
 add_executable(parser parser.cpp)
 target_link_libraries(parser m)
 
-add_executable(ast ast.cpp)
-target_link_libraries(ast readline)
+add_executable(slip slip.cpp ast.cpp type.cpp)
+target_link_libraries(slip readline)
 
-add_executable(infer infer.cpp)
-target_link_libraries(infer readline)
 
 add_executable(obj obj.cpp)
 

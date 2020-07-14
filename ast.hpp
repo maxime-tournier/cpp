@@ -6,6 +6,8 @@
 
 #include <string>
 
+struct sexpr;
+
 namespace ast {
 
 struct lit: variant<long, double, std::string> {
@@ -20,6 +22,8 @@ struct expr: variant<lit, var, abs, app> {
   using expr::variant::variant;
 };
 
+expr check(const sexpr&);
+
 struct var {
   symbol name;
 };
@@ -33,6 +37,7 @@ struct app {
   expr func;
   expr arg;
 };
+
 
 }
 

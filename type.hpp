@@ -1,10 +1,14 @@
-#ifndef INFER_HPP
-#define INFER_HPP
+#ifndef TYPE_HPP
+#define TYPE_HPP
 
 #include "variant.hpp"
-#include "ast.hpp"
+#include "symbol.hpp"
 
-namespace infer {
+namespace ast {
+struct expr;
+}
+
+namespace type {
 
 template<class T>
 using ref = std::shared_ptr<const T>;
@@ -23,6 +27,7 @@ struct kind: variant<ref<kind_constant>, ctor> {
 
   kind operator>>=(kind other) const;
   bool operator==(kind other) const;
+  friend std::ostream& operator<<(std::ostream& out, kind self);
 };
 
 extern const kind term, row;
@@ -65,7 +70,8 @@ struct mono: variant<ref<type_constant>, ref<var>, app> {
 
   struct kind kind() const;
 
-  friend mono operator>>=(mono lhs, mono rhs);
+  mono operator>>=(mono other) const;
+  friend std::ostream& operator<<(std::ostream& out, mono self);
 };
 
 extern const mono func, unit, boolean, integer, number, string;
@@ -79,6 +85,7 @@ struct app {
 };
 
 struct context { };
+mono infer(context ctx, const ast::expr&);
 
 }
 
