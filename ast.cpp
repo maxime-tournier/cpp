@@ -5,6 +5,11 @@
 
 namespace ast {
 
+
+static expr check_app(sexpr func, sexpr::list args) {
+  
+}
+
 expr check(sexpr e) {
   return match(e,
                [](auto self) -> expr {
@@ -22,8 +27,8 @@ expr check(sexpr e) {
                        [](symbol first) {
 
                        },
-                       [](sexpr func) {
-                         
+                       [=](sexpr func) {
+                         return check_app(func, self->tail);
                        });
                  
                  throw std::runtime_error("not implemented");
