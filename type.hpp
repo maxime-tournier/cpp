@@ -61,26 +61,56 @@ struct var {
   var(std::size_t depth, struct kind kind): depth(depth), kind(kind) { }
 };
 
-struct app;
 
-struct mono: variant<ref<type_constant>, ref<var>, app> {
-  using mono::variant::variant;
-
-  struct kind kind() const;
-
-  mono operator>>=(mono other) const;
-  friend std::ostream& operator<<(std::ostream& out, mono self);
+template<class T>
+struct App {
+  T ctor;
+  T arg;
 };
+
+template<class T>
+struct Mono: variant<ref<type_constant>, ref<var>, App<T>> {
+  using Mono::variant::variant;
+
+  template<class Func>
+  friend auto map(const Mono& self, Func func) {
+    using type = typename std::result_of<Func(T)>::type;
+    using result_type = Mono<type>;
+    return match(self,
+                 [](ref<type_constant> self) -> result_type { return self; },
+                 [](ref<var> self) -> result_type { return self; },
+                 [&](App<T> self) -> result_type {
+                   return App<type>{func(self.ctor), func(self.arg)};
+                 });
+  }
+};
+
+// recursion schemes ftw!11
+template<template<class> class F, class Derived>
+struct fix: F<Derived> {
+  using base = F<Derived>;
+  using base::base;
+
+  template<class Alg, class A, class B>
+  static constexpr A result(A (Alg::*)(B) const);
+  
+  template<class Alg>
+  friend auto cata(const fix& self, const Alg& alg) -> decltype(result(&Alg::operator())) {
+    return alg(map(self, [&](auto x) { return cata(x, alg); }));
+  }
+};
+
+
+struct mono: fix<Mono, mono> {
+  using mono::fix::fix;
+
+  friend std::ostream& operator<<(std::ostream& out, mono self);
+  struct kind kind() const;
+};
+
+using app = App<mono>;
 
 extern const mono func, unit, boolean, integer, number, string;
-
-struct app {
-  mono ctor;
-  mono arg;
-
-  app(mono ctor, mono arg);
-  struct kind kind() const;
-};
 
 
 struct forall;

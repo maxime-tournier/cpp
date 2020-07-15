@@ -40,7 +40,7 @@ bool kind::operator==(kind other) const {
         [](auto) { return true; });
 }
 
-std::ostream& operator<<(std::ostream& out, kind self) {
+std::ostream& operator<<(std::ostream& out, struct kind self) {
   match(self,
         [&](ref<kind_constant> self) { out << self->name; },
         [&](ctor self) { out << self.from << " -> " << self.to; });
@@ -48,11 +48,28 @@ std::ostream& operator<<(std::ostream& out, kind self) {
 }
 
 std::ostream& operator<<(std::ostream& out, mono self) {
-  match(self,
-        [&](ref<type_constant> self) { out << self->name; },
-        [](auto) { throw std::runtime_error("unimplemented"); });
-  return out;
+  return out << cata(self, [](Mono<std::string> self) {
+    return match(self,
+                 [](ref<type_constant> self) -> std::string { return self->name.repr; },
+                 [](ref<var> self) -> std::string { return "<var>"; },
+                 [](App<std::string> self) {
+                   return self.ctor + " " + self.arg;
+                 });
+  });
 }
+
+
+struct kind mono::kind() const {
+  return cata(*this, [](Mono<struct kind> self) {
+    return match(self,
+                 [](ref<type_constant> self) { return self->kind; },
+                 [](ref<var> self) { return self->kind; },
+                 [](App<struct kind> self) {
+                   return self.ctor.get<ctor>().to;
+                 });
+  });
+}
+
 
 }
 
@@ -75,9 +92,6 @@ struct type_error: std::runtime_error {
 };
 
 
-struct substitution {
-  hamt::map<const var*, mono> table;
-};
 
 // TODO inference monad
 
