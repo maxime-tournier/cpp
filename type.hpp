@@ -84,7 +84,16 @@ struct app {
   struct kind kind() const;
 };
 
-struct context { };
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct context {
+  std::size_t depth = 0;
+  
+};
+
+
 mono infer(context ctx, const ast::expr&);
 
 }

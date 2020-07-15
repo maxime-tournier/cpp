@@ -10,6 +10,7 @@ add_subdirectory(sparse)
 set(CMAKE_CXX_STANDARD 14)
 
 add_executable(compressed compressed.cpp)
+add_executable(hamt hamt.cpp)
 
 add_executable(parser parser.cpp)
 target_link_libraries(parser m)
