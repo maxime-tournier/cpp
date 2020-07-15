@@ -43,8 +43,9 @@ if(GTest_FOUND)
   enable_testing()
   
   add_executable(tests
-	parser-test.cpp
-    variant.cpp)
+				 parser-test.cpp
+				 hamt-test.cpp
+				 variant.cpp)
   
   target_link_libraries(tests GTest::GTest GTest::Main)
   gtest_discover_tests(tests)

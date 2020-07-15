@@ -1,10 +1,14 @@
 #ifndef COMPRESSED_HPP
 #define COMPRESSED_HPP
 
+// TODO rename sparse.hpp
+
 #include <array>
 #include <memory>
 #include <cassert>
 #include <stdexcept>
+
+#include <iostream>
 
 namespace sparse {
 
@@ -22,6 +26,7 @@ protected:
 public:
   virtual ~base() {}
 
+  // TODO make this portable
   std::size_t size() const { return __builtin_popcount(mask); }
 
   bool has(std::size_t index) const { return mask & (1ul << index); }
@@ -44,8 +49,25 @@ public:
     return data[sparse::index(this->mask, index)];
   }
 
-  
   virtual std::shared_ptr<array> set(std::size_t index, T&& value) const = 0;
+
+  template<class Cont>
+  void iter(Cont cont) const {
+    static constexpr std::size_t bits = 8 * sizeof(std::size_t);
+
+    std::size_t mask = this->mask;
+
+    std::size_t tz, index = 0;
+    const T* it = data;
+    
+    while(mask) {
+      tz = __builtin_ctz(mask);
+      index += tz;
+      cont(index++, *it++);
+      mask >>= (tz + 1);
+    }
+  }
+    
 };
 
 

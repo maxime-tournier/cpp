@@ -112,6 +112,7 @@ struct substitution {
   friend substitution operator<<(substitution lhs, substitution rhs) {
     
   }
+  
 };
 
 
