@@ -3,6 +3,7 @@
 
 #include "variant.hpp"
 #include "symbol.hpp"
+#include "fix.hpp"
 
 namespace ast {
 struct expr;
@@ -85,20 +86,6 @@ struct Mono: variant<ref<type_constant>, ref<var>, App<T>> {
   }
 };
 
-// recursion schemes ftw!11
-template<template<class> class F, class Derived>
-struct fix: F<Derived> {
-  using base = F<Derived>;
-  using base::base;
-
-  template<class Alg, class A, class B>
-  static constexpr A result(A (Alg::*)(B) const);
-  
-  template<class Alg>
-  friend auto cata(const fix& self, const Alg& alg) -> decltype(result(&Alg::operator())) {
-    return alg(map(self, [&](auto x) { return cata(x, alg); }));
-  }
-};
 
 
 struct mono: fix<Mono, mono> {

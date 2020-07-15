@@ -196,6 +196,9 @@ class array: public traits<B, L> {
   explicit operator bool() const {
     return root;
   }
+
+
+  // TODO iterators
   
 };
 
@@ -253,7 +256,9 @@ public:
   explicit operator bool() const {
     return array;
   }
-  
+
+
+  // TODO iterators
 };
 
 

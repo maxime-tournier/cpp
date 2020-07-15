@@ -92,6 +92,28 @@ struct type_error: std::runtime_error {
 };
 
 
+struct substitution {
+  hamt::map<const var*, mono> table;
+
+  mono operator()(mono ty) const {
+    return cata(ty, [&](Mono<mono> self) {
+      return match(self,
+                   [&](ref<var> self) -> mono {
+                     if(auto res = table.find(self.get())) {
+                       return *res;
+                     }
+                     return self;
+                   },
+                   [](auto self) -> mono { return self; });                   
+    });
+  }
+
+  // composition
+  friend substitution operator<<(substitution lhs, substitution rhs) {
+    
+  }
+};
+
 
 // TODO inference monad
 
