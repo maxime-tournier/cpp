@@ -54,25 +54,74 @@ std::ostream& operator<<(std::ostream& out, mono self) {
   return out;
 }
 
+}
 
 ////////////////////////////////////////////////////////////////////////////////
+
+#include "hamt.hpp"
+#include <sstream>
+
+namespace type {
+
+template<class T>
+static std::string quote(const T& self) {
+  std::stringstream ss;
+  ss << '"' << self << '"';
+  return ss.str();
+}
+
 struct type_error: std::runtime_error {
   type_error(std::string what): std::runtime_error("type error: " + what) { }
 };
 
-mono infer(context ctx, const ast::expr& e) {
-  return match(e,
-               [](ast::lit self) {
-                 return match(self,
-                              [](long) { return integer; },
-                              [](double) { return number; },
-                              [](std::string) { return string; },
-                              [](bool) { return boolean; });
-                              
-               },
-               [](auto) -> mono {
-                 throw type_error("unimplemented");
-               });
+
+struct substitution {
+  hamt::map<const var*, mono> table;
+};
+
+// TODO inference monad
+
+struct context {
+  std::size_t depth = 0;
+  hamt::map<symbol, poly> locals;
+
+  mono instantiate(poly p) const {
+    // TODO quantify + susbtitute
+  };
+  
+};
+
+
+ref<context> make_context() {
+  return std::make_shared<context>();
+}
+
+
+static mono infer(ref<context> ctx, const ast::lit& self) {
+  return match(self,
+               [](long) { return integer; },
+               [](double) { return number; },
+               [](std::string) { return string; },
+               [](bool) { return boolean; });
+};
+
+
+static mono infer(ref<context> ctx, const ast::var& self) {
+  if(auto poly = ctx->locals.find(self.name)) {
+    return ctx->instantiate(poly);
+  }
+  
+  throw type_error("unbound variable: " + quote(self.name));
+};
+
+
+template<class T>
+static mono infer(ref<context> ctx, const T&) {
+  throw type_error("unimplemented: ");
+}
+
+mono infer(ref<context> ctx, const ast::expr& e) {
+  return match(e, [=](const auto& self) { return infer(ctx, self); });
 }
 
 }

@@ -15,7 +15,8 @@ static void handle(Cont cont, std::ostream& err=std::cerr) try {
 
 int main(int, char**) {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
-  type::context ctx;
+
+  auto ctx = type::make_context();
   
   repl([&](const char* input) {
     return handle([&] {

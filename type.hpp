@@ -43,8 +43,6 @@ struct ctor {
 
 
 
-
-
 struct type_constant {
   symbol name;
   struct kind kind;
@@ -85,16 +83,21 @@ struct app {
 };
 
 
-
-////////////////////////////////////////////////////////////////////////////////
-
-struct context {
-  std::size_t depth = 0;
-  
+struct forall;
+struct poly: variant<mono, forall> {
+  using poly::variant::variant;
 };
 
+struct forall {
+  ref<var> arg;
+  poly body;
+};
 
-mono infer(context ctx, const ast::expr&);
+////////////////////////////////////////////////////////////////////////////////
+struct context;
+ref<context> make_context();
+
+mono infer(ref<context> ctx, const ast::expr&);
 
 }
 

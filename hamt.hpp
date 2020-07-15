@@ -201,13 +201,17 @@ class array: public traits<B, L> {
 
 
 template<class Key, class Value,
-         std::size_t B, std::size_t L>
+         std::size_t B=5, std::size_t L=4>
 class map {
 public:
   using key_type = Key;
   using value_type = Value;
 
-  static_assert(std::is_pod<key_type>::value, "key type must be POD");
+  static_assert(std::is_trivially_destructible<key_type>::value &&
+                std::is_trivially_copy_constructible<key_type>::value &&
+                std::is_trivially_move_constructible<key_type>::value,
+                "key type must be POD");
+  
   static_assert(sizeof(key_type) <= sizeof(std::size_t),
                 "key type is too large");
 
@@ -216,11 +220,12 @@ private:
   array_type array;
 
   static std::size_t index(key_type key) {
-    union {
+    union result_type {
       key_type key;
       std::size_t index;
-    } result;
-    result.key = key;
+      result_type(key_type key): key(key) { }
+    } result(key);
+    
     return result.index;
   }
 
