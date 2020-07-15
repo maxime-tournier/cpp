@@ -192,11 +192,64 @@ class array: public traits<B, L> {
     const index_array split = array::split(index, level_indices{});
     return find(split, root);
   }
+
+  explicit operator bool() const {
+    return root;
+  }
   
 };
 
 
+template<class Key, class Value,
+         std::size_t B, std::size_t L>
+class map {
+public:
+  using key_type = Key;
+  using value_type = Value;
 
+  static_assert(std::is_pod<key_type>::value, "key type must be POD");
+  static_assert(sizeof(key_type) <= sizeof(std::size_t),
+                "key type is too large");
+
+private:
+  using array_type = array<value_type, B, L>;
+  array_type array;
+
+  static std::size_t index(key_type key) {
+    union {
+      key_type key;
+      std::size_t index;
+    } result;
+    result.key = key;
+    return result.index;
+  }
+
+  map(array_type array): array(std::move(array)) { }
+
+public:
+  map() = default;
+  
+  const value_type* find(key_type key) const {
+    return array.find(index(key));
+  }
+
+  map set(key_type key, value_type&& value) && {
+    return std::move(array).set(index(key), std::move(value));
+  }
+
+  map set(key_type key, value_type&& value) const& {
+    return array.set(index(key), std::move(value));
+  }
+
+  const value_type& get(key_type key) const {
+    return array.get(index(key));
+  }
+
+  explicit operator bool() const {
+    return array;
+  }
+  
+};
 
 
 

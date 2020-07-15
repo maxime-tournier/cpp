@@ -80,6 +80,10 @@ int main(int, char**) {
   std::clog << test.find(1) << std::endl;
 
   test_ordered<double, 5, 4>(400000);
+
+
+  hamt::map<void*, double, 5, 5> map;
+  map = map.set(nullptr, 0);
   
   return 0;
 }
