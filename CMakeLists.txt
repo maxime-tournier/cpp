@@ -7,10 +7,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${ASAN_FLAGS}" )
 
 # add_subdirectory(sparse)
 if(ANDROID)
-  message("android")
-  set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES -latomic)
+  set(CMAKE_EXE_LINKER_FLAGS -latomic)
 else()
-  message("not android")
 endif()
   
 set(CMAKE_CXX_STANDARD 14)
