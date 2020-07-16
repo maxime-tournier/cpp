@@ -8,6 +8,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${ASAN_FLAGS}" )
 # add_subdirectory(sparse)
 if(ANDROID)
   set(CMAKE_EXE_LINKER_FLAGS -latomic)
+  set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} -march=native)  
 else()
 endif()
   
