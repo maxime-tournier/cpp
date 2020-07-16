@@ -52,12 +52,12 @@ public:
   virtual std::shared_ptr<array> set(std::size_t index, T&& value) const = 0;
 
   template<class Cont>
-  void iter(Cont cont) const {
+  void iter(std::size_t start, Cont cont) const {
     static constexpr std::size_t bits = 8 * sizeof(std::size_t);
 
     std::size_t mask = this->mask;
 
-    std::size_t tz, index = 0;
+    std::size_t tz, index = start;
     const T* it = data;
     
     while(mask) {

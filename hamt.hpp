@@ -155,8 +155,24 @@ class array: public traits<B, L> {
     return self;
   }
 
+
+  // iter
+  template<class Cont>
+  static void iter(const node_type& self,
+                   const Cont& cont,
+                   std::size_t start=0,
+                   std::size_t level = array::inner_levels) {
+    if(!level) {
+      as_leaf(self)->iter(start << L, cont);  
+    } else {
+      as_inner(self)->iter(start << B, [&](std::size_t i,
+                                           const node_type& child) {
+        iter(child, cont, i, level - 1);
+      });
+    }
+  }
   
-  public:
+public:
   array() = default;
 
   const T& get(std::size_t index) const {
@@ -198,7 +214,14 @@ class array: public traits<B, L> {
   }
 
 
-  // TODO iterators
+  template<class Cont>
+  void iter(const Cont& cont) const {
+    if(!root) {
+      return;
+    }
+
+    iter(root, cont);
+  }
   
 };
 
