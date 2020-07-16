@@ -23,9 +23,9 @@ struct traits {
   template<std::size_t D>
   static constexpr std::size_t mask() {
     if(D) {
-      return ((1ul << (B + 1)) - 1) << (L + (D - 1) * B);
+      return ((1ul << B) - 1) << (L + (D - 1) * B);
     } else {
-      return (1ul << (L + 1)) - 1;
+      return (1ul << L) - 1;
     }
   }
 

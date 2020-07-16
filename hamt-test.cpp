@@ -40,7 +40,30 @@ TEST(hamt, iter) {
   x = x.set(47, 33.0);
   x = x.set(48, 33.0);          
   x = x.set(100000, 10.0);
+
+
+  using traits = hamt::traits<5, 4>;
+  auto show = [](auto indices) {
+    std::size_t shift = 0;
+    for(auto i: indices) {
+      std::cout << i << "/" << (i << shift) << ", ";
+      if(shift) shift += 5;
+      else shift += 4;
+    }
+    std::cout << std::endl;
+  };
+
+  std::clog << std::bitset<64>(traits::masks[0]) << std::endl;
+  std::clog << std::bitset<64>(traits::masks[1]) << std::endl;
+  std::clog << std::bitset<64>(traits::masks[2]) << std::endl;    
+  
+  show(traits::split(47, traits::level_indices{}));
+  show(traits::split(48, traits::level_indices{}));  
+  std::clog << x.get(48) << std::endl;
+
+  
   x.iter([](auto i, auto j) {
     std::clog << i << " " << j << std::endl;
   });
+
 }
