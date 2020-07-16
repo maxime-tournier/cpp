@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.10)
 set(ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${ASAN_FLAGS}" )
 
-add_subdirectory(sparse)
+# add_subdirectory(sparse)
 
 set(CMAKE_CXX_STANDARD 14)
 

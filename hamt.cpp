@@ -79,7 +79,7 @@ int main(int, char**) {
   std::clog << test.find(0) << std::endl;
   std::clog << test.find(1) << std::endl;
 
-  test_ordered<double, 5, 4>(400000);
+  test_ordered<double, 5, 4>(10000);
 
 
   hamt::map<void*, double, 5, 5> map;
