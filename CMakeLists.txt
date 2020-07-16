@@ -6,7 +6,10 @@ set(ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${ASAN_FLAGS}" )
 
 # add_subdirectory(sparse)
-
+if(ANDROID)
+  set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES -latomic)
+endif()
+  
 set(CMAKE_CXX_STANDARD 14)
 
 add_executable(compressed compressed.cpp)
