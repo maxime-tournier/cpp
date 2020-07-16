@@ -194,7 +194,7 @@ class array: public traits<B, L> {
   }
 
   explicit operator bool() const {
-    return root;
+    return bool(root);
   }
 
 
@@ -254,7 +254,7 @@ public:
   }
 
   explicit operator bool() const {
-    return array;
+    return bool(array);
   }
 
 
