@@ -245,14 +245,16 @@ private:
   using array_type = array<value_type, B, L>;
   array_type array;
 
+  union cast {
+    key_type key;
+    std::size_t index;
+    cast(key_type key): key(key) { }
+    // TODO make this work if key_type == std::size_t
+    cast(std::size_t index): index(index) { }      
+  };
+  
   static std::size_t index(key_type key) {
-    union result_type {
-      key_type key;
-      std::size_t index;
-      result_type(key_type key): key(key) { }
-    } result(key);
-    
-    return result.index;
+    return cast(key).index;
   }
 
   map(array_type array): array(std::move(array)) { }
@@ -280,8 +282,13 @@ public:
     return bool(array);
   }
 
-
-  // TODO iterators
+  template<class Cont>
+  void iter(const Cont& cont) const {
+    array.iter([&](std::size_t index, const value_type& value) {
+      cont(cast(index).key, value);
+    });
+  }
+  
 };
 
 
