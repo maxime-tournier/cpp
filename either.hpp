@@ -1,6 +1,9 @@
 #ifndef EITHER_HPP
 #define EITHER_HPP
 
+#include "functor.hpp"
+#include "monad.hpp"
+
 #include "overload.hpp"
 
 #include <type_traits>
@@ -10,7 +13,8 @@
 
 // either monad
 template<class Left, class Right>
-class either {
+class either: public functor,
+              public monad {
   typename std::aligned_union<0, Left, Right>::type storage;
   const bool ok;
 
@@ -107,7 +111,7 @@ public:
 
   
   template<class Func>
-  friend auto map(either&& self, Func func) {
+  static auto map(either&& self, Func func) {
     using value_type = typename std::result_of<Func(Right)>::type;
     using result_type = either<Left, value_type>;
     
@@ -121,7 +125,7 @@ public:
   }
 
   template<class Func>
-  friend auto map(const either& self, Func func) {
+  static auto map(const either& self, Func func) {
     using value_type = typename std::result_of<Func(Right)>::type;
     using result_type = either<Left, value_type>;
     
@@ -136,7 +140,7 @@ public:
   
 
   template<class Func>
-  static auto bind(either&& self, Func func) {
+  static auto bind(either&& self, const Func& func) {
     using result_type = typename std::result_of<Func(Right)>::type;
     
     return match(self,
@@ -149,7 +153,7 @@ public:
   }
 
   template<class Func>
-  static auto bind(const either& self, Func func) {
+  static auto bind(const either& self, const Func& func) {
     using result_type = typename std::result_of<Func(Right)>::type;
     
     return match(self,
@@ -162,30 +166,6 @@ public:
   }
   
 
-  // monad bind
-  template<class Func>
-  friend auto operator>>=(either&& self, Func func) {
-    return bind(std::move(self), std::move(func));
-  }
-
-  template<class Func>
-  friend auto operator>>=(const either& self, Func func) {
-    return bind(self, std::move(func));
-  }
-
-
-  // functor map
-  template<class Func>
-  friend auto operator|=(const either& self, Func func) {
-    return map(self, std::move(func));
-  }
-
-  template<class Func>
-  friend auto operator|=(either&& self, Func func) {
-    return map(std::move(self), std::move(func));
-  }
-
-  
 };
 
 

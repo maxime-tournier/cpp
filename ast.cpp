@@ -16,10 +16,10 @@ struct syntax_error: std::runtime_error {
 // sexpr list parser monad
 template<class T>
 struct success {
-  T value;
+  using value_type = T;
+  value_type value;
   sexpr::list rest;
 };
-
 
 template<class T>
 using result = either<std::string, success<T>>;
@@ -28,6 +28,9 @@ template<class T>
 static result<T> make_success(T value, sexpr::list rest) {
   return success<T>{value, rest};
 }
+
+template<class Parser>
+using value = typename std::result_of<Parser(sexpr::list)>::type::value_type::value_type;
 
 static const auto pop = [](sexpr::list list) -> result<sexpr> {
   if(list) {
@@ -81,18 +84,18 @@ static const auto pure = [](auto value) {
 
 
 
-template<class LHS, class Func>
-static auto operator>>=(LHS lhs, Func func) { return bind(lhs, func); }
+template<class Parser, class Func, class=value<Parser>>
+static auto operator>>=(Parser parser, Func func) { return bind(parser, func); }
 
-template<class LHS, class RHS>
+template<class LHS, class RHS, class=value<LHS>, class=value<RHS>>
 static auto operator>>(LHS lhs, RHS rhs) {
   return lhs >>= [rhs](auto) {
     return rhs;
   };
 }
 
-template<class LHS, class Func>
-static auto operator|=(LHS lhs, Func func) { return map(lhs, func); }
+template<class Parser, class Func, class=value<Parser>>
+static auto operator|=(Parser parser, Func func) { return map(parser, func); }
 
 static const auto coproduct = [](auto lhs, auto rhs) {
   return [=](sexpr::list args) {
@@ -102,7 +105,7 @@ static const auto coproduct = [](auto lhs, auto rhs) {
   };
 };
 
-template<class LHS, class RHS>
+template<class LHS, class RHS, class=value<LHS>, class=value<RHS>>
 static auto operator|(LHS lhs, RHS rhs) {
   return coproduct(lhs, rhs);
 }

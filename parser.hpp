@@ -95,7 +95,7 @@ static auto pure(T value) {
 };
 
 // functor map
-template<class Parser, class Func>
+template<class Parser, class Func, class=value<Parser>>
 static auto map(Parser parser, Func func) {
   return [parser = std::move(parser), func = std::move(func)](range in) {
     using value_type = typename std::result_of<Func(value<Parser>)>::type;
@@ -106,14 +106,14 @@ static auto map(Parser parser, Func func) {
   };
 };
 
-template<class Parser, class Func>
+template<class Parser, class Func, class=value<Parser>>
 static auto operator|=(Parser parser, Func func) {
   return map(parser, func);
 };
 
 
 // monad bind
-template<class Parser, class Func>
+template<class Parser, class Func, class=value<Parser>>
 static auto bind(Parser parser, Func func) {
   return [parser = std::move(parser), func = std::move(func)](range in) {
     using parser_type = typename std::result_of<Func(value<Parser>)>::type;
@@ -129,13 +129,13 @@ static auto bind(Parser parser, Func func) {
   };
 };
 
-template<class Parser, class Func>
+template<class Parser, class Func, class=value<Parser>>
 static auto operator>>=(Parser parser, Func func) {
   return bind(parser, func);
 };
 
 // sequence parser  
-template<class LHS, class RHS>
+template<class LHS, class RHS, class=value<LHS>, class=value<RHS>>
 static auto operator>>(LHS lhs, RHS rhs) {
   return lhs >>= [rhs = std::move(rhs)](auto) { return rhs; };
 };
@@ -207,7 +207,7 @@ static auto coproduct(LHS lhs, RHS rhs) {
 };
 
 
-template<class LHS, class RHS>
+template<class LHS, class RHS, class=value<LHS>, class=value<RHS>>
 static auto operator|(LHS lhs, RHS rhs) {
   return coproduct(std::move(lhs), std::move(rhs));
 }
@@ -225,7 +225,7 @@ static auto list(Parser parser, Separator separator) {
 };
 
 
-template<class Parser, class Separator>
+template<class Parser, class Separator, class=value<Parser>, class=value<Separator>>
 static auto operator%(Parser parser, Separator separator) {
   return list(std::move(parser), std::move(separator));
 }
@@ -312,8 +312,10 @@ static fixpoint<T, Def> fix(Def def) {
 
 // char parser  
 static result<char> _char(range in) {
-  if(!in)
+  if(!in) {
     return error(in);
+  }
+  
   return make_success(in.get(), in.next());
 };
 

@@ -4,6 +4,7 @@
 #include "variant.hpp"
 #include "symbol.hpp"
 #include "fix.hpp"
+#include "list.hpp"
 
 namespace ast {
 struct expr;
@@ -99,16 +100,37 @@ using app = App<mono>;
 
 extern const mono func, unit, boolean, integer, number, string;
 
-
-struct forall;
-struct poly: variant<mono, forall> {
-  using poly::variant::variant;
-};
-
-struct forall {
+template<class T>
+struct Forall {
   ref<var> arg;
-  poly body;
+  T body;
 };
+
+template<class T>
+struct Poly: variant<mono, Forall<T>> {
+  using Poly::variant::variant;
+
+  template<class Func>
+  friend auto map(const Poly& self, Func func) {
+    using type = typename std::result_of<Func(T)>::type;
+    using result_type = Poly<type>;
+    return match(self,
+                 [](mono self) -> result_type { return self; },
+                 [&](Forall<T> self) -> result_type {
+                   return Forall<type>{self.arg, func(self.body)};
+                 });
+  }
+
+};
+
+struct poly: fix<Poly, poly> {
+  using poly::fix::fix;
+
+  mono body() const;
+  list<ref<var>> bound() const;
+};
+
+using forall = Forall<poly>;
 
 ////////////////////////////////////////////////////////////////////////////////
 struct context;

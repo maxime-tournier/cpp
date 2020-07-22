@@ -2,6 +2,7 @@
 #define LIST_HPP
 
 #include <memory>
+#include <stdexcept>
 
 template<class T>
 struct cons;
