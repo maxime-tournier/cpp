@@ -220,8 +220,32 @@ struct context {
     return sub(p.body());
   };
 
+  list<ref<var>> quantify(list<ref<var>> vars) const {
+    return foldr(vars, list<ref<var>>{}, [&](ref<var> a, list<ref<var>> rest) {
+      if(a->depth < depth) {
+        // bound somewhere in enclosing scope
+        return rest;
+      } else {
+        // can be generalized (TODO assert it's not in locals just in case)
+        assert(a->depth == depth);
+        return a %= rest;
+      }
+    });
+  }
+  
   poly generalize(mono m) const {
-    
+    const auto foralls = quantify(m.vars());
+
+    substitution sub;
+    const auto freshes = map(foralls, [&](auto var) {
+      const auto res = fresh(var->kind);
+      sub = sub.link(var.get(), res);
+      return res;
+    });
+
+    return foldr(freshes, sub(m), [](auto var, auto poly) {
+      return forall{var, poly};
+    });
   }
 };
 

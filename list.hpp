@@ -29,6 +29,14 @@ struct cons {
     }
   }
 
+  template<class Func>
+  friend list<T> map(list<T> self, const Func& func) {
+    using type = typename std::result_of<Func(T)>::type;
+    return foldr(self, list<type>{}, [&](const T& head, list<type> tail) {
+      return func(head) %= tail;
+    });
+  }
+
   template<class X, class Func>
   friend X foldl(X x, list<T> self, const Func& func) {
     if(!self) {
