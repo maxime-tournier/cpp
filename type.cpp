@@ -32,13 +32,13 @@ bool kind::operator==(kind other) const {
     if(type() != other.type()) {
       return false;
     }
-    return match(
-        *this,
-        [&](ctor lhs) {
-          return std::tie(lhs.from, lhs.to) ==
-                 std::tie(other.get<ctor>().from, other.get<ctor>().to);
-        },
-        [](auto) { return true; });
+    
+    return match(*this,
+                 [&](ctor lhs) {
+                   return std::tie(lhs.from, lhs.to) ==
+                     std::tie(other.get<ctor>().from, other.get<ctor>().to);
+                 },
+                 [](auto) { return true; });
 }
 
 std::string kind::show() const {
@@ -298,6 +298,8 @@ ref<context> make_context() {
 }
 
 
+result<mono> infer(const context& ctx, const ast::expr& e);
+
 static result<mono> infer(const context& ctx, const ast::lit& self) {
   return pure(match(self,
                     [](long) { return integer; },
@@ -309,7 +311,7 @@ static result<mono> infer(const context& ctx, const ast::lit& self) {
 
 static result<mono> infer(const context& ctx, const ast::var& self) {
   if(auto poly = ctx.locals.find(self.name)) {
-    return pure(ctx.instantiate(poly));
+    return pure(ctx.instantiate(*poly));
   }
   
   return type_error("unbound variable: " + quote(self.name));

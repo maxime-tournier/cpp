@@ -17,6 +17,8 @@ int main(int, char**) {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
 
   auto ctx = type::make_context();
+
+  const auto history = ".slip";
   
   repl([&](const char* input) {
     return handle([&] {
@@ -25,7 +27,7 @@ int main(int, char**) {
       const auto t = type::infer(ctx, e);
       std::cout << " :: " << t << std::endl;
     });
-  });
+  }, "> ", history);
   
   return 0;
 }

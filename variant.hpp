@@ -34,9 +34,10 @@ struct variant_item {
 
   template<class Derived>
   friend std::shared_ptr<variant_base> construct(const Derived*,
-                                                 const T& value) {
-    return std::make_shared<variant_derived<T>>(I, value);
+                                                 const T* value) {
+    return std::make_shared<variant_derived<T>>(I, *value);
   }
+
 };
 
 template<class Indices, class... Ts>
@@ -53,6 +54,7 @@ struct variant_items<std::index_sequence<Is...>, Ts...>
   template<std::size_t J>
   using type =
       decltype(get_type((const variant_items*)nullptr, std::index_sequence<J>{}));
+
 };
 
 
@@ -64,7 +66,7 @@ class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
   using data_type = std::shared_ptr<variant_base>;
   data_type data;
 
-  public:
+public:
   variant(const variant&) = default;
   variant(variant&&) = default;
 
@@ -72,8 +74,10 @@ class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
   variant& operator=(variant&&) = default;
 
   template<class T,
-           class=std::enable_if_t<!std::is_base_of<variant, T>::value>>
-  variant(const T& value): data(construct(this, value)) {}
+           class=std::enable_if_t<!std::is_base_of<variant, T>::value>,
+           class U=decltype(construct((const variant*)nullptr,
+                                      (const T*)nullptr))>
+  variant(const T& value): data(construct(this, &value)) {}
 
   std::size_t type() const { return data->index; }
 
