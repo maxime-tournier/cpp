@@ -94,6 +94,8 @@ struct mono: fix<Mono, mono> {
 
   friend std::ostream& operator<<(std::ostream& out, mono self);
   struct kind kind() const;
+
+  list<ref<var>> vars() const;
 };
 
 using app = App<mono>;

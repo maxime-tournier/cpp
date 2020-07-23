@@ -71,6 +71,15 @@ struct kind mono::kind() const {
   });
 }
 
+list<ref<var>> mono::vars() const {
+  return cata(*this, [](Mono<list<ref<var>>> self) {
+    return match(self,
+                 [](ref<var> self) { return self %= list<ref<var>>{}; },
+                 [](App<list<ref<var>>> self) { return concat(self.ctor, self.arg); },
+                 [](ref<type_constant> self) { return list<ref<var>>{}; });
+  });
+}
+
 
 mono poly::body() const {
   return cata(*this, [](Poly<mono> self) {
@@ -203,12 +212,17 @@ struct context {
   }
   
   mono instantiate(poly p, struct kind kind=term) const {
-    const substitution sub = foldr(p.bound(), substitution{}, [&](ref<var> a, substitution sub) {
-      return sub.link(a.get(), fresh(kind));
-    });
+    const substitution sub =
+        foldr(p.bound(), substitution{}, [&](ref<var> a, substitution sub) {
+          return sub.link(a.get(), fresh(kind));
+        });
 
     return sub(p.body());
   };
+
+  poly generalize(mono m) const {
+    
+  }
 };
 
 ref<context> make_context() {

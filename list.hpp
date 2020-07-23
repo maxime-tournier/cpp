@@ -2,7 +2,7 @@
 #define LIST_HPP
 
 #include <memory>
-#include <stdexcept>
+// #include <stdexcept>
 
 template<class T>
 struct cons;
@@ -49,11 +49,20 @@ struct cons {
   friend iterator begin(list<T> self) { return {self}; }
   friend iterator end(list<T> self) { return {nullptr}; }
 
-  template<class What>
-  friend list<T> operator||(list<T> self, What what) {
-    if(self) return self;
-    throw std::runtime_error(what);
+  friend list<T> concat(list<T> lhs, list<T> rhs) {
+    if(lhs) {
+      return lhs->head %= concat(lhs->tail, std::move(rhs));
+    } else {
+      return rhs;
+    }
   }
+  
+  // // quick
+  // template<class What>
+  // friend list<T> operator||(list<T> self, What what) {
+  //   if(self) return self;
+  //   throw std::runtime_error(what);
+  // }
 };
 
 
