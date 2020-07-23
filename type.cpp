@@ -183,6 +183,7 @@ public:
   
 };
 
+
 ////////////////////////////////////////////////////////////////////////////////
 // inference monad
 ////////////////////////////////////////////////////////////////////////////////
@@ -220,7 +221,8 @@ struct result: either<type_error, success<T>> {
   template<class Func>
   static auto map(const result& self, const Func& func) {
     return result::either::map(self, [&](auto outer) {
-      using type = typename std::result_of<Func(typename result::either::value_type)>::type;
+      using type =
+        typename std::result_of<Func(typename result::either::value_type)>::type;
 
       return make_success(func(outer.value), outer.sub);
     });
@@ -232,6 +234,28 @@ template<class T>
 static result<T> pure(T value) { return make_success(value, {}); }
 
 
+template<class T>
+static result<success<T>> listen(result<T> self) {
+  return match(self,
+               [](success<T> self) -> result<success<T>> {
+                 return make_success(self, self.sub);
+               },
+               [](type_error error) -> result<success<T>> {
+                 return error;
+               });
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// unification
+////////////////////////////////////////////////////////////////////////////////
+static result<substitution> unify(substitution sub, mono lhs, mono rhs) {
+  return type_error("unimplemented: unification");
+};
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
 struct context {
   std::size_t depth = 0;
   hamt::map<symbol, poly> locals;
@@ -321,10 +345,27 @@ static result<mono> infer(const context& ctx, const ast::var& self) {
 static result<mono> infer(const context& ctx, const ast::abs& self) {
   const mono arg = ctx.fresh();
   
-  return infer(ctx.scope().def(self.arg.name, poly(arg)), self.body) >>= [=](mono body) {
-    return pure(arg >>= body);
-  };
+  return infer(ctx.scope().def(self.arg.name, poly(arg)),
+               self.body) >>= [=](mono body) {
+                 return pure(arg >>= body);
+               };
   
+};
+
+
+static result<mono> infer(const context& ctx, const ast::app& self) {
+  return infer(ctx, self.func) >>= [&](mono func) {
+    return listen(infer(ctx, self.arg)) >>= [&](success<mono> arg) {
+      // note: func needs to be substituted      
+      const mono ret = ctx.fresh();
+      return unify(arg.sub,
+                   arg.value >>= ret,
+                   arg.sub(func)) >>= [&](substitution sub) {
+                     // TODO update substitution
+                     return pure(sub(func));
+                   };
+    };
+  };
 };
 
 
