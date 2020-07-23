@@ -41,12 +41,35 @@ bool kind::operator==(kind other) const {
         [](auto) { return true; });
 }
 
-std::ostream& operator<<(std::ostream& out, struct kind self) {
-  match(self,
-        [&](ref<kind_constant> self) { out << self->name; },
-        [&](ctor self) { out << self.from << " -> " << self.to; });
-  return out;
+std::string kind::show() const {
+  return match(*this,
+               [&](ref<kind_constant> self) -> std::string { return self->name.repr; },
+               [&](ctor self) { return self.from.show() + " -> " + self.to.show(); });
 }
+
+struct kind_error: std::runtime_error {
+  kind_error(std::string what): std::runtime_error("kind error: " + what) { }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+mono mono::operator>>=(mono to) const {
+  return func(*this)(to);
+}
+
+mono mono::operator()(mono arg) const {
+  return match(kind(),
+               [&](ctor self) -> mono {
+                 if(!(self.from == arg.kind())) {
+                   throw kind_error("expected: " + self.from.show() + ", found: " + arg.kind().show());
+                 }
+                 
+                 return app{*this, arg};
+               },
+               [](auto) -> mono {
+                 throw kind_error("type constructor expected");
+               });
+}
+
 
 std::ostream& operator<<(std::ostream& out, mono self) {
   return out << cata(self, [](Mono<std::string> self) {
@@ -99,8 +122,8 @@ list<ref<var>> poly::bound() const {
   });
 }
 
+} // namespace type
 
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -125,8 +148,12 @@ struct type_error: std::runtime_error {
 ////////////////////////////////////////////////////////////////////////////////
 
 class substitution {
-  hamt::map<const var*, mono> table;
+  using table_type = hamt::map<const var*, mono>;
+  table_type table;
+
+  substitution(table_type table): table(table) { }
 public:
+  substitution() = default;
   
   substitution link(const var* a, mono ty) const {
     return {table.set(a, std::move(ty))};
@@ -178,8 +205,8 @@ struct result: either<type_error, success<T>> {
   
   template<class Func>
   static auto bind(const result& self, const Func& func) {
-    return result::either::bind(self, [&](auto outer) {
-      using result_type = typename std::result_of<Func(typename result::either::value_type)>::type;
+    return result::either::bind(self, [&](success<T> outer) {
+      using result_type = typename std::result_of<Func(T)>::type;
       using type = typename result_type::value_type::value_type;
       
       return match(func(outer.value),
@@ -198,9 +225,11 @@ struct result: either<type_error, success<T>> {
       return make_success(func(outer.value), outer.sub);
     });
   }
-  
 };
 
+
+template<class T>
+static result<T> pure(T value) { return make_success(value, {}); }
 
 
 struct context {
@@ -220,6 +249,8 @@ struct context {
     return sub(p.body());
   };
 
+
+  // quantify unbound variables
   list<ref<var>> quantify(list<ref<var>> vars) const {
     return foldr(vars, list<ref<var>>{}, [&](ref<var> a, list<ref<var>> rest) {
       if(a->depth < depth) {
@@ -232,11 +263,15 @@ struct context {
       }
     });
   }
-  
+
+
+  // note: m must be fully substituted
   poly generalize(mono m) const {
     const auto foralls = quantify(m.vars());
 
+    // replace quantified variables with fresh variables just in case
     substitution sub;
+    
     const auto freshes = map(foralls, [&](auto var) {
       const auto res = fresh(var->kind);
       sub = sub.link(var.get(), res);
@@ -247,40 +282,69 @@ struct context {
       return forall{var, poly};
     });
   }
+
+  context scope() const {
+    return {depth + 1, locals};
+  }
+  
+  context def(symbol name, poly p) const {
+    return {depth, locals.set(name, std::move(p))};
+  }
 };
+
 
 ref<context> make_context() {
   return std::make_shared<context>();
 }
 
 
-static mono infer(ref<context> ctx, const ast::lit& self) {
-  return match(self,
-               [](long) { return integer; },
-               [](double) { return number; },
-               [](std::string) { return string; },
-               [](bool) { return boolean; });
+static result<mono> infer(const context& ctx, const ast::lit& self) {
+  return pure(match(self,
+                    [](long) { return integer; },
+                    [](double) { return number; },
+                    [](std::string) { return string; },
+                    [](bool) { return boolean; }));
 };
 
 
-static mono infer(ref<context> ctx, const ast::var& self) {
-  if(auto poly = ctx->locals.find(self.name)) {
-    return ctx->instantiate(poly);
+static result<mono> infer(const context& ctx, const ast::var& self) {
+  if(auto poly = ctx.locals.find(self.name)) {
+    return pure(ctx.instantiate(poly));
   }
   
-  throw type_error("unbound variable: " + quote(self.name));
+  return type_error("unbound variable: " + quote(self.name));
 };
+
+
+static result<mono> infer(const context& ctx, const ast::abs& self) {
+  const mono arg = ctx.fresh();
+  
+  return infer(ctx.scope().def(self.arg.name, poly(arg)), self.body) >>= [=](mono body) {
+    return pure(arg >>= body);
+  };
+  
+};
+
 
 
 template<class T>
-static mono infer(ref<context> ctx, const T&) {
-  throw type_error("unimplemented: ");
+static result<mono> infer(const context& ctx, const T&) {
+  return type_error("unimplemented: ");
 }
 
-mono infer(ref<context> ctx, const ast::expr& e) {
+result<mono> infer(const context& ctx, const ast::expr& e) {
   return match(e, [=](const auto& self) { return infer(ctx, self); });
 }
 
+
+mono infer(ref<context> ctx, const ast::expr& e) {
+  return match(infer(*ctx, e),
+        [](success<mono> self) { return self.value; },
+        [](type_error error) -> mono {
+          throw error;
+        });
 }
 
-////////////////////////////////////////////////////////////////////////////////
+ 
+} // namespace type
+

@@ -38,6 +38,7 @@ struct app {
   expr arg;
 };
 
+// TODO recursion schemes?
 
 }
 

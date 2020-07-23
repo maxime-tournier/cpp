@@ -29,7 +29,8 @@ struct kind: variant<ref<kind_constant>, ctor> {
 
   kind operator>>=(kind other) const;
   bool operator==(kind other) const;
-  friend std::ostream& operator<<(std::ostream& out, kind self);
+
+  std::string show() const;
 };
 
 extern const kind term, row;
@@ -66,6 +67,7 @@ struct var {
 
 template<class T>
 struct App {
+  // TODO ctor w/ kind check
   T ctor;
   T arg;
 };
@@ -96,6 +98,9 @@ struct mono: fix<Mono, mono> {
   struct kind kind() const;
 
   list<ref<var>> vars() const;
+
+  mono operator>>=(mono to) const;
+  mono operator()(mono arg) const;
 };
 
 using app = App<mono>;

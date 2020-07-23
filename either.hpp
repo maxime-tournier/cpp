@@ -157,10 +157,10 @@ public:
     using result_type = typename std::result_of<Func(Right)>::type;
     
     return match(self,
-                 [](Left& left) -> result_type {
+                 [](const Left& left) -> result_type {
                    return std::move(left);
                  },
-                 [&](Right& right) -> result_type {
+                 [&](const Right& right) -> result_type {
                    return func(std::move(right));
                  });
   }
