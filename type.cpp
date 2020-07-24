@@ -89,9 +89,12 @@ std::string mono::show(repr_type repr) const {
   struct result {
     const std::string value;
     const bool flip;
-    result(std::string value, bool flip = false): value(value), flip(flip) {}
+    const bool parens;
+    result(std::string value, bool flip = false, bool parens = false):
+      value(value), flip(flip), parens(parens) {}
   };
-  
+
+  // TODO handle parens
   return cata(*this, [&](Mono<result> self) {
     return match(self,
                  [](ref<type_constant> self) -> result {
