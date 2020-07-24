@@ -37,28 +37,25 @@ class variant {
       base(index), value(value) {}
   };
 
-
   template<class T>
-  struct item {
-    template<class Derived>
-    friend std::shared_ptr<base> construct(const Derived& self,
+  struct tag {
+    friend std::shared_ptr<base> construct(const tag& self,
                                            const T* value) {
-      return std::make_shared<derived<T>>(index_of(self, value), *value);
+      return std::make_shared<derived<T>>(index(self, value), *value);
     }
 
-    template<class Derived>
-    friend constexpr std::size_t index_of(const Derived&,
-                                          const T* value) {
+    friend constexpr std::size_t index(const tag&,
+                                       const T* value) {
       return type_index<sizeof...(Ts), T, Ts...>::value;
     }
-    
   };
 
-  struct items: item<Ts>... {
+  struct tags: tag<Ts>... {
     template<class T>
-    static constexpr std::size_t index = index_of(items{}, (const T*)nullptr);
+    static constexpr std::size_t index_of() {
+      return index(tags{}, (const T*)nullptr);
+    }
   };
-  
 
   using data_type = std::shared_ptr<base>;
   data_type data;
@@ -71,17 +68,17 @@ public:
   variant& operator=(variant&&) = default;
 
   template<class T>
-  variant(const T& value): data(construct(items{}, &value)) {}
+  variant(const T& value): data(construct(tags{}, &value)) {}
 
   std::size_t type() const { return data->index; }
 
-  template<class T, std::size_t I = items::template index<T>>
+  template<class T, std::size_t I = tags::template index_of<T>()>
   const T& get() const {
     assert(data->index == I && "type error");
     return static_cast<derived<T>*>(data.get())->value;
   }
 
-  template<class T, std::size_t I = items::template index<T>>
+  template<class T, std::size_t I = tags::template index_of<T>()>
   const T* cast() const {
     if(data->index != I) {
       return nullptr;
