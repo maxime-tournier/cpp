@@ -7,22 +7,23 @@
 #include "overload.hpp"
 
 
+template<class Tag>
 struct variant_base {
   virtual ~variant_base() {}
   variant_base(std::size_t index): index(index) {}
   const std::size_t index;
 };
 
-template<class T>
-struct variant_derived: variant_base {
+template<class Tag, class T>
+struct variant_derived: variant_base<Tag> {
   const T value;
 
   variant_derived(std::size_t index, const T& value):
-      variant_base(index), value(value) {}
+    variant_base<Tag>(index), value(value) {}
 };
 
 
-template<std::size_t I, class T>
+template<class Tag, std::size_t I, class T>
 struct variant_item {
   template<class Derived>
   friend constexpr std::size_t get_index(const Derived*, const T*) {
@@ -33,20 +34,20 @@ struct variant_item {
   friend constexpr T get_type(const Derived*, std::index_sequence<I>);
 
   template<class Derived>
-  friend std::shared_ptr<variant_base> construct(const Derived*,
+  friend std::shared_ptr<variant_base<Tag>> construct(const Derived*,
                                                  const T* value) {
-    return std::make_shared<variant_derived<T>>(I, *value);
+    return std::make_shared<variant_derived<Tag, T>>(I, *value);
   }
 
 };
 
-template<class Indices, class... Ts>
+template<class Tag, class Indices, class... Ts>
 struct variant_items;
 
 
-template<std::size_t... Is, class... Ts>
-struct variant_items<std::index_sequence<Is...>, Ts...>
-    : variant_item<Is, Ts>... {
+template<class Tag, std::size_t... Is, class... Ts>
+struct variant_items<Tag, std::index_sequence<Is...>, Ts...>
+    : variant_item<Tag, Is, Ts>... {
   template<class T>
   static constexpr std::size_t index = get_index((const variant_items*)nullptr,
                                                  (const T*)(nullptr));
@@ -54,16 +55,16 @@ struct variant_items<std::index_sequence<Is...>, Ts...>
   template<std::size_t J>
   using type =
       decltype(get_type((const variant_items*)nullptr, std::index_sequence<J>{}));
-
 };
 
 
 // el-cheapo immutablo varianto
 template<class... Ts>
-class variant: variant_items<std::index_sequence_for<Ts...>, Ts...> {
+class variant: variant_items<variant<Ts...>,
+                             std::index_sequence_for<Ts...>, Ts...> {
   using indices_type = std::index_sequence_for<Ts...>;
 
-  using data_type = std::shared_ptr<variant_base>;
+  using data_type = std::shared_ptr<variant_base<variant>>;
   data_type data;
 
 public:
@@ -84,7 +85,7 @@ public:
   template<class T, std::size_t index = variant::template index<T>>
   const T& get() const {
     assert(data->index == index && "type error");
-    return static_cast<variant_derived<T>*>(data.get())->value;
+    return static_cast<variant_derived<variant, T>*>(data.get())->value;
   }
 
   template<class T, std::size_t index = variant::template index<T>>

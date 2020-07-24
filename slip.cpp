@@ -24,10 +24,13 @@ int main(int, char**) {
     return handle([&] {
       const auto s = parser::run(parser, input);
       const auto e = ast::check(s);
-      const auto t = type::infer(ctx, e);
-      std::cout << " :: " << t.show() << std::endl;
+      const auto p = type::infer(ctx, e);
+      std::cout << " :: " << p.show() << std::endl;
     });
   }, "> ", history);
+
+  using namespace type;
+  mono test = forall{{}, type::func};
   
   return 0;
 }

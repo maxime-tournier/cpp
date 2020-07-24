@@ -6,6 +6,8 @@
 #include "fix.hpp"
 #include "list.hpp"
 
+#include <map>
+
 namespace ast {
 struct expr;
 }
@@ -90,11 +92,13 @@ struct Mono: variant<ref<type_constant>, ref<var>, App<T>> {
 };
 
 
+// TODO use hamt::map instead?
+using repr_type = std::map<const var*, std::string>;
 
 struct mono: fix<Mono, mono> {
   using mono::fix::fix;
-
-  std::string show() const;
+  
+  std::string show(repr_type={}) const;
   struct kind kind() const;
 
   list<ref<var>> vars() const;
@@ -135,6 +139,8 @@ struct poly: fix<Poly, poly> {
 
   mono body() const;
   list<ref<var>> bound() const;
+
+  std::string show(repr_type repr={}) const;
 };
 
 using forall = Forall<poly>;
@@ -143,7 +149,7 @@ using forall = Forall<poly>;
 struct context;
 ref<context> make_context();
 
-mono infer(ref<context> ctx, const ast::expr&);
+poly infer(ref<context> ctx, const ast::expr&);
 
 }
 

@@ -50,8 +50,12 @@ bool kind::operator==(kind other) const {
 
 std::string kind::show() const {
   return match(*this,
-               [&](ref<kind_constant> self) -> std::string { return self->name.repr; },
-               [&](ctor self) { return self.from.show() + " -> " + self.to.show(); });
+               [&](ref<kind_constant> self) -> std::string {
+                 return self->name.repr;
+               },
+               [&](ctor self) {
+                 return self.from.show() + " -> " + self.to.show();
+               });
 }
 
 
@@ -69,7 +73,8 @@ mono mono::operator()(mono arg) const {
   return match(kind(),
                [&](ctor self) -> mono {
                  if(!(self.from == arg.kind())) {
-                   throw kind_error("expected: " + self.from.show() + ", found: " + arg.kind().show());
+                   throw kind_error("expected: " + self.from.show() +
+                                    ", found: " + arg.kind().show());
                  }
                  
                  return app{*this, arg};
@@ -80,13 +85,20 @@ mono mono::operator()(mono arg) const {
 }
 
 
-std::string mono::show() const {
-  return cata(*this, [](Mono<std::string> self) {
+std::string mono::show(repr_type repr) const {
+  return cata(*this, [&](Mono<std::string> self) {
     return match(self,
                  [](ref<type_constant> self) -> std::string {
                    return self->name.repr;
                  },
-                 [](ref<var> self) -> std::string { return "<var>"; },
+                 [&](ref<var> self) -> std::string {
+                   const auto it = repr.find(self.get());
+                   if(it == repr.end()) {
+                     return "<var>";
+                   }
+
+                   return it->second;
+                 },
                  [](App<std::string> self) {
                    return self.ctor + " " + self.arg;
                  });
@@ -109,12 +121,15 @@ list<ref<var>> mono::vars() const {
   return cata(*this, [](Mono<list<ref<var>>> self) {
     return match(self,
                  [](ref<var> self) { return self %= list<ref<var>>{}; },
-                 [](App<list<ref<var>>> self) { return concat(self.ctor, self.arg); },
+                 [](App<list<ref<var>>> self) {
+                   return concat(self.ctor, self.arg);
+                 },
                  [](ref<type_constant> self) { return list<ref<var>>{}; });
   });
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
 mono poly::body() const {
   return cata(*this, [](Poly<mono> self) {
     return match(self,
@@ -128,10 +143,27 @@ mono poly::body() const {
 list<ref<var>> poly::bound() const {
   return cata(*this, [](Poly<list<ref<var>>> self) {
     return match(self,
-                 [](Forall<list<ref<var>>> self) { return self.arg %= self.body; }, 
+                 [](Forall<list<ref<var>>> self) {
+                   return self.arg %= self.body;
+                 }, 
                  [](mono self) { return list<ref<var>>{}; });
   });
 }
+
+static std::string varname(std::size_t index) {
+  std::string res;
+  res += 'a' + index;
+  return res;
+}
+
+std::string poly::show(repr_type repr) const {
+  for(auto var: bound()) {
+    repr.emplace(var.get(), varname(repr.size()));
+  }
+
+  return body().show(std::move(repr));
+}
+
 
 } // namespace type
 
@@ -343,7 +375,7 @@ struct context {
         return rest;
       } else {
         // can be generalized (TODO assert it's not in locals just in case)
-        assert(a->depth == depth);
+        // assert(a->depth == depth);
         return a %= rest;
       }
     });
@@ -351,20 +383,20 @@ struct context {
 
 
   // note: m must be fully substituted
-  poly generalize(mono m) const {
-    const auto foralls = quantify(m.vars());
+  poly generalize(mono ty) const {
+    const auto foralls = quantify(ty.vars());
 
     // replace quantified variables with fresh variables just in case
     substitution sub;
     
-    const auto freshes = map(foralls, [&](auto var) {
-      const auto res = fresh(var->kind);
-      sub = sub.link(var.get(), res);
+    const auto freshes = map(foralls, [&](ref<var> a) {
+      const auto res = fresh(a->kind);
+      sub = sub.link(a.get(), res);
       return res;
     });
 
-    return foldr(freshes, sub(m), [](auto var, auto poly) {
-      return forall{var, poly};
+    return foldr(freshes, poly(sub(ty)), [](ref<var> a, poly p) -> poly {
+      return forall{a, p};
     });
   }
 
@@ -439,12 +471,14 @@ result<mono> infer(const context& ctx, const ast::expr& e) {
 }
 
 
-mono infer(ref<context> ctx, const ast::expr& e) {
-  return match(infer(*ctx, e),
-        [](success<mono> self) { return self.value; },
-        [](type_error error) -> mono {
-          throw error;
-        });
+poly infer(ref<context> ctx, const ast::expr& e) {
+  const mono ty = match(infer(*ctx, e),
+                        [](success<mono> self) { return self.value; },
+                        [](type_error error) -> mono {
+                          throw error;
+                        });
+  // return ty;
+  return ctx->generalize(ty);
 }
 
  
