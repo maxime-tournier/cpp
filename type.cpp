@@ -8,7 +8,7 @@ namespace type {
 const kind term = kind_constant::make("*");
 const kind row = kind_constant::make("@");
 
-const mono func = type_constant::make("->", term >>= term >>= term);
+const mono func = type_constant::make("->", term >>= term >>= term, true);
 
 const mono unit = type_constant::make("()", term);
 const mono boolean = type_constant::make("bool", term);
@@ -27,8 +27,8 @@ ref<kind_constant> kind_constant::make(symbol name) {
   return std::make_shared<const kind_constant>(name);
 }
 
-ref<type_constant> type_constant::make(symbol name, struct kind kind) {
-  return std::make_shared<const type_constant>(name, kind);
+ref<type_constant> type_constant::make(symbol name, struct kind kind, bool flip) {
+  return std::make_shared<const type_constant>(name, kind, flip);
 }
 
 kind kind::operator>>=(kind other) const {
@@ -86,23 +86,33 @@ mono mono::operator()(mono arg) const {
 
 
 std::string mono::show(repr_type repr) const {
-  return cata(*this, [&](Mono<std::string> self) {
+  struct result {
+    const std::string value;
+    const bool flip;
+    result(std::string value, bool flip = false): value(value), flip(flip) {}
+  };
+  
+  return cata(*this, [&](Mono<result> self) {
     return match(self,
-                 [](ref<type_constant> self) -> std::string {
-                   return self->name.repr;
+                 [](ref<type_constant> self) -> result {
+                   return {self->name.repr, self->flip};
                  },
-                 [&](ref<var> self) -> std::string {
+                 [&](ref<var> self) -> result {
                    const auto it = repr.find(self.get());
                    if(it == repr.end()) {
-                     return "<var>";
+                     return std::string("<var>");
                    }
 
                    return it->second;
                  },
-                 [](App<std::string> self) {
-                   return self.ctor + " " + self.arg;
+                 [](App<result> self) -> result {
+                   if(self.ctor.flip) {
+                     return self.arg.value + " " + self.ctor.value;
+                   } else {
+                     return self.ctor.value + " " + self.arg.value;
+                   }
                  });
-  });
+  }).value;
 }
 
 

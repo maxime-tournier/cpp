@@ -51,10 +51,11 @@ struct ctor {
 struct type_constant {
   symbol name;
   struct kind kind;
+  bool flip;
+  type_constant(symbol name, struct kind kind, bool flip):
+      name(name), kind(kind), flip(flip) {}
 
-  type_constant(symbol name, struct kind kind): name(name), kind(kind) { }
-
-  static ref<type_constant> make(symbol name, struct kind kind);
+  static ref<type_constant> make(symbol name, struct kind kind, bool flip=false);
 };
 
 
