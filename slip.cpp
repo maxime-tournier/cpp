@@ -29,8 +29,5 @@ int main(int, char**) {
     });
   }, "> ", history);
 
-  using namespace type;
-  mono test = forall{{}, type::func};
-  
   return 0;
 }

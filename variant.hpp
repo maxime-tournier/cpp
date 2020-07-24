@@ -7,64 +7,60 @@
 #include "overload.hpp"
 
 
-template<class Tag>
-struct variant_base {
-  virtual ~variant_base() {}
-  variant_base(std::size_t index): index(index) {}
-  const std::size_t index;
+template<std::size_t N, class T, class ... Ts>
+struct type_index;
+
+template<std::size_t N, class T, class ... Ts>
+struct type_index<N, T, T, Ts...> {
+  static_assert(1 + sizeof...(Ts) <= N, "size error");
+  static constexpr std::size_t value = N - (sizeof...(Ts) + 1);
 };
 
-template<class Tag, class T>
-struct variant_derived: variant_base<Tag> {
-  const T value;
-
-  variant_derived(std::size_t index, const T& value):
-    variant_base<Tag>(index), value(value) {}
-};
-
-
-template<class Tag, std::size_t I, class T>
-struct variant_item {
-  template<class Derived>
-  friend constexpr std::size_t get_index(const Derived*, const T*) {
-    return I;
-  }
-
-  template<class Derived>
-  friend constexpr T get_type(const Derived*, std::index_sequence<I>);
-
-  template<class Derived>
-  friend std::shared_ptr<variant_base<Tag>> construct(const Derived*,
-                                                 const T* value) {
-    return std::make_shared<variant_derived<Tag, T>>(I, *value);
-  }
-
-};
-
-template<class Tag, class Indices, class... Ts>
-struct variant_items;
-
-
-template<class Tag, std::size_t... Is, class... Ts>
-struct variant_items<Tag, std::index_sequence<Is...>, Ts...>
-    : variant_item<Tag, Is, Ts>... {
-  template<class T>
-  static constexpr std::size_t index = get_index((const variant_items*)nullptr,
-                                                 (const T*)(nullptr));
-
-  template<std::size_t J>
-  using type =
-      decltype(get_type((const variant_items*)nullptr, std::index_sequence<J>{}));
-};
+template<std::size_t N, class T, class X, class ... Xs>
+struct type_index<N, T, X, Xs...>: type_index<N, T, Xs...> { };
 
 
 // el-cheapo immutablo varianto
 template<class... Ts>
-class variant: variant_items<variant<Ts...>,
-                             std::index_sequence_for<Ts...>, Ts...> {
-  using indices_type = std::index_sequence_for<Ts...>;
+class variant {
+  struct base {
+    virtual ~base() {}
+    base(std::size_t index): index(index) {}
+    const std::size_t index;
+  };
 
-  using data_type = std::shared_ptr<variant_base<variant>>;
+  template<class T>
+  struct derived: base {
+    const T value;
+    
+    derived(std::size_t index, const T& value):
+      base(index), value(value) {}
+  };
+
+
+  template<class T>
+  struct item {
+    template<class Derived>
+    friend std::shared_ptr<base> construct(const Derived& self,
+                                           const T* value) {
+      return std::make_shared<derived<T>>(index_of(self, value), *value);
+    }
+
+    template<class Derived>
+    friend constexpr std::size_t index_of(const Derived&,
+                                          const T* value) {
+      return type_index<sizeof...(Ts), T, Ts...>::value;
+    }
+    
+  };
+
+  struct items: item<Ts>... {
+    template<class T>
+    static constexpr std::size_t index = index_of(items{}, (const T*)nullptr);
+  };
+  
+
+  using data_type = std::shared_ptr<base>;
   data_type data;
 
 public:
@@ -74,23 +70,20 @@ public:
   variant& operator=(const variant&) = default;
   variant& operator=(variant&&) = default;
 
-  template<class T,
-           class=std::enable_if_t<!std::is_base_of<variant, T>::value>,
-           class U=decltype(construct((const variant*)nullptr,
-                                      (const T*)nullptr))>
-  variant(const T& value): data(construct(this, &value)) {}
+  template<class T>
+  variant(const T& value): data(construct(items{}, &value)) {}
 
   std::size_t type() const { return data->index; }
 
-  template<class T, std::size_t index = variant::template index<T>>
+  template<class T, std::size_t I = items::template index<T>>
   const T& get() const {
-    assert(data->index == index && "type error");
-    return static_cast<variant_derived<variant, T>*>(data.get())->value;
+    assert(data->index == I && "type error");
+    return static_cast<derived<T>*>(data.get())->value;
   }
 
-  template<class T, std::size_t index = variant::template index<T>>
+  template<class T, std::size_t I = items::template index<T>>
   const T* cast() const {
-    if(data->index != index) {
+    if(data->index != I) {
       return nullptr;
     }
     return &get<T>();
