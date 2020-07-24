@@ -16,6 +16,13 @@ const mono integer = type_constant::make("int", term);
 const mono number = type_constant::make("num", term);
 const mono string = type_constant::make("str", term);
 
+struct type_error: std::runtime_error {
+  type_error(std::string what): std::runtime_error("type error: " + what) { }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// kinds
+////////////////////////////////////////////////////////////////////////////////
 ref<kind_constant> kind_constant::make(symbol name) {
   return std::make_shared<const kind_constant>(name);
 }
@@ -47,6 +54,8 @@ std::string kind::show() const {
                [&](ctor self) { return self.from.show() + " -> " + self.to.show(); });
 }
 
+
+
 struct kind_error: std::runtime_error {
   kind_error(std::string what): std::runtime_error("kind error: " + what) { }
 };
@@ -71,10 +80,12 @@ mono mono::operator()(mono arg) const {
 }
 
 
-std::ostream& operator<<(std::ostream& out, mono self) {
-  return out << cata(self, [](Mono<std::string> self) {
+std::string mono::show() const {
+  return cata(*this, [](Mono<std::string> self) {
     return match(self,
-                 [](ref<type_constant> self) -> std::string { return self->name.repr; },
+                 [](ref<type_constant> self) -> std::string {
+                   return self->name.repr;
+                 },
                  [](ref<var> self) -> std::string { return "<var>"; },
                  [](App<std::string> self) {
                    return self.ctor + " " + self.arg;
@@ -139,9 +150,6 @@ static std::string quote(const T& self) {
   return ss.str();
 }
 
-struct type_error: std::runtime_error {
-  type_error(std::string what): std::runtime_error("type error: " + what) { }
-};
 
 ////////////////////////////////////////////////////////////////////////////////
 // substitutions
@@ -235,7 +243,7 @@ static result<T> pure(T value) { return make_success(value, {}); }
 
 
 template<class T>
-static result<success<T>> listen(result<T> self) {
+static result<success<T>> get_sub(result<T> self) {
   return match(self,
                [](success<T> self) -> result<success<T>> {
                  return make_success(self, self.sub);
@@ -245,11 +253,64 @@ static result<success<T>> listen(result<T> self) {
                });
 }
 
+template<class T>
+static result<T> set_sub(T value, substitution sub) {
+  return make_success(value, sub);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // unification
 ////////////////////////////////////////////////////////////////////////////////
-static result<substitution> unify(substitution sub, mono lhs, mono rhs) {
-  return type_error("unimplemented: unification");
+
+// note: lhs/rhs must be fully substituted
+static result<substitution> unify(const context& ctx, mono lhs, mono rhs) {
+  assert(lhs.kind() == rhs.kind());
+
+  const auto lapp = lhs.cast<app>();
+  const auto rapp = rhs.cast<app>();
+  
+  // both applications
+  if(lapp && rapp) {
+    return unify(ctx, lapp->ctor, rapp->ctor) >>= [&](substitution out) {
+      return unify(ctx, out(lapp->arg), out(rapp->arg)) >>= [&](substitution in) {
+        return pure(out << in);
+      };
+    };
+  }
+
+  const auto lvar = lhs.cast<ref<var>>();
+  const auto rvar = rhs.cast<ref<var>>();  
+  
+  // both variables
+  if(lvar && rvar) {
+    const auto target = std::make_shared<const var>(std::min((*lvar)->depth,
+                                                             (*rvar)->depth),
+                                                    (*lvar)->kind);
+    substitution sub;
+    sub = sub.link(lvar->get(), target);
+    sub = sub.link(rvar->get(), target);      
+    
+    return pure(sub);
+  } else if(lvar) {
+    // TODO upgrade?
+    return pure(substitution().link(lvar->get(), rhs));
+  } else if(rvar) {
+    // TODO upgrade?    
+    return pure(substitution().link(rvar->get(), lhs));
+  }
+  
+  const auto lcst = lhs.cast<ref<type_constant>>();
+  const auto rcst = rhs.cast<ref<type_constant>>();
+
+  // both constants
+  if(lcst && rcst) {
+    if(*lcst == *rcst) {
+      return pure(substitution{});
+    }
+  }
+
+  return type_error("cannot unify: " + quote(lhs.show()) +
+                    " with: " + quote(rhs.show()));
 };
 
 
@@ -349,20 +410,18 @@ static result<mono> infer(const context& ctx, const ast::abs& self) {
                self.body) >>= [=](mono body) {
                  return pure(arg >>= body);
                };
-  
 };
 
 
 static result<mono> infer(const context& ctx, const ast::app& self) {
   return infer(ctx, self.func) >>= [&](mono func) {
-    return listen(infer(ctx, self.arg)) >>= [&](success<mono> arg) {
-      // note: func needs to be substituted      
+    return get_sub(infer(ctx, self.arg)) >>= [&](success<mono> arg) {
+      // note: func needs to be substituted after arg has been inferred  
       const mono ret = ctx.fresh();
-      return unify(arg.sub,
+      return unify(ctx,
                    arg.value >>= ret,
                    arg.sub(func)) >>= [&](substitution sub) {
-                     // TODO update substitution
-                     return pure(sub(func));
+                     return set_sub(sub(ret), sub);
                    };
     };
   };

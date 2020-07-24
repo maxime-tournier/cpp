@@ -94,7 +94,7 @@ struct Mono: variant<ref<type_constant>, ref<var>, App<T>> {
 struct mono: fix<Mono, mono> {
   using mono::fix::fix;
 
-  friend std::ostream& operator<<(std::ostream& out, mono self);
+  std::string show() const;
   struct kind kind() const;
 
   list<ref<var>> vars() const;

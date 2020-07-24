@@ -25,7 +25,7 @@ int main(int, char**) {
       const auto s = parser::run(parser, input);
       const auto e = ast::check(s);
       const auto t = type::infer(ctx, e);
-      std::cout << " :: " << t << std::endl;
+      std::cout << " :: " << t.show() << std::endl;
     });
   }, "> ", history);
   
