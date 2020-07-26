@@ -169,12 +169,16 @@ static std::string varname(std::size_t index) {
   return res;
 }
 
-std::string poly::show(repr_type repr) const {
-  for(auto var: bound()) {
+static repr_type label(list<ref<var>> vars, repr_type repr={}) {
+  for(auto var: vars) {
     repr.emplace(var.get(), varname(repr.size()));
   }
+  
+  return repr;
+}
 
-  return body().show(std::move(repr));
+std::string poly::show(repr_type repr) const {
+  return body().show(label(bound()));
 }
 
 
@@ -308,7 +312,8 @@ static result<T> set_sub(T value, substitution sub) {
 ////////////////////////////////////////////////////////////////////////////////
 
 // note: lhs/rhs must be fully substituted
-static result<substitution> unify(const context& ctx, mono lhs, mono rhs) {
+static result<substitution> unify(const context& ctx,
+                                  mono lhs, mono rhs) {
   assert(lhs.kind() == rhs.kind());
 
   const auto lapp = lhs.cast<app>();
@@ -458,16 +463,31 @@ static result<mono> infer(const context& ctx, const ast::abs& self) {
 };
 
 
+static const bool debug = false;
+
 static result<mono> infer(const context& ctx, const ast::app& self) {
   return infer(ctx, self.func) >>= [&](mono func) {
     return get_sub(infer(ctx, self.arg)) >>= [&](success<mono> arg) {
       // note: func needs to be substituted after arg has been inferred  
       const mono ret = ctx.fresh();
-      return unify(ctx,
-                   arg.value >>= ret,
-                   arg.sub(func)) >>= [&](substitution sub) {
-                     return set_sub(sub(ret), sub);
-                   };
+
+      const mono lhs = arg.value >>= ret;
+      const mono rhs = arg.sub(func);
+
+      if(debug) {
+        static repr_type repr;
+        
+        repr = label(lhs.vars(), std::move(repr));
+        repr = label(rhs.vars(), std::move(repr));
+        
+        std::clog << "unifying: " << lhs.show(repr)
+                  << " with: " << rhs.show(repr)
+                  << std::endl;
+      }
+      
+      return unify(ctx, lhs, rhs) >>= [&](substitution sub) {
+        return set_sub(sub(ret), sub);
+      };
     };
   };
 };
