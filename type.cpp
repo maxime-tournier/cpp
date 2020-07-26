@@ -451,10 +451,10 @@ static result<mono> infer(const context& ctx, const ast::var& self) {
 static result<mono> infer(const context& ctx, const ast::abs& self) {
   const mono arg = ctx.fresh();
   
-  return infer(ctx.scope().def(self.arg.name, poly(arg)),
-               self.body) >>= [=](mono body) {
-                 return pure(arg >>= body);
-               };
+  return get_sub(infer(ctx.scope().def(self.arg.name, poly(arg)),
+                       self.body)) >>= [=](success<mono> body) {
+                         return pure(body.sub(arg) >>= body.value);
+                       };
 };
 
 
