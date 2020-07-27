@@ -305,10 +305,13 @@ template<class T>
 using monad = std::function<result<T>(context& ctx, substitution& sub)>;
 
 template<class M>
-using value = typename std::result_of<M(context& ctx, substitution&)>::type::value_type;
+using value = typename std::result_of<M(context& ctx,
+                                        substitution&)>::type::value_type;
 
 template<class T>
-static auto pure(T value) { return [value](context& ctx, substitution&) -> result<T> { return value; }; }
+static auto pure(T value) {
+  return [value](context& ctx, substitution&) -> result<T> { return value; };
+}
 
 template<class MA, class Func, class A=value<MA>>
 static auto bind(MA self, Func func) {
@@ -467,9 +470,10 @@ static monad<mono> infer(ast::var self) {
 
 static monad<mono> infer(ast::abs self) {
   return fresh() >>= [=](mono arg) {
-    return scope((def(self.arg.name, poly(arg)) >> infer(self.body)) >>= [=](mono body) {
-      return substitute(arg >>= body);
-    });
+    return scope((def(self.arg.name, poly(arg)) >> infer(self.body))
+                 >>= [=](mono body) {
+                   return substitute(arg >>= body);
+                 });
   };
   
 };
