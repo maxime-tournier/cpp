@@ -42,7 +42,9 @@ bool kind::operator==(kind other) const {
                    return std::tie(lhs.from, lhs.to) ==
                      std::tie(other.get<ctor>().from, other.get<ctor>().to);
                  },
-                 [](auto) { return true; });
+                 [&](kind_constant lhs) {
+                   return lhs == other.get<kind_constant>();
+                 });
 }
 
 std::string kind::show() const {
@@ -160,15 +162,20 @@ list<var> poly::bound() const {
   });
 }
 
-static std::string varname(std::size_t index) {
+static std::string varname(std::size_t index, kind k) {
   std::string res;
   res += 'a' + index;
+
+  if(k == row) {
+    res += "...";
+  }
+  
   return res;
 }
 
 static repr_type label(list<var> vars, repr_type repr={}) {
   for(auto var: vars) {
-    repr.emplace(var, varname(repr.size()));
+    repr.emplace(var, varname(repr.size(), var->kind));
   }
   
   return repr;
@@ -241,10 +248,10 @@ struct context {
     return var(depth, kind);
   }
   
-  mono instantiate(poly p, struct kind kind=term) const {
+  mono instantiate(poly p) const {
     const substitution sub =
         foldr(p.bound(), substitution{}, [&](var a, substitution sub) {
-          return sub.link(a, fresh(kind));
+          return sub.link(a, fresh(a->kind));
         });
 
     return sub(p.body());
@@ -402,7 +409,7 @@ static monad<unit> unify(mono lhs, mono rhs);
 
 static monad<unit> unify_terms(mono lhs, mono rhs);
 static monad<unit> unify_rows(mono lhs, mono rhs);
-
+static monad<unit> unify_vars(mono lhs, mono rhs);
 
 static monad<unit> unify_rows(mono lhs, mono rhs) {
     return fail<unit>("unimplemented: row unification");
@@ -421,27 +428,16 @@ static monad<unit> unify(mono lhs, mono rhs) {
   return unify_terms(lhs, rhs);
 }
 
-static monad<unit> unify_terms(mono lhs, mono rhs) {
-  const auto lapp = lhs.cast<app>();
-  const auto rapp = rhs.cast<app>();
+static monad<unit> unify_vars(mono lhs, mono rhs) {
+  assert(lhs.kind() == rhs.kind());
   
-  // both applications
-  if(lapp && rapp) {
-    return unify(lapp->ctor, rapp->ctor) >>
-      (substitute(lapp->arg) >>= [=](mono larg) {
-        return substitute(rapp->arg) >>= [=](mono rarg) {
-          return unify(larg, rarg);
-        };
-      });
-  }
-
   const auto lvar = lhs.cast<var>();
   const auto rvar = rhs.cast<var>();  
   
   // both variables
   if(lvar && rvar) {
     const var target(std::min((*lvar)->depth,
-                              (*rvar)->depth), term);
+                              (*rvar)->depth), lhs.kind());
     // TODO create target *inside* monad?
     return link(*lvar, target) >> link(*rvar, target);
   } else if(lvar) {
@@ -452,6 +448,25 @@ static monad<unit> unify_terms(mono lhs, mono rhs) {
     return link(*rvar, lhs);    
   }
   
+  return fail<unit>("cannot unify types " + quote(lhs.show()) +
+                    " and " + quote(rhs.show()));  
+}
+
+
+static monad<unit> unify_terms(mono lhs, mono rhs) {
+  const auto lapp = lhs.cast<app>();
+  const auto rapp = rhs.cast<app>();
+  
+  // both applications
+  if(lapp && rapp) {
+    return unify(lapp->ctor, rapp->ctor) >>
+      (substitute(lhs.get<app>().arg) >>= [=](mono larg) {
+        return substitute(rhs.get<app>().arg) >>= [=](mono rarg) {
+          return unify(larg, rarg);
+        };
+      });
+  }
+
   const auto lcst = lhs.cast<type_constant>();
   const auto rcst = rhs.cast<type_constant>();
 
@@ -459,11 +474,11 @@ static monad<unit> unify_terms(mono lhs, mono rhs) {
   if(lcst && rcst) {
     if(*lcst == *rcst) {
       return pure(unit{});
-    }
+    } 
   }
-
-  return fail<unit>("cannot unify types " + quote(lhs.show()) +
-                    " and " + quote(rhs.show()));
+  
+  // variables
+  return unify_vars(lhs, rhs);
 };
 
 
@@ -499,7 +514,8 @@ static monad<mono> infer(ast::abs self) {
 };
 
 
-static const bool debug = false;
+static const bool debug = std::getenv("SLIP_DEBUG");
+
 static auto print(mono lhs, mono rhs) {
   static repr_type repr;
             
