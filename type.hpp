@@ -117,6 +117,7 @@ struct mono: fix<Mono, mono> {
 using app = App<mono>;
 
 extern const mono func, boolean, integer, number, string;
+extern const mono record;
 
 template<class T>
 struct Forall {

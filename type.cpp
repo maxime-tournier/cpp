@@ -18,6 +18,8 @@ const mono integer = type_constant("int");
 const mono number = type_constant("num");
 const mono string = type_constant("str");
 
+const mono record = type_constant("record", row >>= term);
+
 struct type_error: std::runtime_error {
   type_error(std::string what): std::runtime_error("type error: " + what) { }
 };
@@ -396,11 +398,30 @@ static auto instantiate(poly p) {
 ////////////////////////////////////////////////////////////////////////////////
 // unification
 ////////////////////////////////////////////////////////////////////////////////
+static monad<unit> unify(mono lhs, mono rhs);
+
+static monad<unit> unify_terms(mono lhs, mono rhs);
+static monad<unit> unify_rows(mono lhs, mono rhs);
+
+
+static monad<unit> unify_rows(mono lhs, mono rhs) {
+    return fail<unit>("unimplemented: row unification");
+}
+
 
 // note: lhs/rhs must be fully substituted
 static monad<unit> unify(mono lhs, mono rhs) {
   assert(lhs.kind() == rhs.kind());
 
+  const auto kind = lhs.kind();
+  if(kind == row) {
+    return unify_rows(lhs, rhs);
+  }
+
+  return unify_terms(lhs, rhs);
+}
+
+static monad<unit> unify_terms(mono lhs, mono rhs) {
   const auto lapp = lhs.cast<app>();
   const auto rapp = rhs.cast<app>();
   
@@ -419,9 +440,8 @@ static monad<unit> unify(mono lhs, mono rhs) {
   
   // both variables
   if(lvar && rvar) {
-    const auto target = var(std::min((*lvar)->depth,
-                                     (*rvar)->depth),
-                            (*lvar)->kind);
+    const var target(std::min((*lvar)->depth,
+                              (*rvar)->depth), term);
     // TODO create target *inside* monad?
     return link(*lvar, target) >> link(*rvar, target);
   } else if(lvar) {
@@ -512,6 +532,41 @@ static monad<mono> infer(ast::app self) {
   };
 };
 
+
+// row extension type constructor
+static mono ext(symbol name) {
+  static std::map<symbol, type_constant> table;
+  
+  const auto it = table.find(name);
+  if(it != table.end()) return it->second;
+
+  type_constant result(name, term >>= row >>= row);
+
+  // cache
+  table.emplace(name, result);
+  
+  return result;  
+}
+
+
+// attribute projection type: forall a.rho.{name: a; rho} -> a
+static poly attr(symbol name) {
+  const var a(0ul, term), rho(0ul, row);
+  const mono body = record(ext(name)(a)(rho)) >>= a;
+  
+  return forall{a, forall{rho, body}};
+};
+
+
+static monad<mono> infer(ast::attr self) {
+  return infer(self.arg) >>= [=](mono arg) {
+    return fresh() >>= [=](mono res) {
+      return instantiate(attr(self.name)) >>= [=](mono proj) {
+        return unify(proj, arg >>= res) >> substitute(res);
+      };
+    };
+  };
+};
 
 template<class T>
 static monad<mono> infer(T) {
