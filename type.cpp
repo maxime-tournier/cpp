@@ -202,6 +202,7 @@ static std::string quote(const T& self) {
 }
 
 
+
 ////////////////////////////////////////////////////////////////////////////////
 // substitutions
 ////////////////////////////////////////////////////////////////////////////////
@@ -231,144 +232,12 @@ public:
     });
   }
 
-  // composition
-  friend substitution operator<<(substitution lhs, substitution rhs) {
-    rhs.table.iter([&](auto var, auto mono) {
-      lhs.table = std::move(lhs.table).set(var, std::move(mono));
-    });
-    
-    return {std::move(lhs.table)};
-  }
-  
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// inference monad
-////////////////////////////////////////////////////////////////////////////////
+// context
 
-template<class T>
-using result = either<type_error, T>;
-
-template<class T>
-using monad = std::function<result<T>(substitution& sub)>;
-
-template<class M>
-using value = typename std::result_of<M(substitution&)>::type::value_type;
-
-template<class T>
-static auto pure(T value) { return [value](substitution&) -> result<T> { return value; }; }
-
-template<class MA, class Func, class A=value<MA>>
-static auto bind(MA self, Func func) {
-  return [self, func](substitution& sub) {
-    return self(sub) >>= [&](const A& value) {
-      return func(value)(sub);
-    };
-  };
-}
-
-template<class MA, class Func, class A=value<MA>>
-static auto operator>>=(MA self, Func func) {
-  return bind(self, func);
-}
-
-template<class MA, class MB, class A=value<MA>, class B=value<MB>>
-static auto operator>>(MA lhs, MB rhs) {
-  return lhs >>= [rhs](auto&) { return rhs; };
-}
-
-
-template<class T, class Func>
-static auto map(result<T> self, Func func) {
-  return [self, func](substitution& sub) {
-    return self(sub) |= func;
-  };
-}
-
-template<class T, class Func>
-static auto operator|=(result<T> self, Func func) {
-  return map(self, func);
-}
-
-static auto link(const var* from, mono to) {
-  return [=](substitution& sub) -> result<unit> {
-    sub = sub.link(from, to);
-    return unit{};
-  };
-}
-
-static auto substitute(mono ty) {
-  return [=](substitution& sub) -> result<mono> {
-    return sub(ty);
-  };
-}
-
-
-template<class T>
-static auto fail(std::string what) {
-  return [what](substitution&) -> result<T> {
-    return type_error(what);
-  };
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// unification
-////////////////////////////////////////////////////////////////////////////////
-
-// note: lhs/rhs must be fully substituted
-static monad<unit> unify(mono lhs, mono rhs) {
-  assert(lhs.kind() == rhs.kind());
-
-  const auto lapp = lhs.cast<app>();
-  const auto rapp = rhs.cast<app>();
-  
-  // both applications
-  if(lapp && rapp) {
-    return unify(lapp->ctor, rapp->ctor) >>
-      (substitute(lapp->arg) >>= [=](mono larg) {
-        return substitute(rapp->arg) >>= [=](mono rarg) {
-          return unify(larg, rarg);
-        };
-      });
-  }
-
-  const auto lvar = lhs.cast<ref<var>>();
-  const auto rvar = rhs.cast<ref<var>>();  
-  
-  // both variables
-  if(lvar && rvar) {
-    const auto target = std::make_shared<const var>(std::min((*lvar)->depth,
-                                                             (*rvar)->depth),
-                                                    (*lvar)->kind);
-    // TODO create target *inside* monad?
-    return link(lvar->get(), target) >> link(rvar->get(), target);
-  } else if(lvar) {
-    // TODO upgrade?    
-    return link(lvar->get(), rhs);
-  } else if(rvar) {
-    // TODO upgrade?
-    return link(rvar->get(), lhs);    
-  }
-  
-  const auto lcst = lhs.cast<ref<type_constant>>();
-  const auto rcst = rhs.cast<ref<type_constant>>();
-
-  // both constants
-  if(lcst && rcst) {
-    if(*lcst == *rcst) {
-      return pure(unit{});
-    }
-  }
-
-  return fail<unit>("cannot unify: " + quote(lhs.show()) +
-                    " with: " + quote(rhs.show()));
-};
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////
 struct context {
   std::size_t depth = 0;
   hamt::map<symbol, poly> locals;
@@ -424,20 +293,170 @@ struct context {
     return {depth + 1, locals};
   }
   
-  context def(symbol name, poly p) const {
-    return {depth, locals.set(name, std::move(p))};
+  void def(symbol name, poly p) {
+    locals = locals.set(name, std::move(p));
   }
 };
 
 
-ref<context> make_context() {
-  return std::make_shared<context>();
-}
+
 
 ////////////////////////////////////////////////////////////////////////////////
-monad<mono> infer(context ctx, ast::expr e);
+// inference monad
+////////////////////////////////////////////////////////////////////////////////
 
-static monad<mono> infer(context ctx, ast::lit self) {
+template<class T>
+using result = either<type_error, T>;
+
+template<class T>
+using monad = std::function<result<T>(context& ctx, substitution& sub)>;
+
+template<class M>
+using value = typename std::result_of<M(context& ctx, substitution&)>::type::value_type;
+
+template<class T>
+static auto pure(T value) { return [value](context& ctx, substitution&) -> result<T> { return value; }; }
+
+template<class MA, class Func, class A=value<MA>>
+static auto bind(MA self, Func func) {
+  return [self, func](context& ctx, substitution& sub) {
+    return self(ctx, sub) >>= [&](const A& value) {
+      return func(value)(ctx, sub);
+    };
+  };
+}
+
+template<class MA, class Func, class A=value<MA>>
+static auto operator>>=(MA self, Func func) {
+  return bind(self, func);
+}
+
+template<class MA, class MB, class A=value<MA>, class B=value<MB>>
+static auto operator>>(MA lhs, MB rhs) {
+  return lhs >>= [rhs](auto&) { return rhs; };
+}
+
+
+static auto link(const var* from, mono to) {
+  return [=](context& ctx, substitution& sub) -> result<unit> {
+    sub = sub.link(from, to);
+    return unit{};
+  };
+}
+
+static auto substitute(mono ty) {
+  return [=](context& ctx, substitution& sub) -> result<mono> {
+    return sub(ty);
+  };
+}
+
+
+template<class T>
+static auto fail(std::string what) {
+  return [what](context& ctx, substitution&) -> result<T> {
+    return type_error(what);
+  };
+}
+
+template<class M>
+static auto scope(M m) {
+  return [m](context& ctx, substitution& sub) {
+    auto scope = ctx.scope();
+    return m(scope, sub);
+  };
+}
+
+static auto def(symbol name, poly p) {
+  return [name, p](context& ctx, substitution& sub) -> result<unit> {
+    ctx.def(name, p);
+    return unit{};
+  };
+};
+
+
+static auto fresh(kind k=term) {
+  return [k](context& ctx, substitution& sub) -> result<ref<var>> {
+    return ctx.fresh(k);
+  };
+}
+
+
+static auto find(symbol name) {
+  return [name](context& ctx, substitution& sub) -> result<poly> {
+    if(auto poly = ctx.locals.find(name)) {
+      return *poly;
+    }
+    
+    return type_error("unbound variable: " + quote(name));
+  };
+};
+
+static auto instantiate(poly p) {
+  return [p](context& ctx, substitution& sub) -> result<mono> {
+    return ctx.instantiate(p);
+  };
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// unification
+////////////////////////////////////////////////////////////////////////////////
+
+// note: lhs/rhs must be fully substituted
+static monad<unit> unify(mono lhs, mono rhs) {
+  assert(lhs.kind() == rhs.kind());
+
+  const auto lapp = lhs.cast<app>();
+  const auto rapp = rhs.cast<app>();
+  
+  // both applications
+  if(lapp && rapp) {
+    return unify(lapp->ctor, rapp->ctor) >>
+      (substitute(lapp->arg) >>= [=](mono larg) {
+        return substitute(rapp->arg) >>= [=](mono rarg) {
+          return unify(larg, rarg);
+        };
+      });
+  }
+
+  const auto lvar = lhs.cast<ref<var>>();
+  const auto rvar = rhs.cast<ref<var>>();  
+  
+  // both variables
+  if(lvar && rvar) {
+    const auto target = std::make_shared<const var>(std::min((*lvar)->depth,
+                                                             (*rvar)->depth),
+                                                    (*lvar)->kind);
+    // TODO create target *inside* monad?
+    return link(lvar->get(), target) >> link(rvar->get(), target);
+  } else if(lvar) {
+    // TODO upgrade?    
+    return link(lvar->get(), rhs);
+  } else if(rvar) {
+    // TODO upgrade?
+    return link(rvar->get(), lhs);    
+  }
+  
+  const auto lcst = lhs.cast<ref<type_constant>>();
+  const auto rcst = rhs.cast<ref<type_constant>>();
+
+  // both constants
+  if(lcst && rcst) {
+    if(*lcst == *rcst) {
+      return pure(unit{});
+    }
+  }
+
+  return fail<unit>("cannot unify types " + quote(lhs.show()) +
+                    " and " + quote(rhs.show()));
+};
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+monad<mono> infer(ast::expr e);
+
+static monad<mono> infer(ast::lit self) {
   return pure(match(self,
                     [](long) { return integer; },
                     [](double) { return number; },
@@ -446,47 +465,47 @@ static monad<mono> infer(context ctx, ast::lit self) {
 };
 
 
-static monad<mono> infer(context ctx, ast::var self) {
-  if(auto poly = ctx.locals.find(self.name)) {
-    return pure(ctx.instantiate(*poly));
-  }
-  
-  return fail<mono>("unbound variable: " + quote(self.name));
+static monad<mono> infer(ast::var self) {
+  return find(self.name) >>= [](poly p) {
+    return instantiate(p);
+  };
 };
 
 
-static monad<mono> infer(context ctx, ast::abs self) {
-  const mono arg = ctx.fresh();
+static monad<mono> infer(ast::abs self) {
 
-  const auto sub = ctx.scope().def(self.arg.name, poly(arg));
-  return infer(sub, self.body) >>= [=](mono body) {
-    return substitute(arg >>= body);
+  return fresh() >>= [=](mono arg) {
+    return scope((def(self.arg.name, poly(arg)) >> infer(self.body)) >>= [=](mono body) {
+      return substitute(arg >>= body);
+    });
   };
+  
 };
 
 
 static const bool debug = false;
 
-static monad<mono> infer(context ctx, ast::app self) {
-  return infer(ctx, self.func) >>= [=](mono func) {
-    return infer(ctx, self.arg) >>= [=](mono arg) {
+static monad<mono> infer(ast::app self) {
+  return infer(self.func) >>= [=](mono func) {
+    return infer(self.arg) >>= [=](mono arg) {
+      return fresh() >>= [=](mono ret) {
       // note: func needs to be substituted *after* arg has been inferred
-      const mono ret = ctx.fresh();
 
-      return substitute(arg >>= ret) >>= [=](mono lhs) {
-        return substitute(func) >>= [=](mono rhs) {
-          if(debug) {
-            static repr_type repr;
+        return substitute(arg >>= ret) >>= [=](mono lhs) {
+          return substitute(func) >>= [=](mono rhs) {
+            if(debug) {
+              static repr_type repr;
             
-            repr = label(lhs.vars(), std::move(repr));
-            repr = label(rhs.vars(), std::move(repr));
+              repr = label(lhs.vars(), std::move(repr));
+              repr = label(rhs.vars(), std::move(repr));
         
-            std::clog << "unifying: " << lhs.show(repr)
-                      << " with: " << rhs.show(repr)
-                      << std::endl;
-          }
+              std::clog << "unifying: " << lhs.show(repr)
+                        << " with: " << rhs.show(repr)
+                        << std::endl;
+            }
       
-          return unify(lhs, rhs) >> substitute(ret);
+            return unify(lhs, rhs) >> substitute(ret);
+          };
         };
       };
     };
@@ -494,21 +513,24 @@ static monad<mono> infer(context ctx, ast::app self) {
 };
 
 
-
 template<class T>
-static monad<mono> infer(context ctx, T) {
+static monad<mono> infer(T) {
   return fail<mono>("unimplemented: " + std::string(typeid(T).name()));
 }
 
-monad<mono> infer(context ctx, ast::expr e) {
-  return match(e, [=](const auto& self) { return infer(ctx, self); });
+monad<mono> infer(ast::expr e) {
+  return match(e, [=](const auto& self) { return infer(self); });
 }
 
 
 // user-facing api
-poly infer(ref<context> ctx, const ast::expr& e) {
+std::shared_ptr<context> make_context() {
+  return std::make_shared<context>();
+}
+
+poly infer(std::shared_ptr<context> ctx, const ast::expr& e) {
   substitution sub;
-  const mono ty = match(infer(*ctx, e)(sub),
+  const mono ty = match(infer(e)(*ctx, sub),
                         [](mono self) { return self; },
                         [](type_error error) -> mono {
                           throw error;

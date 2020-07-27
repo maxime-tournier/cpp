@@ -148,9 +148,10 @@ using forall = Forall<poly>;
 
 ////////////////////////////////////////////////////////////////////////////////
 struct context;
-ref<context> make_context();
 
-poly infer(ref<context> ctx, const ast::expr&);
+std::shared_ptr<context> make_context();
+
+poly infer(std::shared_ptr<context> ctx, const ast::expr&);
 
 }
 
