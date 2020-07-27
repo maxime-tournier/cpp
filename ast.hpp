@@ -3,6 +3,8 @@
 
 #include "variant.hpp"
 #include "symbol.hpp"
+#include "fix.hpp"
+#include "list.hpp"
 
 #include <string>
 
@@ -17,8 +19,11 @@ struct lit: variant<long, double, std::string> {
 struct abs;
 struct app;
 struct var;
+struct let;
 
-struct expr: variant<lit, var, abs, app> {
+struct attr;
+
+struct expr: variant<lit, var, abs, app, let, attr> {
   using expr::variant::variant;
 };
 
@@ -36,6 +41,21 @@ struct abs {
 struct app {
   expr func;
   expr arg;
+};
+
+struct def {
+  symbol name;
+  expr value;
+};
+
+struct let {
+  list<def> defs;
+  expr body;
+};
+
+struct attr {
+  expr arg;
+  symbol name;
 };
 
 // TODO recursion schemes?

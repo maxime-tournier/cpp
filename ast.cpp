@@ -181,6 +181,9 @@ expr check(const sexpr& e) {
   return match(
       e,
       [](auto self) -> expr { return lit{self}; },
+      [](attrib self) -> expr {
+        return attr{check(self.arg), self.name};
+      },
       [](symbol self) -> expr { return var{self}; },
       [](sexpr::list self) -> expr {
         if(!self) {

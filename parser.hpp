@@ -248,7 +248,7 @@ static auto token(Parser parser, Skipper skipper) {
   return skip(skipper) >> parser;
 }
 
-// debug parser
+// debugparser
 template<class Parser>
 static auto debug(std::string name, Parser parser,
                   std::ostream& out = std::clog) {

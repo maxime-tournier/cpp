@@ -5,9 +5,26 @@
 #include "variant.hpp"
 #include "symbol.hpp"
 #include "list.hpp"
+#include "fix.hpp"
 
-struct sexpr: variant<long, double, std::string, symbol, list<sexpr>> {
-  using sexpr::variant::variant;
+template<class T>
+struct Attrib {
+  T arg;
+  symbol name;
+};
+
+template<class T>
+struct Sexpr: variant<long, double, std::string, symbol, Attrib<T>, list<T>> {
+  using Sexpr::variant::variant;
+
+  // TODO map
+};
+
+struct sexpr;
+using attrib = Attrib<sexpr>;
+
+struct sexpr: fix<Sexpr, sexpr> {
+  using sexpr::fix::fix;
   using list = list<sexpr>;
 
   friend std::ostream& operator<<(std::ostream& out, const sexpr& self) {
@@ -64,11 +81,11 @@ struct sexpr: variant<long, double, std::string, symbol, list<sexpr>> {
         nexts.emplace_front(first);
         std::string repr(nexts.begin(), nexts.end());
         struct symbol s(repr.c_str());
-        return pure(sexpr(s));
+        return pure(s);
       };
     };
     
-    const auto atom = number | string | symbol;
+    const auto atom = number | string | (symbol |= cast);
   
     const auto list = [=](auto parser) {
       auto inner = ((parser % space) | pure(std::deque<sexpr>{})) |= [](auto items) {
@@ -79,7 +96,27 @@ struct sexpr: variant<long, double, std::string, symbol, list<sexpr>> {
       return lparen >> inner >>= drop(rparen);
     };
 
-    const auto expr = fix<sexpr>([=](auto self) { return atom | list(self); });
+    const auto dot = token(single('.'));
+    
+    const auto attr = [=](auto parser) {
+      return (parser >>= drop(dot)) >>= [=](auto e) {
+        return symbol >>= [=](auto s) {
+          const sexpr res = attrib{e, s};
+          return pure(res);
+        };
+      };
+    };
+
+    const auto peek = [](auto parser) {
+      return [parser](range in) -> parser::result<bool> {
+        return make_success(bool(parser(in)), in);
+      };
+    };
+    
+    const auto expr = parser::fix<sexpr>([=](auto self) {
+      return atom | list(self);
+    });
+    
     return expr;
   }
   
