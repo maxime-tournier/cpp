@@ -76,16 +76,16 @@ struct sexpr: fix<Sexpr, sexpr> {
     const auto first = pred(std::isalpha);
     const auto next = pred(std::isalnum);
     
-    const auto symbol = first >>= [=](char first) {
+    const auto sym = first >>= [=](char first) {
       return kleene(next) >>= [=](auto nexts) {
         nexts.emplace_front(first);
         std::string repr(nexts.begin(), nexts.end());
-        struct symbol s(repr.c_str());
+        symbol s(repr.c_str());
         return pure(s);
       };
     };
     
-    const auto atom = number | string | (symbol |= cast);
+    const auto atom = number | string | (sym |= cast);
   
     const auto list = [=](auto parser) {
       auto inner = ((parser % space) | pure(std::deque<sexpr>{})) |= [](auto items) {
@@ -98,23 +98,21 @@ struct sexpr: fix<Sexpr, sexpr> {
 
     const auto dot = token(single('.'));
     
-    const auto attr = [=](auto parser) {
-      return (parser >>= drop(dot)) >>= [=](auto e) {
-        return symbol >>= [=](auto s) {
-          const sexpr res = attrib{e, s};
-          return pure(res);
-        };
-      };
-    };
-
     const auto peek = [](auto parser) {
       return [parser](range in) -> parser::result<bool> {
         return make_success(bool(parser(in)), in);
       };
     };
     
-    const auto expr = parser::fix<sexpr>([=](auto self) {
-      return atom | list(self);
+    const auto expr = parser::fix<sexpr>([=](auto& self) {
+      return (atom | list(self)) >>= [=](sexpr e) {
+        return ((dot >> (sym % dot)) >>= [=](auto attrs) {
+          return pure(foldl(e, make_list(attrs.begin(), attrs.end()),
+                            [](sexpr e, symbol name) -> sexpr {
+                              return attrib{e, name};
+                            }));
+        }) | pure(e);
+      };
     });
     
     return expr;
