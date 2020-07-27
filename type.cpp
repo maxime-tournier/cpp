@@ -4,6 +4,7 @@
 #include "unit.hpp"
 
 #include <functional>
+#include <sstream>
 
 ////////////////////////////////////////////////////////////////////////////////
 namespace type {
@@ -84,6 +85,15 @@ mono mono::operator()(mono arg) const {
 }
 
 
+static std::string varid(var self) {
+  std::stringstream ss;
+  ss << self.get();
+  std::string s = ss.str();
+  
+  return s.substr(s.size() - 6);
+};
+
+
 std::string mono::show(repr_type repr) const {
   struct result {
     const std::string value;
@@ -102,7 +112,7 @@ std::string mono::show(repr_type repr) const {
                  [&](var self) -> result {
                    const auto it = repr.find(self);
                    if(it == repr.end()) {
-                     return std::string("<var>");
+                     return "<var:" + varid(self) + ">";
                    }
 
                    return it->second;
@@ -129,15 +139,26 @@ struct kind mono::kind() const {
   });
 }
 
+
+template<class T>
+static list<T> unique(list<T> source) {
+  std::set<T> prune;
+  for(auto& it: source) {
+    prune.insert(it);
+  }
+  
+  return make_list(prune.begin(), prune.end());
+}
+
 list<var> mono::vars() const {
-  return cata(*this, [](Mono<list<var>> self) {
+  return unique(cata(*this, [](Mono<list<var>> self) {
     return match(self,
                  [](var self) { return self %= list<var>{}; },
                  [](App<list<var>> self) {
                    return concat(self.ctor, self.arg);
                  },
                  [](type_constant self) { return list<var>{}; });
-  });
+  }));
 }
 
 
@@ -341,6 +362,18 @@ static auto operator>>(MA lhs, MB rhs) {
   return lhs >>= [rhs](auto&) { return rhs; };
 }
 
+static auto upgrade(mono ty, std::size_t max) {
+  return [=](context& ctx, substitution& sub) -> result<unit> {
+    for(auto v: ty.vars()) {
+      if(v->depth > max) {
+        sub = sub.link(v, var(max, v->kind));
+      }
+    }
+    
+    return unit{};
+  };
+}
+
 
 static auto link(var from, mono to) {
   return [=](context& ctx, substitution& sub) -> result<unit> {
@@ -428,6 +461,7 @@ static monad<unit> unify(mono lhs, mono rhs) {
   return unify_terms(lhs, rhs);
 }
 
+
 static monad<unit> unify_vars(mono lhs, mono rhs) {
   assert(lhs.kind() == rhs.kind());
   
@@ -441,11 +475,9 @@ static monad<unit> unify_vars(mono lhs, mono rhs) {
     // TODO create target *inside* monad?
     return link(*lvar, target) >> link(*rvar, target);
   } else if(lvar) {
-    // TODO upgrade?    
-    return link(*lvar, rhs);
+    return link(*lvar, rhs) >> upgrade(rhs, (*lvar)->depth);
   } else if(rvar) {
-    // TODO upgrade?
-    return link(*rvar, lhs);    
+    return link(*rvar, lhs) >> upgrade(lhs, (*rvar)->depth);    
   }
   
   return fail<unit>("cannot unify types " + quote(lhs.show()) +
@@ -578,6 +610,9 @@ static monad<mono> infer(ast::attr self) {
   return infer(self.arg) >>= [=](mono arg) {
     return fresh() >>= [=](mono res) {
       return instantiate(attr(self.name)) >>= [=](mono proj) {
+        std::clog << proj.show() << std::endl;
+        std::clog << (arg >>= res).show() << std::endl;        
+        
         return unify(proj, arg >>= res) >> substitute(res);
       };
     };
