@@ -8,15 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////
 namespace type {
 
-const kind term = kind_constant::make("*");
-const kind row = kind_constant::make("@");
+const kind term = kind_constant("*");
+const kind row = kind_constant("@");
 
-const mono func = type_constant::make("->", term >>= term >>= term, true);
+const mono func = type_constant("->", term >>= term >>= term, true);
 
-const mono boolean = type_constant::make("bool", term);
-const mono integer = type_constant::make("int", term);
-const mono number = type_constant::make("num", term);
-const mono string = type_constant::make("str", term);
+const mono boolean = type_constant("bool");
+const mono integer = type_constant("int");
+const mono number = type_constant("num");
+const mono string = type_constant("str");
 
 struct type_error: std::runtime_error {
   type_error(std::string what): std::runtime_error("type error: " + what) { }
@@ -25,13 +25,6 @@ struct type_error: std::runtime_error {
 ////////////////////////////////////////////////////////////////////////////////
 // kinds
 ////////////////////////////////////////////////////////////////////////////////
-ref<kind_constant> kind_constant::make(symbol name) {
-  return std::make_shared<const kind_constant>(name);
-}
-
-ref<type_constant> type_constant::make(symbol name, struct kind kind, bool flip) {
-  return std::make_shared<const type_constant>(name, kind, flip);
-}
 
 kind kind::operator>>=(kind other) const {
   return ctor{*this, other};
@@ -52,7 +45,7 @@ bool kind::operator==(kind other) const {
 
 std::string kind::show() const {
   return match(*this,
-               [&](ref<kind_constant> self) -> std::string {
+               [&](kind_constant self) -> std::string {
                  return self->name.repr;
                },
                [&](ctor self) {
@@ -99,11 +92,11 @@ std::string mono::show(repr_type repr) const {
   // TODO handle parens
   return cata(*this, [&](Mono<result> self) {
     return match(self,
-                 [](ref<type_constant> self) -> result {
+                 [](type_constant self) -> result {
                    return {self->name.repr, self->flip};
                  },
-                 [&](ref<var> self) -> result {
-                   const auto it = repr.find(self.get());
+                 [&](var self) -> result {
+                   const auto it = repr.find(self);
                    if(it == repr.end()) {
                      return std::string("<var>");
                    }
@@ -124,22 +117,22 @@ std::string mono::show(repr_type repr) const {
 struct kind mono::kind() const {
   return cata(*this, [](Mono<struct kind> self) {
     return match(self,
-                 [](ref<type_constant> self) { return self->kind; },
-                 [](ref<var> self) { return self->kind; },
+                 [](type_constant self) { return self->kind; },
+                 [](var self) { return self->kind; },
                  [](App<struct kind> self) {
                    return self.ctor.get<ctor>().to;
                  });
   });
 }
 
-list<ref<var>> mono::vars() const {
-  return cata(*this, [](Mono<list<ref<var>>> self) {
+list<var> mono::vars() const {
+  return cata(*this, [](Mono<list<var>> self) {
     return match(self,
-                 [](ref<var> self) { return self %= list<ref<var>>{}; },
-                 [](App<list<ref<var>>> self) {
+                 [](var self) { return self %= list<var>{}; },
+                 [](App<list<var>> self) {
                    return concat(self.ctor, self.arg);
                  },
-                 [](ref<type_constant> self) { return list<ref<var>>{}; });
+                 [](type_constant self) { return list<var>{}; });
   });
 }
 
@@ -155,13 +148,13 @@ mono poly::body() const {
 
 
 
-list<ref<var>> poly::bound() const {
-  return cata(*this, [](Poly<list<ref<var>>> self) {
+list<var> poly::bound() const {
+  return cata(*this, [](Poly<list<var>> self) {
     return match(self,
-                 [](Forall<list<ref<var>>> self) {
+                 [](Forall<list<var>> self) {
                    return self.arg %= self.body;
                  }, 
-                 [](mono self) { return list<ref<var>>{}; });
+                 [](mono self) { return list<var>{}; });
   });
 }
 
@@ -171,9 +164,9 @@ static std::string varname(std::size_t index) {
   return res;
 }
 
-static repr_type label(list<ref<var>> vars, repr_type repr={}) {
+static repr_type label(list<var> vars, repr_type repr={}) {
   for(auto var: vars) {
-    repr.emplace(var.get(), varname(repr.size()));
+    repr.emplace(var, varname(repr.size()));
   }
   
   return repr;
@@ -208,21 +201,21 @@ static std::string quote(const T& self) {
 ////////////////////////////////////////////////////////////////////////////////
 
 class substitution {
-  using table_type = hamt::map<const var*, mono>;
+  using table_type = hamt::map<const var_info*, mono>;
   table_type table;
 
   substitution(table_type table): table(table) { }
 public:
   substitution() = default;
   
-  substitution link(const var* a, mono ty) const {
-    return {table.set(a, std::move(ty))};
+  substitution link(var a, mono ty) const {
+    return {table.set(a.get(), std::move(ty))};
   }
   
   mono operator()(mono ty) const {
     return cata(ty, [&](Mono<mono> self) {
       return match(self,
-                   [&](ref<var> self) -> mono {
+                   [&](var self) -> mono {
                      if(auto res = table.find(self.get())) {
                        return *res;
                      }
@@ -242,14 +235,14 @@ struct context {
   std::size_t depth = 0;
   hamt::map<symbol, poly> locals;
 
-  ref<var> fresh(struct kind kind=term) const {
-    return std::make_shared<var>(depth, kind);
+  var fresh(struct kind kind=term) const {
+    return var(depth, kind);
   }
   
   mono instantiate(poly p, struct kind kind=term) const {
     const substitution sub =
-        foldr(p.bound(), substitution{}, [&](ref<var> a, substitution sub) {
-          return sub.link(a.get(), fresh(kind));
+        foldr(p.bound(), substitution{}, [&](var a, substitution sub) {
+          return sub.link(a, fresh(kind));
         });
 
     return sub(p.body());
@@ -257,8 +250,8 @@ struct context {
 
 
   // quantify unbound variables
-  list<ref<var>> quantify(list<ref<var>> vars) const {
-    return foldr(vars, list<ref<var>>{}, [&](ref<var> a, list<ref<var>> rest) {
+  list<var> quantify(list<var> vars) const {
+    return foldr(vars, list<var>{}, [&](var a, list<var> rest) {
       if(a->depth < depth) {
         // bound somewhere in enclosing scope
         return rest;
@@ -278,13 +271,13 @@ struct context {
     // replace quantified variables with fresh variables just in case
     substitution sub;
     
-    const auto freshes = map(foralls, [&](ref<var> a) {
+    const auto freshes = map(foralls, [&](var a) {
       const auto res = fresh(a->kind);
-      sub = sub.link(a.get(), res);
+      sub = sub.link(a, res);
       return res;
     });
 
-    return foldr(freshes, poly(sub(ty)), [](ref<var> a, poly p) -> poly {
+    return foldr(freshes, poly(sub(ty)), [](var a, poly p) -> poly {
       return forall{a, p};
     });
   }
@@ -337,7 +330,7 @@ static auto operator>>(MA lhs, MB rhs) {
 }
 
 
-static auto link(const var* from, mono to) {
+static auto link(var from, mono to) {
   return [=](context& ctx, substitution& sub) -> result<unit> {
     sub = sub.link(from, to);
     return unit{};
@@ -375,7 +368,7 @@ static auto def(symbol name, poly p) {
 
 
 static auto fresh(kind k=term) {
-  return [k](context& ctx, substitution& sub) -> result<ref<var>> {
+  return [k](context& ctx, substitution& sub) -> result<var> {
     return ctx.fresh(k);
   };
 }
@@ -418,26 +411,26 @@ static monad<unit> unify(mono lhs, mono rhs) {
       });
   }
 
-  const auto lvar = lhs.cast<ref<var>>();
-  const auto rvar = rhs.cast<ref<var>>();  
+  const auto lvar = lhs.cast<var>();
+  const auto rvar = rhs.cast<var>();  
   
   // both variables
   if(lvar && rvar) {
-    const auto target = std::make_shared<const var>(std::min((*lvar)->depth,
-                                                             (*rvar)->depth),
-                                                    (*lvar)->kind);
+    const auto target = var(std::min((*lvar)->depth,
+                                     (*rvar)->depth),
+                            (*lvar)->kind);
     // TODO create target *inside* monad?
-    return link(lvar->get(), target) >> link(rvar->get(), target);
+    return link(*lvar, target) >> link(*rvar, target);
   } else if(lvar) {
     // TODO upgrade?    
-    return link(lvar->get(), rhs);
+    return link(*lvar, rhs);
   } else if(rvar) {
     // TODO upgrade?
-    return link(rvar->get(), lhs);    
+    return link(*rvar, lhs);    
   }
   
-  const auto lcst = lhs.cast<ref<type_constant>>();
-  const auto rcst = rhs.cast<ref<type_constant>>();
+  const auto lcst = lhs.cast<type_constant>();
+  const auto rcst = rhs.cast<type_constant>();
 
   // both constants
   if(lcst && rcst) {
@@ -473,7 +466,6 @@ static monad<mono> infer(ast::var self) {
 
 
 static monad<mono> infer(ast::abs self) {
-
   return fresh() >>= [=](mono arg) {
     return scope((def(self.arg.name, poly(arg)) >> infer(self.body)) >>= [=](mono body) {
       return substitute(arg >>= body);
@@ -484,24 +476,28 @@ static monad<mono> infer(ast::abs self) {
 
 
 static const bool debug = false;
+static auto print(mono lhs, mono rhs) {
+  static repr_type repr;
+            
+  repr = label(lhs.vars(), std::move(repr));
+  repr = label(rhs.vars(), std::move(repr));
+        
+  std::clog << "unifying: " << lhs.show(repr)
+            << " with: " << rhs.show(repr)
+            << std::endl;
+
+}
 
 static monad<mono> infer(ast::app self) {
   return infer(self.func) >>= [=](mono func) {
     return infer(self.arg) >>= [=](mono arg) {
       return fresh() >>= [=](mono ret) {
-      // note: func needs to be substituted *after* arg has been inferred
-
+        // note: func needs to be substituted *after* arg has been inferred
         return substitute(arg >>= ret) >>= [=](mono lhs) {
           return substitute(func) >>= [=](mono rhs) {
+
             if(debug) {
-              static repr_type repr;
-            
-              repr = label(lhs.vars(), std::move(repr));
-              repr = label(rhs.vars(), std::move(repr));
-        
-              std::clog << "unifying: " << lhs.show(repr)
-                        << " with: " << rhs.show(repr)
-                        << std::endl;
+              print(lhs, rhs);
             }
       
             return unify(lhs, rhs) >> substitute(ret);

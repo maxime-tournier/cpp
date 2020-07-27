@@ -14,19 +14,27 @@ struct expr;
 
 namespace type {
 
-template<class T>
-using ref = std::shared_ptr<const T>;
+template<class Info>
+struct shared: std::shared_ptr<const Info> {
+  template<class... Args>
+  explicit shared(const Args&... args):
+    std::shared_ptr<const Info>(
+          std::make_shared<const Info>(Info{args...})) {}
+
+  shared(const shared&) = default;
+  shared(shared&&) = default;  
+  
+};
 
 struct ctor;
 
-struct kind_constant {
+struct kind_constant_info {
   symbol name;
-  kind_constant(symbol name): name(name) { }
-
-  static ref<kind_constant> make(symbol name);  
 };
 
-struct kind: variant<ref<kind_constant>, ctor> {
+using kind_constant = shared<kind_constant_info>;
+
+struct kind: variant<kind_constant, ctor> {
   using kind::variant::variant;
 
   kind operator>>=(kind other) const;
@@ -47,25 +55,23 @@ struct ctor {
 };
 
 
-
-struct type_constant {
+struct type_constant_info {
   symbol name;
   struct kind kind;
   bool flip;
-  type_constant(symbol name, struct kind kind, bool flip):
+  type_constant_info(symbol name, struct kind kind=term, bool flip=false):
       name(name), kind(kind), flip(flip) {}
-
-  static ref<type_constant> make(symbol name, struct kind kind, bool flip=false);
 };
 
 
+using type_constant = shared<type_constant_info>;
 
-
-struct var {
+struct var_info {
   std::size_t depth;
   struct kind kind;
-  var(std::size_t depth, struct kind kind): depth(depth), kind(kind) { }
 };
+
+using var = shared<var_info>;
 
 
 template<class T>
@@ -76,7 +82,7 @@ struct App {
 };
 
 template<class T>
-struct Mono: variant<ref<type_constant>, ref<var>, App<T>> {
+struct Mono: variant<type_constant, var, App<T>> {
   using Mono::variant::variant;
 
   template<class Func>
@@ -84,8 +90,8 @@ struct Mono: variant<ref<type_constant>, ref<var>, App<T>> {
     using type = typename std::result_of<Func(T)>::type;
     using result_type = Mono<type>;
     return match(self,
-                 [](ref<type_constant> self) -> result_type { return self; },
-                 [](ref<var> self) -> result_type { return self; },
+                 [](type_constant self) -> result_type { return self; },
+                 [](var self) -> result_type { return self; },
                  [&](App<T> self) -> result_type {
                    return App<type>{func(self.ctor), func(self.arg)};
                  });
@@ -94,7 +100,7 @@ struct Mono: variant<ref<type_constant>, ref<var>, App<T>> {
 
 
 // TODO use hamt::map instead?
-using repr_type = std::map<const var*, std::string>;
+using repr_type = std::map<var, std::string>;
 
 struct mono: fix<Mono, mono> {
   using mono::fix::fix;
@@ -102,7 +108,7 @@ struct mono: fix<Mono, mono> {
   std::string show(repr_type={}) const;
   struct kind kind() const;
 
-  list<ref<var>> vars() const;
+  list<var> vars() const;
 
   mono operator>>=(mono to) const;
   mono operator()(mono arg) const;
@@ -114,7 +120,7 @@ extern const mono func, boolean, integer, number, string;
 
 template<class T>
 struct Forall {
-  ref<var> arg;
+  var arg;
   T body;
 };
 
@@ -139,7 +145,7 @@ struct poly: fix<Poly, poly> {
   using poly::fix::fix;
 
   mono body() const;
-  list<ref<var>> bound() const;
+  list<var> bound() const;
 
   std::string show(repr_type repr={}) const;
 };
@@ -154,6 +160,7 @@ std::shared_ptr<context> make_context();
 poly infer(std::shared_ptr<context> ctx, const ast::expr&);
 
 }
+
 
 
 #endif
