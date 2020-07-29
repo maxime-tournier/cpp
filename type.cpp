@@ -225,6 +225,14 @@ static std::string quote(const T& self) {
 }
 
 
+static const bool debug = std::getenv("SLIP_DEBUG");
+
+static std::string show(mono self) {
+  static repr_type repr;
+  repr = label(self.vars(), std::move(repr));
+  return self.show(repr);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // substitutions
@@ -239,6 +247,9 @@ public:
   substitution() = default;
   
   substitution link(var a, mono ty) const {
+    std::clog << "| link: " << show(a)
+              << " == " << show(ty) << std::endl;
+
     return {table.set(a.get(), std::move(ty))};
   }
   
@@ -366,7 +377,8 @@ static auto upgrade(mono ty, std::size_t max) {
   return [=](context& ctx, substitution& sub) -> result<unit> {
     for(auto v: ty.vars()) {
       if(v->depth > max) {
-        sub = sub.link(v, var(max, v->kind));
+        const mono target = var(max, v->kind);
+        sub = sub.link(v, target);
       }
     }
     
@@ -438,6 +450,10 @@ static auto instantiate(poly p) {
 ////////////////////////////////////////////////////////////////////////////////
 // unification
 ////////////////////////////////////////////////////////////////////////////////
+
+
+
+
 static monad<unit> unify(mono lhs, mono rhs);
 
 static monad<unit> unify_terms(mono lhs, mono rhs);
@@ -453,6 +469,12 @@ static monad<unit> unify_rows(mono lhs, mono rhs) {
 static monad<unit> unify(mono lhs, mono rhs) {
   assert(lhs.kind() == rhs.kind());
 
+  if(debug) {
+    std::clog << "unifying: " << show(lhs)
+              << " with: " << show(rhs)
+              << std::endl;
+  }
+  
   const auto kind = lhs.kind();
   if(kind == row) {
     return unify_rows(lhs, rhs);
@@ -545,21 +567,6 @@ static monad<mono> infer(ast::abs self) {
   
 };
 
-
-static const bool debug = std::getenv("SLIP_DEBUG");
-
-static auto print(mono lhs, mono rhs) {
-  static repr_type repr;
-            
-  repr = label(lhs.vars(), std::move(repr));
-  repr = label(rhs.vars(), std::move(repr));
-        
-  std::clog << "unifying: " << lhs.show(repr)
-            << " with: " << rhs.show(repr)
-            << std::endl;
-
-}
-
 static monad<mono> infer(ast::app self) {
   return infer(self.func) >>= [=](mono func) {
     return infer(self.arg) >>= [=](mono arg) {
@@ -568,10 +575,6 @@ static monad<mono> infer(ast::app self) {
         return substitute(arg >>= ret) >>= [=](mono lhs) {
           return substitute(func) >>= [=](mono rhs) {
 
-            if(debug) {
-              print(lhs, rhs);
-            }
-      
             return unify(lhs, rhs) >> substitute(ret);
           };
         };
@@ -610,9 +613,6 @@ static monad<mono> infer(ast::attr self) {
   return infer(self.arg) >>= [=](mono arg) {
     return fresh() >>= [=](mono res) {
       return instantiate(attr(self.name)) >>= [=](mono proj) {
-        std::clog << proj.show() << std::endl;
-        std::clog << (arg >>= res).show() << std::endl;        
-        
         return unify(proj, arg >>= res) >> substitute(res);
       };
     };
