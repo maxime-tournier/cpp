@@ -23,6 +23,11 @@ add_executable(parser parser.cpp)
 target_link_libraries(parser m)
 
 add_executable(slip slip.cpp ast.cpp type.cpp)
+option(SLIP_DEBUG "" OFF)
+if(SLIP_DEBUG)
+  target_compile_definitions(slip PRIVATE -DSLIP_DEBUG)
+endif()
+
 target_link_libraries(slip readline)
 
 

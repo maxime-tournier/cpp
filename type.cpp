@@ -6,6 +6,23 @@
 #include <functional>
 #include <sstream>
 
+#ifdef SLIP_DEBUG
+#include <iostream>
+
+template<class... Args>
+static void debug(const Args&... args) {
+  int i = 0;
+  const int expand[] = {((std::clog << (i++ ? "" : " ") << args), 0)...}; (void)expand;
+  std::clog << std::endl;
+}
+
+#else
+
+#define debug(...)
+
+#endif
+
+
 ////////////////////////////////////////////////////////////////////////////////
 namespace type {
 
@@ -225,7 +242,6 @@ static std::string quote(const T& self) {
 }
 
 
-static const bool debug = std::getenv("SLIP_DEBUG");
 
 static std::string show(mono self) {
   static repr_type repr;
@@ -375,6 +391,7 @@ static auto upgrade(mono ty, std::size_t max) {
     for(auto v: ty.vars()) {
       if(v->depth > max) {
         const mono target = var(max, v->kind);
+        debug("upgrade:", show(v), "==", show(target));
         sub = sub.link(v, target);
       }
     }
@@ -386,10 +403,7 @@ static auto upgrade(mono ty, std::size_t max) {
 
 static auto link(var from, mono to) {
   return [=](context& ctx, substitution& sub) -> result<unit> {
-    if(debug) {
-      std::clog << "| link: " << show(from)
-                << " == " << show(to) << std::endl;
-    }
+    debug("> link:", show(from), "==", show(to));
     sub = sub.link(from, to);
     return unit{};
   };
@@ -470,11 +484,7 @@ static monad<unit> unify_rows(mono lhs, mono rhs) {
 static monad<unit> unify(mono lhs, mono rhs) {
   assert(lhs.kind() == rhs.kind());
 
-  if(debug) {
-    std::clog << "unifying: " << show(lhs)
-              << " with: " << show(rhs)
-              << std::endl;
-  }
+  debug("unifying:", show(lhs), "with:", show(rhs));
   
   const auto kind = lhs.kind();
   if(kind == row) {
@@ -614,7 +624,10 @@ static monad<mono> infer(ast::attr self) {
   return infer(self.arg) >>= [=](mono arg) {
     return fresh() >>= [=](mono res) {
       return instantiate(attr(self.name)) >>= [=](mono proj) {
-        return unify(proj, arg >>= res) >> substitute(res);
+        return (unify(proj, arg >>= res) >> substitute(res)) >>= [=](mono res) {
+          debug("attr:", res.show());
+          return pure(res);
+        };
       };
     };
   };
@@ -626,7 +639,9 @@ static monad<mono> infer(T) {
 }
 
 monad<mono> infer(ast::expr e) {
-  return match(e, [=](const auto& self) { return infer(self); });
+  return match(e, [=](const auto& self) {
+    return infer(self);
+  });
 }
 
 
