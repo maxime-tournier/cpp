@@ -247,9 +247,6 @@ public:
   substitution() = default;
   
   substitution link(var a, mono ty) const {
-    std::clog << "| link: " << show(a)
-              << " == " << show(ty) << std::endl;
-
     return {table.set(a.get(), std::move(ty))};
   }
   
@@ -389,6 +386,10 @@ static auto upgrade(mono ty, std::size_t max) {
 
 static auto link(var from, mono to) {
   return [=](context& ctx, substitution& sub) -> result<unit> {
+    if(debug) {
+      std::clog << "| link: " << show(from)
+                << " == " << show(to) << std::endl;
+    }
     sub = sub.link(from, to);
     return unit{};
   };
