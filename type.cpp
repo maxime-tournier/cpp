@@ -272,7 +272,7 @@ public:
       return match(self,
                    [&](var self) -> mono {
                      if(auto res = table.find(self.get())) {
-                       // keep substituting until
+                       // keep substituting
                        return (*this)(*res);
                      }
                      return self;
