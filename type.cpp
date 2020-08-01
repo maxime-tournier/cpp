@@ -12,7 +12,7 @@
 template<class... Args>
 static void debug(const Args&... args) {
   int i = 0;
-  const int expand[] = {((std::clog << (i++ ? "" : " ") << args), 0)...}; (void)expand;
+  const int expand[] = {((std::clog << (i++ ? " " : "") << args), 0)...}; (void)expand;
   std::clog << std::endl;
 }
 
@@ -263,6 +263,7 @@ public:
   substitution() = default;
   
   substitution link(var a, mono ty) const {
+    // TODO compress var => var
     return {table.set(a.get(), std::move(ty))};
   }
   
@@ -271,7 +272,8 @@ public:
       return match(self,
                    [&](var self) -> mono {
                      if(auto res = table.find(self.get())) {
-                       return *res;
+                       // keep substituting until
+                       return (*this)(*res);
                      }
                      return self;
                    },
@@ -570,9 +572,13 @@ static monad<mono> infer(ast::var self) {
 
 static monad<mono> infer(ast::abs self) {
   return fresh() >>= [=](mono arg) {
+    debug("abs arg:", show(arg));
     return scope((def(self.arg.name, poly(arg)) >> infer(self.body))
                  >>= [=](mono body) {
-                   return substitute(arg >>= body);
+                   return substitute(arg >>= body) >>= [=](mono res) {
+                     debug("abs res:", show(res));
+                     return pure(res);
+                   };
                  });
   };
   
@@ -625,7 +631,7 @@ static monad<mono> infer(ast::attr self) {
     return fresh() >>= [=](mono res) {
       return instantiate(attr(self.name)) >>= [=](mono proj) {
         return (unify(proj, arg >>= res) >> substitute(res)) >>= [=](mono res) {
-          debug("attr:", res.show());
+          debug("attr:", show(res));
           return pure(res);
         };
       };
