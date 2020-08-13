@@ -5,7 +5,9 @@
 
 #include <functional>
 #include <sstream>
+#include <algorithm>
 
+////////////////////////////////////////////////////////////////////////////////
 #ifdef SLIP_DEBUG
 #include <iostream>
 
@@ -21,6 +23,23 @@ static void debug(const Args&... args) {
 #define debug(...)
 
 #endif
+
+
+template<class T>
+static std::string quote(const T& self) {
+  std::stringstream ss;
+  ss << '"' << self << '"';
+  return ss.str();
+}
+
+
+template<class T>
+static std::string parens(const T& self) {
+  std::stringstream ss;
+  ss << '(' << self << ')';
+  return ss.str();
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +121,7 @@ mono mono::operator()(mono arg) const {
 }
 
 
-static std::string varid(var self) {
+static std::string var_id(var self) {
   std::stringstream ss;
   ss << self.get();
   std::string s = ss.str();
@@ -129,16 +148,19 @@ std::string mono::show(repr_type repr) const {
                  [&](var self) -> result {
                    const auto it = repr.find(self);
                    if(it == repr.end()) {
-                     return "<var:" + varid(self) + ">";
+                     return "<var:" + var_id(self) + ">";
                    }
 
                    return it->second;
                  },
                  [](App<result> self) -> result {
+                   const std::string ctor = self.ctor.parens ? parens(self.ctor.value) : self.ctor.value;
+                   const std::string arg = self.arg.parens ? parens(self.arg.value) : self.arg.value;
+                   
                    if(self.ctor.flip) {
-                     return self.arg.value + " " + self.ctor.value;
+                     return {arg + " " + ctor, false, false};
                    } else {
-                     return self.ctor.value + " " + self.arg.value;
+                     return {ctor + " " + arg, false, true};
                    }
                  });
   }).value;
@@ -200,20 +222,28 @@ list<var> poly::bound() const {
   });
 }
 
-static std::string varname(std::size_t index, kind k) {
+static std::string var_name(std::size_t index, kind k) {
   std::string res;
-  res += 'a' + index;
 
+  const std::size_t basis = 26;
+  do {
+    const std::size_t digit = index % basis;
+    res += 'a' + digit;
+    index /= basis;
+  } while(index);
+
+  std::reverse(res.begin(), res.end());
+  
   if(k == row) {
     res += "...";
   }
-  
+
   return res;
 }
 
 static repr_type label(list<var> vars, repr_type repr={}) {
   for(auto var: vars) {
-    repr.emplace(var, varname(repr.size(), var->kind));
+    repr.emplace(var, var_name(repr.size(), var->kind));
   }
   
   return repr;
@@ -233,14 +263,6 @@ std::string poly::show(repr_type repr) const {
 #include <sstream>
 
 namespace type {
-
-template<class T>
-static std::string quote(const T& self) {
-  std::stringstream ss;
-  ss << '"' << self << '"';
-  return ss.str();
-}
-
 
 
 static std::string show(mono self) {
@@ -286,6 +308,7 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////
 // context
+////////////////////////////////////////////////////////////////////////////////
 
 struct context {
   std::size_t depth = 0;
@@ -353,6 +376,7 @@ struct context {
 ////////////////////////////////////////////////////////////////////////////////
 // inference monad
 ////////////////////////////////////////////////////////////////////////////////
+
 struct state {
   context& ctx;
   substitution& sub;
@@ -481,30 +505,99 @@ static auto instantiate(poly p) {
 // unification
 ////////////////////////////////////////////////////////////////////////////////
 
-
 static monad<unit> unify(mono lhs, mono rhs);
-
-static monad<unit> unify_terms(mono lhs, mono rhs);
-static monad<unit> unify_rows(mono lhs, mono rhs);
 static monad<unit> unify_vars(mono lhs, mono rhs);
 
-static monad<unit> unify_rows(mono lhs, mono rhs) {
-    return fail<unit>("unimplemented: row unification");
+static monad<unit> unify_app_terms(app lhs, app rhs);
+static monad<unit> unify_app_rows(app lhs, app rhs);
+
+
+
+static const auto app_match = [](mono ty, auto cont) {
+  return match(ty,
+               [&](app self) {
+                 return cont(self.ctor, self.arg);
+               },
+               [&](auto) {
+                 return fail<unit>("not a type application");
+               });
+};
+
+static const auto type_constant_match = [](mono ty, auto cont) {
+  return match(ty,
+               [&](type_constant self) {
+                 return cont(self);
+               },
+               [&](auto) {
+                 return fail<unit>("not a type constant");
+               });
+};
+
+
+static const auto row_match = [](mono ty, auto cont) {
+  return app_match(ty, [&](mono outer, mono tail) {
+    return app_match(outer, [&](mono ctor, mono arg) {
+      return type_constant_match(ctor, [&](type_constant ctor) {
+        // TODO check that kind is correct
+        return cont(ctor->name, arg, tail);
+      });
+    });      
+  });
+};
+
+static mono ext(symbol name);
+
+static monad<unit> unify_app_rows(app lhs, app rhs) {
+  return row_match(lhs, [&](symbol lattr, mono lty, mono ltail) -> monad<unit> {
+    return row_match(rhs, [&](symbol rattr, mono rty, mono rtail) -> monad<unit> {
+      if(lattr == rattr) {
+        return unify(lty, rty) >> unify(ltail, rtail);
+      } else {
+        return fresh(row) >>= [=](mono ldummy) {
+          return fresh(row) >>= [=](mono rdummy) {
+            return
+              unify(ltail, ext(rattr)(rty)(rdummy)) >>
+              unify(rtail, ext(lattr)(lty)(ldummy));
+          };
+        };
+      }        
+    });
+  });
 }
 
 
 // note: lhs/rhs must be fully substituted
 static monad<unit> unify(mono lhs, mono rhs) {
-  assert(lhs.kind() == rhs.kind());
-
-  debug("unifying:", show(lhs), "with:", show(rhs));
+  assert(lhs.kind() == rhs.kind() && "kind error");
+  
+  debug("unifying:", quote(show(lhs)), "with:", quote(show(rhs)));
   
   const auto kind = lhs.kind();
-  if(kind == row) {
-    return unify_rows(lhs, rhs);
-  }
 
-  return unify_terms(lhs, rhs);
+  const auto lapp = lhs.cast<app>();
+  const auto rapp = rhs.cast<app>();
+  
+  // both applications
+  if(lapp && rapp) {
+    if(kind == row) {
+      return unify_app_rows(*lapp, *rapp);
+    }
+
+    return unify_app_terms(*lapp, *rapp);
+  }    
+
+  const auto lcst = lhs.cast<type_constant>();
+  const auto rcst = rhs.cast<type_constant>();
+
+  // both constants
+  if(lcst && rcst) {
+    if(*lcst == *rcst) {
+      return pure(unit{});
+    }
+  }
+  
+  // variables
+  return unify_vars(lhs, rhs);
 }
 
 
@@ -531,32 +624,13 @@ static monad<unit> unify_vars(mono lhs, mono rhs) {
 }
 
 
-static monad<unit> unify_terms(mono lhs, mono rhs) {
-  const auto lapp = lhs.cast<app>();
-  const auto rapp = rhs.cast<app>();
-  
-  // both applications
-  if(lapp && rapp) {
-    return unify(lapp->ctor, rapp->ctor) >>
-      (substitute(lhs.get<app>().arg) >>= [=](mono larg) {
-        return substitute(rhs.get<app>().arg) >>= [=](mono rarg) {
-          return unify(larg, rarg);
-        };
-      });
-  }
-
-  const auto lcst = lhs.cast<type_constant>();
-  const auto rcst = rhs.cast<type_constant>();
-
-  // both constants
-  if(lcst && rcst) {
-    if(*lcst == *rcst) {
-      return pure(unit{});
-    } 
-  }
-  
-  // variables
-  return unify_vars(lhs, rhs);
+static monad<unit> unify_app_terms(app lhs, app rhs) {
+  return unify(lhs.ctor, rhs.ctor) >>
+    (substitute(lhs.arg) >>= [=](mono larg) {
+      return substitute(rhs.arg) >>= [=](mono rarg) {
+        return unify(larg, rarg);
+      };
+    });
 };
 
 
@@ -623,7 +697,7 @@ static monad<mono> infer(ast::cond self) {
 }
 
 
-// row extension type constructor
+// row extension type constructor ::: * -> @ -> @
 static mono ext(symbol name) {
   static std::map<symbol, type_constant> table;
   

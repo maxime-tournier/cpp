@@ -17,6 +17,7 @@ struct symbol {
   }
 
   bool operator<(symbol other) const { return repr < other.repr; }
+  bool operator==(symbol other) const { return repr == other.repr; }
 };
 
 #endif
