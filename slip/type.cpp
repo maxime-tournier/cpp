@@ -604,15 +604,15 @@ static monad<mono> infer(ast::app self) {
 };
 
 
-// static monad<mono> infer(ast::cond self) {
-//   return infer(self.pred) >>= [=](mono pred) {
-//     return unify(pred, boolean) >>= [=](auto) {
-//       return infer(self.conseq) >>= 
-
-//     };
-//   };
-// }
-
+static monad<mono> infer(ast::cond self) {
+  return infer(self.pred) >>= [=](mono pred) {
+    return (unify(pred, boolean) >> infer(self.conseq)) >>= [=](mono conseq) {
+      return infer(self.alt) >>= [=](mono alt) {
+        return unify(conseq, alt) >> substitute(conseq);
+      };
+    };
+  };
+}
 
 
 // row extension type constructor
