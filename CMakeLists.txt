@@ -4,9 +4,12 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES stdc++)
-set(ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${ASAN_FLAGS}" )
+option(ASAN "" OFF)
 
+if(ASAN)
+  set(ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ASAN_FLAGS}" )
+endif()
 
 # add_subdirectory(sparse)
 if(ANDROID)
