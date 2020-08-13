@@ -165,10 +165,24 @@ static const auto check_abs =
     };
   }) | fail<expr>("(fn (`sym`...) `expr`)");
 
+
+// conditionals
+static const auto check_cond = (pop >>= [](sexpr pred) {
+  return pop >>= [=](sexpr conseq) {
+    return pop >>= [=](sexpr alt) {
+      const expr res = cond{check(pred), check(conseq), check(alt)};
+      return empty >> pure(res);
+    };
+  };
+ }) | fail<expr>("(if `expr` `expr` `expr`)");
+
+
+// special forms
 using special_type = std::function<result<expr>(sexpr::list)>;
 
 static const std::map<symbol, special_type> special = {
-  {"fn", check_abs}
+    {"fn", check_abs},
+    {"if", check_cond}
 };
 
 static expr check_app(sexpr func, sexpr::list args) {

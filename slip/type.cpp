@@ -353,27 +353,31 @@ struct context {
 ////////////////////////////////////////////////////////////////////////////////
 // inference monad
 ////////////////////////////////////////////////////////////////////////////////
+struct state {
+  context& ctx;
+  substitution& sub;
+};
+
 
 template<class T>
 using result = either<type_error, T>;
 
 template<class T>
-using monad = std::function<result<T>(context& ctx, substitution& sub)>;
+using monad = std::function<result<T>(state&)>;
 
 template<class M>
-using value = typename std::result_of<M(context& ctx,
-                                        substitution&)>::type::value_type;
+using value = typename std::result_of<M(state&)>::type::value_type;
 
 template<class T>
 static auto pure(T value) {
-  return [value](context& ctx, substitution&) -> result<T> { return value; };
+  return [value](state&) -> result<T> { return value; };
 }
 
 template<class MA, class Func, class A=value<MA>>
 static auto bind(MA self, Func func) {
-  return [self, func](context& ctx, substitution& sub) {
-    return self(ctx, sub) >>= [&](const A& value) {
-      return func(value)(ctx, sub);
+  return [self, func](state& s) {
+    return self(s) >>= [&](const A& value) {
+      return func(value)(s);
     };
   };
 }
@@ -389,12 +393,12 @@ static auto operator>>(MA lhs, MB rhs) {
 }
 
 static auto upgrade(mono ty, std::size_t max) {
-  return [=](context& ctx, substitution& sub) -> result<unit> {
+  return [=](state& s) -> result<unit> {
     for(auto v: ty.vars()) {
       if(v->depth > max) {
         const mono target = var(max, v->kind);
         debug("upgrade:", show(v), "==", show(target));
-        sub = sub.link(v, target);
+        s.sub = s.sub.link(v, target);
       }
     }
     
@@ -404,53 +408,54 @@ static auto upgrade(mono ty, std::size_t max) {
 
 
 static auto link(var from, mono to) {
-  return [=](context& ctx, substitution& sub) -> result<unit> {
+  return [=](state& s) -> result<unit> {
     debug("> link:", show(from), "==", show(to));
-    sub = sub.link(from, to);
+    s.sub = s.sub.link(from, to);
     return unit{};
   };
 }
 
 static auto substitute(mono ty) {
-  return [=](context& ctx, substitution& sub) -> result<mono> {
-    return sub(ty);
+  return [=](state& s) -> result<mono> {
+    return s.sub(ty);
   };
 }
 
 
 template<class T>
 static auto fail(std::string what) {
-  return [what](context& ctx, substitution&) -> result<T> {
+  return [what](state&) -> result<T> {
     return type_error(what);
   };
 }
 
 template<class M>
 static auto scope(M m) {
-  return [m](context& ctx, substitution& sub) {
-    auto scope = ctx.scope();
-    return m(scope, sub);
+  return [m](state& outer) {
+    context scope = outer.ctx.scope();
+    state inner = {scope, outer.sub};
+    return m(inner);
   };
 }
 
 static auto def(symbol name, poly p) {
-  return [name, p](context& ctx, substitution& sub) -> result<unit> {
-    ctx.def(name, p);
+  return [name, p](state& s) -> result<unit> {
+    s.ctx.def(name, p);
     return unit{};
   };
 };
 
 
 static auto fresh(kind k=term) {
-  return [k](context& ctx, substitution& sub) -> result<var> {
-    return ctx.fresh(k);
+  return [k](state& s) -> result<var> {
+    return s.ctx.fresh(k);
   };
 }
 
 
 static auto find(symbol name) {
-  return [name](context& ctx, substitution& sub) -> result<poly> {
-    if(auto poly = ctx.locals.find(name)) {
+  return [name](state& s) -> result<poly> {
+    if(auto poly = s.ctx.locals.find(name)) {
       return *poly;
     }
     
@@ -459,16 +464,14 @@ static auto find(symbol name) {
 };
 
 static auto instantiate(poly p) {
-  return [p](context& ctx, substitution& sub) -> result<mono> {
-    return ctx.instantiate(p);
+  return [p](state& s) -> result<mono> {
+    return s.ctx.instantiate(p);
   };
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 // unification
 ////////////////////////////////////////////////////////////////////////////////
-
-
 
 
 static monad<unit> unify(mono lhs, mono rhs);
@@ -601,6 +604,17 @@ static monad<mono> infer(ast::app self) {
 };
 
 
+// static monad<mono> infer(ast::cond self) {
+//   return infer(self.pred) >>= [=](mono pred) {
+//     return unify(pred, boolean) >>= [=](auto) {
+//       return infer(self.conseq) >>= 
+
+//     };
+//   };
+// }
+
+
+
 // row extension type constructor
 static mono ext(symbol name) {
   static std::map<symbol, type_constant> table;
@@ -624,6 +638,7 @@ static poly attr(symbol name) {
   
   return forall{a, forall{rho, body}};
 };
+
 
 
 static monad<mono> infer(ast::attr self) {
@@ -658,7 +673,9 @@ std::shared_ptr<context> make_context() {
 
 poly infer(std::shared_ptr<context> ctx, const ast::expr& e) {
   substitution sub;
-  const mono ty = match(infer(e)(*ctx, sub),
+  state s{*ctx, sub};
+  
+  const mono ty = match(infer(e)(s),
                         [](mono self) { return self; },
                         [](type_error error) -> mono {
                           throw error;

@@ -21,9 +21,12 @@ struct app;
 struct var;
 struct let;
 
+struct cond;
+
 struct attr;
 
-struct expr: variant<lit, var, abs, app, let, attr> {
+
+struct expr: variant<lit, var, abs, app, let, cond, attr> {
   using expr::variant::variant;
 };
 
@@ -53,10 +56,17 @@ struct let {
   expr body;
 };
 
+struct cond {
+  expr pred;
+  expr conseq;
+  expr alt;
+};
+
 struct attr {
   expr arg;
   symbol name;
 };
+
 
 // TODO recursion schemes?
 
