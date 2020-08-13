@@ -18,11 +18,11 @@ all: compile
 
 $(BUILD):
 	mkdir $(BUILD)
+
+$(CMAKECACHE): $(BUILD)
 	cmake -S . -B $(BUILD) -G $(GENERATOR) $(CMAKE_DEFINITIONS)
 
-cmake: $(BUILD)
-
-$(CMAKECACHE): cmake
+cmake: $(CMAKECACHE)
 
 compile: $(CMAKECACHE)
 	cmake --build $(BUILD)
