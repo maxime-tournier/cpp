@@ -392,9 +392,17 @@ static auto operator>>(MA lhs, MB rhs) {
   return lhs >>= [rhs](auto&) { return rhs; };
 }
 
-static auto upgrade(mono ty, std::size_t max) {
+static auto upgrade(mono ty, var target) {
+  const std::size_t max = target->depth;
   return [=](state& s) -> result<unit> {
-    for(auto v: ty.vars()) {
+    const auto vars = ty.vars();
+    for(auto v: vars) {
+      if(v == target) {
+        const auto repr = label(vars);
+        return type_error("type variable " + quote(mono(target).show(repr)) +
+                          " occurs in type " + quote(ty.show(repr)));
+      }
+      
       if(v->depth > max) {
         const mono target = var(max, v->kind);
         debug("upgrade:", show(v), "==", show(target));
@@ -513,9 +521,9 @@ static monad<unit> unify_vars(mono lhs, mono rhs) {
     // TODO create target *inside* monad?
     return link(*lvar, target) >> link(*rvar, target);
   } else if(lvar) {
-    return link(*lvar, rhs) >> upgrade(rhs, (*lvar)->depth);
+    return link(*lvar, rhs) >> upgrade(rhs, *lvar);
   } else if(rvar) {
-    return link(*rvar, lhs) >> upgrade(lhs, (*rvar)->depth);    
+    return link(*rvar, lhs) >> upgrade(lhs, *rvar);    
   }
   
   return fail<unit>("cannot unify types " + quote(lhs.show()) +
@@ -568,14 +576,14 @@ static monad<mono> infer(ast::lit self) {
 
 static monad<mono> infer(ast::var self) {
   return find(self.name) >>= [](poly p) {
-    return instantiate(p);
+    return instantiate(p) >>= substitute;
   };
 };
 
 
 static monad<mono> infer(ast::abs self) {
   return fresh() >>= [=](mono arg) {
-    debug("abs arg:", show(arg));
+    debug("abs:", self.arg.name, "::", show(arg));
     return scope((def(self.arg.name, poly(arg)) >> infer(self.body))
                  >>= [=](mono body) {
                    return substitute(arg >>= body) >>= [=](mono res) {

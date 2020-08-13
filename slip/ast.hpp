@@ -12,7 +12,7 @@ struct sexpr;
 
 namespace ast {
 
-struct lit: variant<long, double, std::string> {
+struct lit: variant<bool, long, double, std::string> {
   using lit::variant::variant;
 };
 

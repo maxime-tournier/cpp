@@ -198,7 +198,16 @@ expr check(const sexpr& e) {
       [](attrib self) -> expr {
         return attr{check(self.arg), self.name};
       },
-      [](symbol self) -> expr { return var{self}; },
+      [](symbol self) -> expr {
+        static const std::map<symbol, expr> special = {
+            {"true", lit{true}},
+            {"false", lit{false}},
+        };
+        const auto it = special.find(self);
+        if(it != special.end()) return it->second;
+        
+        return var{self};
+      },
       [](sexpr::list self) -> expr {
         if(!self) {
           throw syntax_error("empty list in application");
