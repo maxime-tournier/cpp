@@ -1,9 +1,12 @@
 project(cpp CXX)
 cmake_minimum_required(VERSION 3.10)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES stdc++)
 set(ASAN_FLAGS "-fsanitize=address -fsanitize-address-use-after-scope")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${ASAN_FLAGS}" )
+
 
 # add_subdirectory(sparse)
 if(ANDROID)
@@ -19,19 +22,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(compressed compressed.cpp)
 add_executable(hamt hamt.cpp)
 
-add_executable(parser parser.cpp)
-target_link_libraries(parser m)
-
-add_executable(slip slip.cpp ast.cpp type.cpp)
-option(SLIP_DEBUG "" OFF)
-if(SLIP_DEBUG)
-  target_compile_definitions(slip PRIVATE -DSLIP_DEBUG)
-endif()
-
-target_link_libraries(slip readline)
-
+add_subdirectory(slip)
 
 add_executable(obj obj.cpp)
+
+
 
 # add_executable(cml cml.cpp)
 
