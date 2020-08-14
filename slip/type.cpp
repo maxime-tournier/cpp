@@ -57,6 +57,8 @@ const mono string = type_constant("str");
 
 const mono record = type_constant("record", row >>= term);
 
+const mono lst = type_constant("list", term >>= term);
+
 struct type_error: std::runtime_error {
   type_error(std::string what): std::runtime_error("type error: " + what) { }
 };
@@ -225,13 +227,16 @@ list<var> poly::bound() const {
 static std::string var_name(std::size_t index, kind k) {
   std::string res;
 
-  const std::size_t basis = 26;
+  static constexpr std::size_t basis = 26;
+  
   do {
     const std::size_t digit = index % basis;
     res += 'a' + digit;
     index /= basis;
   } while(index);
 
+  res += "'";
+  
   std::reverse(res.begin(), res.end());
   
   if(k == row) {
@@ -618,9 +623,13 @@ static monad<unit> unify_vars(mono lhs, mono rhs) {
   } else if(rvar) {
     return link(*rvar, lhs) >> upgrade(lhs, *rvar);    
   }
+
+  repr_type repr;
+  repr = label(lhs.vars(), std::move(repr));
+  repr = label(rhs.vars(), std::move(repr));  
   
-  return fail<unit>("cannot unify types " + quote(lhs.show()) +
-                    " and " + quote(rhs.show()));  
+  return fail<unit>("cannot unify types " + quote(lhs.show(repr)) +
+                    " and " + quote(rhs.show(repr)));  
 }
 
 
@@ -750,7 +759,20 @@ monad<mono> infer(ast::expr e) {
 
 // user-facing api
 std::shared_ptr<context> make_context() {
-  return std::make_shared<context>();
+  auto res = std::make_shared<context>();
+
+  {
+    const mono a = res->fresh();
+    res->def("cons", res->generalize(a >>= lst(a) >>= lst(a)));
+  }
+
+
+  {
+    const mono a = res->fresh();
+    res->def("nil", res->generalize(lst(a)));
+  }
+  
+  return res;
 }
 
 poly infer(std::shared_ptr<context> ctx, const ast::expr& e) {
