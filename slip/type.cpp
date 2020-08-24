@@ -506,6 +506,18 @@ static auto instantiate(poly p) {
   };
 };
 
+
+template<class M>
+static monad<list<value<M>>> sequence(list<M> items) {
+  if(!items) return pure(list<value<M>>{});
+  else return items->head >>= [=](auto head) {
+    return sequence(items->tail) >>= [=](auto tail) {
+      return pure(head %= tail);
+    };
+  };
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // unification
 ////////////////////////////////////////////////////////////////////////////////
@@ -704,6 +716,24 @@ static monad<mono> infer(ast::cond self) {
     };
   };
 }
+
+
+
+// static monad<mono> infer(ast::let self) {
+//   const auto freshes = map(self.defs, [](ast::def def) {
+//     return fresh();
+//   });
+
+//   return sequence(freshes) >>= [=](auto vars) {
+//     return scope(
+//         sequence(zip(self.defs, vars, [](ast::def def, var a) {
+//           return def(def.name, a);
+//         })) >>
+//         (sequence(map(self.defs, [](ast::def def) {
+//           return infer(def.value);
+//         }))
+//   };
+// };
 
 
 // row extension type constructor ::: * -> @ -> @

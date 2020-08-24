@@ -30,7 +30,7 @@ struct cons {
   }
 
   template<class Func>
-  friend list<T> map(list<T> self, const Func& func) {
+  friend auto map(list<T> self, const Func& func) {
     using type = typename std::result_of<Func(T)>::type;
     return foldr(self, list<type>{}, [&](const T& head, list<type> tail) {
       return func(head) %= tail;
@@ -83,6 +83,17 @@ static list<typename Iterator::value_type> make_list(Iterator first, Iterator la
     return head %= make_list(first, last);
   }
 }
+
+template<class LHS, class RHS, class Func>
+static auto zip(list<LHS> lhs, list<RHS> rhs, const Func& func) {
+  if(lhs && rhs) {
+    return func(lhs, rhs) %= zip(lhs->tail, rhs->tail, func);
+  }
+
+  using result_type = typename std::result_of<Func(LHS, RHS)>::type;
+  return list<result_type>{};
+};
+
 
 
 #endif

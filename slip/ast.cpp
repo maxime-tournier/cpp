@@ -200,6 +200,7 @@ static const auto check_def = ((pop >>= expect<symbol>) >>= [](symbol name) {
 
 
 static const auto check_defs = check_list([](sexpr item) {
+  // TODO prevent redefinitions
   return (expect<sexpr::list>(item) |= [](sexpr::list def) {
     return run(check_def, def);
   }) | fail<def>("((`sym` `expr`)...) expected for definitions");
