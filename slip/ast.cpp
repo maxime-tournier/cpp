@@ -50,12 +50,12 @@ static const auto empty = [](sexpr::list list) -> result<unit> {
 
 template<class T>
 static auto expect(sexpr self) {
-  return [self](sexpr::list rest) -> result<T> {
+  return [=](sexpr::list rest) -> result<T> {
     return match(self,
                  [=](T expected) -> result<T> {
                    return make_success(expected, rest);
                  },
-                 [](auto) -> result<T> {
+                 [=](auto) -> result<T> {
                    return std::string("type error");
                  });
   };
@@ -139,16 +139,30 @@ static auto fail(std::string what) {
   };
 };
 
+static auto check_list = [](auto func) {
+  using func_type = decltype(func);
+  using result_type = typename std::result_of<func_type(sexpr)>::type;
+  using value_type = value<result_type>;
+  using list_type = list<value_type>;
+  
+  return fix<list_type>([=](auto self) {
+    return (empty >> pure(list_type{}))
+      | ((pop >>= func) >>= [=](auto first) {
+        return self >>= [=](auto rest) {
+          return pure(first %= rest);
+        };
+      });
+  });
+ };
+
+
 ////////////////////////////////////////////////////////////////////////////////
 
 // check function arguments
-static const auto check_args = fix<list<var>>([](auto self) {
-  return (empty >> pure(list<var>{}))
-    | ((pop >>= expect<symbol>) >>= [=](symbol name) {
-      return self >>= [=](list<var> tail) {
-        return pure(var{name} %= tail);
-      };
-    });
+static const auto check_args = check_list([](sexpr item) {
+  return expect<symbol>(item) |= [](symbol name) {
+    return var{name};
+  };
 });
 
 // check function definition
@@ -177,12 +191,36 @@ static const auto check_cond = (pop >>= [](sexpr pred) {
  }) | fail<expr>("(if `expr` `expr` `expr`)");
 
 
+// definition
+static const auto check_def = ((pop >>= expect<symbol>) >>= [](symbol name) {
+  return pop >>= [=](sexpr value) {
+    return empty >> pure(def{name, check(value)});
+  };
+ }) | fail<def>("(`sym` `expr`) expected for definition");
+
+
+static const auto check_defs = check_list([](sexpr item) {
+  return (expect<sexpr::list>(item) |= [](sexpr::list def) {
+    return run(check_def, def);
+  }) | fail<def>("((`sym` `expr`)...) expected for definitions");
+});
+
+
+// let
+static const auto check_let = ((pop >>= expect<sexpr::list>) >>= [](sexpr::list defs) {
+  return pop >>= [=](sexpr body) {
+    const expr res = let{run(check_defs, defs), check(body)};
+    return empty >> pure(res);
+  };
+ }) | fail<expr>("(let ((`sym` `expr`)...) `expr`)");
+
 // special forms
 using special_type = std::function<result<expr>(sexpr::list)>;
 
 static const std::map<symbol, special_type> special = {
     {"fn", check_abs},
-    {"if", check_cond}
+    {"if", check_cond},
+    {"let", check_let},    
 };
 
 static expr check_app(sexpr func, sexpr::list args) {
