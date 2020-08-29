@@ -482,6 +482,12 @@ static auto def(symbol name, poly p) {
   };
 };
 
+static auto generalize(mono ty) {
+  return [ty](state& s) -> result<poly> {
+    return s.ctx.generalize(ty);
+  };
+}
+
 
 static auto fresh(kind k=term) {
   return [k](state& s) -> result<var> {
@@ -719,21 +725,43 @@ static monad<mono> infer(ast::cond self) {
 
 
 
-// static monad<mono> infer(ast::let self) {
-//   const auto freshes = map(self.defs, [](ast::def def) {
-//     return fresh();
-//   });
+static monad<mono> infer(ast::let self) {
+  // assign fresh vars to defs
+  const auto create_vars = sequence(map(self.defs, [](ast::def) {
+    return fresh();
+  }));
 
-//   return sequence(freshes) >>= [=](auto vars) {
-//     return scope(
-//         sequence(zip(self.defs, vars, [](ast::def def, var a) {
-//           return def(def.name, a);
-//         })) >>
-//         (sequence(map(self.defs, [](ast::def def) {
-//           return infer(def.value);
-//         }))
-//   };
-// };
+  // push let scope, create vars
+  return scope(create_vars >>= [=](auto vars) {
+
+    // populate defs scope (monomorphic)
+    const auto populate_defs = sequence(zip(self.defs, vars, [](ast::def self, var a) {
+      return def(self.name, mono(a));
+    }));
+
+    // infer + unify defs with vars
+    const auto infer_defs = sequence(zip(self.defs, vars, [](ast::def self, var a) {
+      return infer(self.value) >>= [=](mono ty) {
+        return substitute(a) >>= [=](mono a) {
+          // TODO detect useless definitions
+          return unify(a, ty);
+        };
+      };
+    }));
+
+    // generalize vars + populate body scope (polymorphic)
+    const auto populate_body = sequence(zip(self.defs, vars, [](ast::def self, var a) {
+      return substitute(a) >>= [=](mono ty) {
+        return generalize(ty) >>= [=](poly p) {
+          return def(self.name, p);
+        };
+      };
+    }));
+    
+    return scope(populate_defs >> infer_defs) >>
+      populate_body >> infer(self.body);
+  });
+};
 
 
 // row extension type constructor ::: * -> @ -> @

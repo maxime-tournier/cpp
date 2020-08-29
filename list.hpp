@@ -85,15 +85,14 @@ static list<typename Iterator::value_type> make_list(Iterator first, Iterator la
 }
 
 template<class LHS, class RHS, class Func>
-static auto zip(list<LHS> lhs, list<RHS> rhs, const Func& func) {
+static auto zip(list<LHS> lhs, list<RHS> rhs, const Func& func)
+    -> list<typename std::result_of<Func(LHS, RHS)>::type> {
   if(lhs && rhs) {
-    return func(lhs, rhs) %= zip(lhs->tail, rhs->tail, func);
+    return func(lhs->head, rhs->head) %= zip(lhs->tail, rhs->tail, func);
   }
 
-  using result_type = typename std::result_of<Func(LHS, RHS)>::type;
-  return list<result_type>{};
+  return {};
 };
-
 
 
 #endif
