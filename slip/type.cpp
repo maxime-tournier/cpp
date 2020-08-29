@@ -764,6 +764,35 @@ static monad<mono> infer(ast::let self) {
 };
 
 
+static monad<type_constant> constructor(mono ty) {
+  return match(ty,
+               [](type_constant self) -> monad<type_constant> { return pure(self); },
+               [](app self) { return constructor(self.ctor); },
+               [](var self) -> monad<type_constant> {
+                 return fail<type_constant> ("type constructor is not a constant");
+               });
+}
+
+static monad<mono> infer(ast::open self) {
+  // attempt to extract ctor info
+  return infer(self.arg) >>= [=](mono arg) {
+    return constructor(arg) >>= [=](type_constant ctor) -> monad<mono> {
+
+      if(!ctor->open) {
+        // TODO use some default opening scheme instead?
+        return fail<mono>("type " + quote(arg.show()) + " cannot be opened");
+      }
+
+      // instantiate open type and unify with arg
+      return instantiate(ctor->open()) >>= [=](mono open) {
+        return fresh() >>= [=](mono result) {
+          return unify(arg >>= result, open) >> substitute(result);
+        };
+      };
+    };
+  };
+}
+
 // row extension type constructor ::: * -> @ -> @
 static mono ext(symbol name) {
   static std::map<symbol, type_constant> table;
@@ -829,6 +858,11 @@ std::shared_ptr<context> make_context() {
     const mono a = res->fresh();
     res->def("nil", res->generalize(lst(a)));
   }
+
+
+  
+
+  
   
   return res;
 }

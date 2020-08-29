@@ -24,9 +24,9 @@ struct let;
 struct cond;
 
 struct attr;
+struct open;
 
-
-struct expr: variant<lit, var, abs, app, let, cond, attr> {
+struct expr: variant<lit, var, abs, app, let, cond, attr, open> {
   using expr::variant::variant;
 };
 
@@ -65,6 +65,10 @@ struct cond {
 struct attr {
   expr arg;
   symbol name;
+};
+
+struct open {
+  expr arg;
 };
 
 

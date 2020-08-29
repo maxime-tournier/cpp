@@ -7,6 +7,7 @@
 #include "list.hpp"
 
 #include <map>
+#include <functional>
 
 namespace ast {
 struct expr;
@@ -54,11 +55,16 @@ struct ctor {
   }
 };
 
+struct mono;
 
-struct type_constant_info {
+struct type_constant_info: std::enable_shared_from_this<type_constant_info> {
   symbol name;
   struct kind kind;
   bool flip;
+
+  using open_type = std::function<mono()>;
+  open_type open;
+  
   type_constant_info(symbol name, struct kind kind=term, bool flip=false):
       name(name), kind(kind), flip(flip) {}
 };

@@ -215,13 +215,21 @@ static const auto check_let = ((pop >>= expect<sexpr::list>) >>= [](sexpr::list 
   };
  }) | fail<expr>("(let ((`sym` `expr`)...) `expr`)");
 
+
+// open
+static const auto check_open = pop >>= [](sexpr arg) {
+  const expr res = open{check(arg)};
+  return empty >> pure(res);
+};
+
 // special forms
 using special_type = std::function<result<expr>(sexpr::list)>;
 
 static const std::map<symbol, special_type> special = {
     {"fn", check_abs},
     {"if", check_cond},
-    {"let", check_let},    
+    {"let", check_let},
+    {"open", check_open},
 };
 
 static expr check_app(sexpr func, sexpr::list args) {
