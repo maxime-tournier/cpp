@@ -56,6 +56,7 @@ const mono number = type_constant("num");
 const mono string = type_constant("str");
 
 const mono record = type_constant("record", row >>= term);
+const mono empty = type_constant("empty", row);
 
 const mono lst = type_constant("list", term >>= term);
 
@@ -784,7 +785,7 @@ static monad<mono> infer(ast::open self) {
       }
 
       // instantiate open type and unify with arg
-      return instantiate(ctor->open()) >>= [=](mono open) {
+      return instantiate(ctor->open(ctor)) >>= [=](mono open) {
         return fresh() >>= [=](mono result) {
           return unify(arg >>= result, open) >> substitute(result);
         };
@@ -860,7 +861,18 @@ std::shared_ptr<context> make_context() {
   }
 
 
-  
+  {
+    const mono module = type_constant("module", term >>= term, false, [=](mono self) {
+      const mono a = res->fresh();
+      const mono b = res->fresh();
+      return res->generalize(self(a) >>= record(ext("nil")(lst(a))
+                                                (ext("map")((a >>= b) >>= lst(a) >>= lst(b))
+                                                 (empty))));
+    });
+
+    const mono a = res->fresh();
+    res->def("module", res->generalize(module(a)));
+  }
 
   
   

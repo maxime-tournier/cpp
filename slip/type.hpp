@@ -55,22 +55,23 @@ struct ctor {
   }
 };
 
-struct mono;
+struct poly;
+struct type_constant_info;
+using type_constant = shared<type_constant_info>;
 
-struct type_constant_info: std::enable_shared_from_this<type_constant_info> {
+struct type_constant_info {
   symbol name;
   struct kind kind;
   bool flip;
 
-  using open_type = std::function<mono()>;
+  using open_type = std::function<poly(type_constant self)>;
   open_type open;
   
-  type_constant_info(symbol name, struct kind kind=term, bool flip=false):
-      name(name), kind(kind), flip(flip) {}
+  type_constant_info(symbol name, struct kind kind=term, bool flip=false, open_type open={}):
+    name(name), kind(kind), flip(flip), open(open) {}
 };
 
 
-using type_constant = shared<type_constant_info>;
 
 struct var_info {
   std::size_t depth;
