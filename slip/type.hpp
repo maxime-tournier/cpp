@@ -5,6 +5,7 @@
 #include "symbol.hpp"
 #include "fix.hpp"
 #include "list.hpp"
+#include "shared.hpp"
 
 #include <map>
 #include <functional>
@@ -14,18 +15,6 @@ struct expr;
 }
 
 namespace type {
-
-template<class Info>
-struct shared: std::shared_ptr<const Info> {
-  template<class... Args>
-  explicit shared(const Args&... args):
-    std::shared_ptr<const Info>(
-          std::make_shared<const Info>(Info{args...})) {}
-
-  shared(const shared&) = default;
-  shared(shared&&) = default;  
-  
-};
 
 struct ctor;
 

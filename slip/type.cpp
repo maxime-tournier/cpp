@@ -2,10 +2,15 @@
 #include "ast.hpp"
 #include "either.hpp"
 #include "unit.hpp"
+#include "hamt.hpp"
+#include "common.hpp"
 
 #include <functional>
 #include <sstream>
 #include <algorithm>
+#include <sstream>
+
+
 
 ////////////////////////////////////////////////////////////////////////////////
 #ifdef SLIP_DEBUG
@@ -23,22 +28,6 @@ static void debug(const Args&... args) {
 #define debug(...)
 
 #endif
-
-
-template<class T>
-static std::string quote(const T& self) {
-  std::stringstream ss;
-  ss << '"' << self << '"';
-  return ss.str();
-}
-
-
-template<class T>
-static std::string parens(const T& self) {
-  std::stringstream ss;
-  ss << '(' << self << ')';
-  return ss.str();
-}
 
 
 
@@ -264,9 +253,6 @@ std::string poly::show(repr_type repr) const {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-
-#include "hamt.hpp"
-#include <sstream>
 
 namespace type {
 

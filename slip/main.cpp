@@ -1,6 +1,8 @@
 #include "sexpr.hpp"
 #include "ast.hpp"
 #include "type.hpp"
+#include "eval.hpp"
+
 #include "repl.hpp"
 
 #include <iostream>
@@ -42,12 +44,15 @@ int main_repl() {
 
 int main_load(std::string filename) try {
   auto ctx = type::make_context();
+  auto env = eval::make_environment();
   
   if(std::ifstream ifs{filename}) {
     for(auto s: parser::run(program(), ifs)) {
       const auto e = ast::check(s);
-      const auto p = type::infer(ctx, e);
-      std::cout << " :: " << p.show() << std::endl;
+      const auto p = infer(ctx, e);
+      const auto v = run(env, e);
+      std::cout << " :: " << p.show() << '\n';
+      std::cout << " = " << v.show() << std::endl;      
     }
     
     return 0;
