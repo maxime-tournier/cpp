@@ -10,8 +10,10 @@
 
 namespace eval {
 
+using table_type = hamt::map<symbol, value>;
+
 struct environment {
-  hamt::map<symbol, value> defs;
+  table_type table;
 };
 
 std::shared_ptr<environment> make_environment() {
@@ -20,18 +22,50 @@ std::shared_ptr<environment> make_environment() {
 
 
 template<class T>
-using monad = std::function<value(const std::shared_ptr<environment>&)>;
+using monad = std::function<T(const table_type&)>;
 
+static monad<value> compile(const ast::expr& self);
 
 template<class T>
-static monad<value> eval(const T& self) {
-  throw std::runtime_error("unimplemented eval: " + std::string(typeid(T).name()));
+static monad<value> compile(const T& self) {
+  throw std::runtime_error("unimplemented compile: " + std::string(typeid(T).name()));
 }
 
-static monad<value> eval(const ast::lit& self) {
+static monad<value> compile(const ast::lit& self) {
   return match(self, [](auto self) -> monad<value> {
-    return [=](const std::shared_ptr<environment>&) { return self; };
+    return [=](const auto&) { return self; };
   });
+}
+
+struct closure {
+  table_type table;
+  symbol arg;
+  monad<value> body;
+};
+
+static monad<value> compile(const ast::abs& self) {
+  return [body = compile(self.body),
+          arg = self.arg.name](const auto& env) -> value {
+    return shared<closure>(env, arg, body);
+  };
+}
+
+
+static monad<value> compile(const ast::app& self) {
+  const auto func = compile(self.func);
+  const auto arg = compile(self.arg);  
+  
+  return [=](const auto& env) {
+    const auto f = func(env).template get<shared<closure>>();
+    return f->body(env.set(f->arg, arg(env)));
+  };
+}
+
+
+static monad<value> compile(const ast::var& self) {
+  return [name=self.name](const auto& env) {
+    return env.get(name);
+  };
 }
 
 std::string value::show() const {
@@ -45,11 +79,12 @@ std::string value::show() const {
 }
 
 
+static monad<value> compile(const ast::expr& self) {
+  return match(self, [](const auto& self) { return compile(self); });
+}
+
 value run(std::shared_ptr<environment> env, const ast::expr& self) {
-  return match(self,
-               [&](const auto& self) -> value {
-                 return eval(self)(env);
-               });
+  return compile(self)(env->table);
 
 }
 
