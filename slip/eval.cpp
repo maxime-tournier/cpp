@@ -6,7 +6,7 @@
 #include "ast.hpp"
 #include "hamt.hpp"
 #include "symbol.hpp"
-#include "tool.hpp"
+#include "common.hpp"
 
 namespace eval {
 
