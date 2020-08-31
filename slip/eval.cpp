@@ -20,15 +20,19 @@ std::shared_ptr<environment> make_environment() {
 
 
 template<class T>
-using monad = std::function<value(std::shared_ptr<environment>)>;
+using monad = std::function<value(const std::shared_ptr<environment>&)>;
 
 
 template<class T>
 static monad<value> eval(const T& self) {
-  std::clog << "derp" << std::endl;
   throw std::runtime_error("unimplemented eval: " + std::string(typeid(T).name()));
 }
 
+static monad<value> eval(const ast::lit& self) {
+  return match(self, [](auto self) -> monad<value> {
+    return [=](const std::shared_ptr<environment>&) { return self; };
+  });
+}
 
 std::string value::show() const {
   return match(*this,

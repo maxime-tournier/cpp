@@ -27,7 +27,8 @@ int main_repl() {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
 
   auto ctx = type::make_context();
-
+  auto env = eval::make_environment();
+  
   const auto history = ".slip";
 
   repl([&](const char* input) {
@@ -35,7 +36,8 @@ int main_repl() {
       const auto s = parser::run(parser, input);
       const auto e = ast::check(s);
       const auto p = type::infer(ctx, e);
-      std::cout << " :: " << p.show() << std::endl;
+      const auto v = run(env, e);
+      std::cout << " :: " << p.show() << " = " << v.show() << std::endl;      
     });
   }, "> ", history);
 
@@ -51,8 +53,7 @@ int main_load(std::string filename) try {
       const auto e = ast::check(s);
       const auto p = infer(ctx, e);
       const auto v = run(env, e);
-      std::cout << " :: " << p.show() << '\n';
-      std::cout << " = " << v.show() << std::endl;      
+      std::cout << " :: " << p.show() << " = " << v.show() << std::endl;
     }
     
     return 0;
