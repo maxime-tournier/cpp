@@ -56,8 +56,9 @@ static monad<value> compile(const ast::app& self) {
   const auto arg = compile(self.arg);  
   
   return [=](const auto& env) {
-    const auto f = func(env).template get<shared<closure>>();
-    return f->body(env.set(f->arg, arg(env)));
+    const value f = func(env);
+    const auto& c = f.template get<shared<closure>>();
+    return c->body(env.set(c->arg, arg(env)));
   };
 }
 
