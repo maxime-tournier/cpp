@@ -59,7 +59,9 @@ TEST(hamt, iter) {
   std::clog << x.get(48) << std::endl;
 
 
-  x.iter([](auto i, auto j) { std::clog << i << " " << j << std::endl; });
+  x.iter([](auto i, auto j) {
+    std::clog << i << " " << j << std::endl;
+  });
 }
 
 
@@ -67,12 +69,14 @@ TEST(hamt, quirks) {
   hamt::array<double> x;
   using traits = hamt::traits<5, 4>;
 
-  const std::size_t key = 105965433143312;
-  x = x.set(105965433143312, 1.0);
+  const std::size_t keys[] = {105965433143312, 105965433145616};
 
-  std::clog << std::hex << key << std::endl;
-  std::clog << std::bitset<64>(key) << std::endl;
-  show(traits::split(key, traits::level_indices{}));
+  for(auto key: keys) {
+    x = x.set(key, 1.0);
+  }
 
-  std::clog << x.get(key) << std::endl;
+  for(auto key: keys) {
+    std::clog << x.get(key) << std::endl;
+  }
+  
 }
