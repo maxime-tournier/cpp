@@ -66,7 +66,7 @@ template<std::size_t B, std::size_t L>
 constexpr typename traits<B, L>::index_array traits<B, L>::offsets;
 
 
-template<class T, std::size_t B, std::size_t L>
+template<class T, std::size_t B=5, std::size_t L=4>
 class array: public traits<B, L> {
   using node_type = ref<sparse::base>;
   node_type root;
