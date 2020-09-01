@@ -390,8 +390,21 @@ static auto pure(T value) {
 }
 
 template<class MA, class Func, class A=value<MA>>
+static auto map(MA self, Func func) {
+  return [=](state& s) {
+    return self(s) |= func;
+  };
+}
+
+template<class MA, class Func, class A=value<MA>>
+static auto operator|=(MA self, Func func) {
+  return map(self, func);
+}
+
+
+template<class MA, class Func, class A=value<MA>>
 static auto bind(MA self, Func func) {
-  return [self, func](state& s) {
+  return [=](state& s) {
     return self(s) >>= [&](const A& value) {
       return func(value)(s);
     };
@@ -707,6 +720,20 @@ static monad<mono> infer(ast::cond self) {
         return unify(conseq, alt) >> substitute(conseq);
       };
     };
+  };
+}
+
+
+static monad<mono> infer(ast::record self) {
+  const monad<mono> init = pure(empty);
+  return foldr(self.attrs, init, [](ast::def self, monad<mono> tail) -> monad<mono> {
+    return infer(self.value) >>= [=](mono ty) {
+      return tail |= [=](mono rows) -> mono {
+        return ext(self.name)(ty)(rows);
+      };
+    };
+  }) |= [](mono rows) {
+    return record(rows);
   };
 }
 

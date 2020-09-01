@@ -24,9 +24,11 @@ struct let;
 struct cond;
 
 struct attr;
+struct record;
+
 struct open;
 
-struct expr: variant<lit, var, abs, app, let, cond, attr, open> {
+struct expr: variant<lit, var, abs, app, let, cond, record, attr, open> {
   using expr::variant::variant;
 };
 
@@ -60,6 +62,10 @@ struct cond {
   expr pred;
   expr conseq;
   expr alt;
+};
+
+struct record {
+  list<def> attrs;
 };
 
 struct attr {

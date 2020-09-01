@@ -16,7 +16,7 @@ struct closure;
 struct builtin;
 struct record;
 
-struct value: variant<bool, long, double, std::string, shared<record>, shared<closure>> {
+struct value: variant<bool, long, double, std::string, record, closure> {
   using value::variant::variant;
 
   std::string show() const;
