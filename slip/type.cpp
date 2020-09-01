@@ -887,6 +887,11 @@ std::shared_ptr<context> make_context() {
     res->def("module", res->generalize(module(a)));
   }
 
+
+  res->def("eq", integer >>= integer >>= boolean);
+  res->def("add", integer >>= integer >>= integer);
+  res->def("sub", integer >>= integer >>= integer);
+  res->def("mul", integer >>= integer >>= integer);      
   
   
   return res;

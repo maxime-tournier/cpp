@@ -12,13 +12,7 @@ namespace eval {
 
 using table_type = hamt::map<symbol, value>;
 
-struct environment {
-  table_type table;
-};
 
-std::shared_ptr<environment> make_environment() {
-  return std::make_shared<environment>();
-}
 
 
 template<class T>
@@ -82,6 +76,27 @@ static monad<value> compile(ast::cond self) {
   };
 }
 
+struct def {
+  symbol name;
+  monad<value> code;
+};
+
+static monad<value> compile(ast::let self) {
+  const auto defs = map(self.defs, [](ast::def self) {
+    return def{self.name, compile(self.value)};
+  });
+
+  const auto body = compile(self.body);
+  
+  return [=](auto env) {
+    for(auto&& def: defs) {
+      env = env.set(def.name, def.code(env));
+    }
+
+    return body(env);
+  };
+}
+
 
 struct record {
   using attrs_type = hamt::map<symbol, value>;
@@ -89,19 +104,14 @@ struct record {
 };
 
 static monad<value> compile(ast::record self) {
-  struct attr {
-    symbol name;
-    monad<value> def;
-  };
-  
   const auto defs = map(self.attrs, [](ast::def self) {
-    return attr{self.name, compile(self.value)};
+    return def{self.name, compile(self.value)};
   });
 
   return [defs](const auto& env) {
     record res;
     for(auto&& attr: defs) {
-      res.attrs = std::move(res.attrs).set(attr.name, attr.def(env));
+      res.attrs = std::move(res.attrs).set(attr.name, attr.code(env));
     }
     return res;
   };
@@ -144,9 +154,63 @@ static monad<value> compile(ast::expr self) {
   return match(self, [](auto self) { return compile(self); });
 }
 
+static value wrap(value self) { return self; }
+
+template<class Func>
+static closure wrap(Func func) {
+  const symbol arg = "__arg__";
+  return {{}, arg, [=](const auto& env) {
+    return wrap(func(env.get(arg)));
+  }};
+}
+
+
+struct environment {
+  table_type table;
+
+  template<class T>
+  void def(symbol name, T value) {
+    table = table.set(name, wrap(value));
+  }
+};
+
+
 value run(std::shared_ptr<environment> env, const ast::expr& self) {
   return compile(self)(env->table);
 }
+
+
+std::shared_ptr<environment> make_environment() {
+  auto res = std::make_shared<environment>();
+
+  res->def("eq", [=](value x) {
+    return [=](value y) -> value {
+      return x.get<long>() == y.get<long>();
+    };
+  });
+
+  res->def("add", [=](value x) {
+    return [=](value y) -> value {
+      return x.get<long>() + y.get<long>();
+    };
+  });
+
+  res->def("sub", [=](value x) {
+    return [=](value y) -> value {
+      return x.get<long>() - y.get<long>();
+    };
+  });
+
+  res->def("mul", [=](value x) {
+    return [=](value y) -> value {
+      return x.get<long>() * y.get<long>();
+    };
+  });
+  
+  
+  return res;
+}
+
 
 } // namespace eval
 
