@@ -119,12 +119,24 @@ static monad<value> compile(ast::attr self) {
 
 std::string value::show() const {
   return match(*this,
-               [](bool value) -> std::string { return value ? "true" : "false"; },
-               [](long value) { return std::to_string(value); },
-               [](double value) { return std::to_string(value); },
-               [](std::string value) { return quote(value); },
-               [](record value) { return std::string("#record"); },
-               [](closure value) { return std::string("#closure"); });
+               [](bool self) -> std::string { return self ? "true" : "false"; },
+               [](long self) { return std::to_string(self); },
+               [](double self) { return std::to_string(self); },
+               [](std::string self) { return quote(self); },
+               [](record self) {
+                 std::stringstream ss;
+                 ss << "(record";
+
+                 self.attrs.iter([&](symbol name, value val) {
+                   ss << " (" << name << " " << val.show() << ")";
+                 });
+
+                 ss << ")";
+
+                 // TODO abbreviate if too long
+                 return ss.str();
+               },
+               [](closure self) { return std::string("#closure"); });
 }
 
 
