@@ -38,7 +38,7 @@ static monad<value> compile(const ast::lit& self) {
 }
 
 struct closure {
-  table_type table;
+  table_type env;
   symbol arg;
   monad<value> body;
 };
@@ -58,7 +58,7 @@ static monad<value> compile(const ast::app& self) {
   return [=](const auto& env) {
     const value f = func(env);
     const auto& c = f.template get<shared<closure>>();
-    return c->body(env.set(c->arg, arg(env)));
+    return c->body(c->env.set(c->arg, arg(env)));
   };
 }
 
