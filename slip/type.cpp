@@ -580,7 +580,7 @@ static monad<unit> unify_app_rows(app lhs, app rhs) {
 static monad<unit> unify(mono lhs, mono rhs) {
   assert(lhs.kind() == rhs.kind() && "kind error");
   
-  debug("unifying:", quote(show(lhs)), "with:", quote(show(rhs)));
+  debug("unifying:", show(lhs), "==", show(rhs));
   
   const auto kind = lhs.kind();
 
