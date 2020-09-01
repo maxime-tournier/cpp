@@ -69,6 +69,20 @@ static monad<value> compile(const ast::var& self) {
   };
 }
 
+
+static monad<value> compile(const ast::cond& self) {
+  return [pred=compile(self.pred),
+          conseq=compile(self.conseq),
+          alt=compile(self.alt)](const auto& env) {
+    if(pred(env).template get<bool>()) {
+      return conseq(env);
+    } else {
+      return alt(env);
+    }
+  };
+}
+
+
 std::string value::show() const {
   return match(*this,
                [](bool value) -> std::string { return value ? "true" : "false"; },
