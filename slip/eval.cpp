@@ -35,7 +35,14 @@ struct closure {
   table_type env;
   symbol arg;
   monad<value> body;
+  mutable symbol self = "__self__";
 };
+
+static symbol gensym(std::string prefix) {
+  static std::size_t index = 0;
+  symbol res = (prefix + std::to_string(index++)).c_str();
+  return res;
+}
 
 static monad<value> compile(ast::abs self) {
   return [body = compile(self.body),
@@ -50,9 +57,13 @@ static monad<value> compile(ast::app self) {
   const auto arg = compile(self.arg);  
   
   return [=](const auto& env) {
-    const value f = func(env);
+    value f = func(env);
     const closure& c = f.template get<closure>();
-    return c.body(c.env.set(c.arg, arg(env)));
+    auto sub = c.env.set(c.arg, arg(env));
+
+    // TODO only if needed
+    sub = sub.set(c.self, std::move(f));
+    return c.body(sub);
   };
 }
 
@@ -90,7 +101,11 @@ static monad<value> compile(ast::let self) {
   
   return [=](auto env) {
     for(auto&& def: defs) {
-      env = env.set(def.name, def.code(env));
+      value v = def.code(env);
+      if(auto c = v.template cast<closure>()) {
+        c->self = def.name;
+      }
+      env = env.set(def.name, std::move(v));
     }
 
     return body(env);
