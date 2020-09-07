@@ -4,6 +4,7 @@
 #include "eval.hpp"
 
 #include "repl.hpp"
+#include "lua.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -27,8 +28,8 @@ int main_repl() {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
 
   auto ctx = type::make_context();
-  auto env = eval::make_environment();
-  
+  // auto env = eval::make_environment();
+  auto env = lua::make_environment();
   const auto history = ".slip";
 
   repl([&](const char* input) {
@@ -36,8 +37,8 @@ int main_repl() {
       const auto s = parser::run(parser, input);
       const auto e = ast::check(s);
       const auto p = type::infer(ctx, e);
-      const auto v = run(env, e);
-      std::cout << " :: " << p.show() << " = " << v.show() << std::endl;      
+      const auto v = lua::run(env, e);
+      std::cout << " :: " << p.show() << " = " << v << std::endl;      
     });
   }, "> ", history);
 
@@ -46,14 +47,15 @@ int main_repl() {
 
 int main_load(std::string filename) try {
   auto ctx = type::make_context();
-  auto env = eval::make_environment();
+  // auto env = eval::make_environment();
+  auto env = lua::make_environment();
   
   if(std::ifstream ifs{filename}) {
     for(auto s: parser::run(program(), ifs)) {
       const auto e = ast::check(s);
       const auto p = infer(ctx, e);
-      const auto v = run(env, e);
-      std::cout << " :: " << p.show() << " = " << v.show() << std::endl;
+      const auto v = lua::run(env, e);
+      std::cout << " :: " << p.show() << " = " << v << std::endl;
     }
     
     return 0;
