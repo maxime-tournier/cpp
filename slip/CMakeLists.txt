@@ -1,6 +1,6 @@
 project(slip VERSION 0.1)
 
-add_executable(slip main.cpp ast.cpp type.cpp eval.cpp lua.cpp)
+add_executable(slip main.cpp ast.cpp type.cpp lua.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR})
 
 option(SLIP_DEBUG "" OFF)

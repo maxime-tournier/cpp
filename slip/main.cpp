@@ -1,7 +1,6 @@
 #include "sexpr.hpp"
 #include "ast.hpp"
 #include "type.hpp"
-#include "eval.hpp"
 
 #include "repl.hpp"
 #include "lua.hpp"
@@ -28,7 +27,6 @@ int main_repl() {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
 
   auto ctx = type::make_context();
-  // auto env = eval::make_environment();
   auto env = lua::make_environment();
   const auto history = ".slip";
 
@@ -47,7 +45,6 @@ int main_repl() {
 
 int main_load(std::string filename) try {
   auto ctx = type::make_context();
-  // auto env = eval::make_environment();
   auto env = lua::make_environment();
   
   if(std::ifstream ifs{filename}) {
