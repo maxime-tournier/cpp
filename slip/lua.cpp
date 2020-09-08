@@ -58,16 +58,19 @@ public:
   state(std::ostream& out): out(out) { }
 
   template<class T>
-  std::ostream& operator<<(const T& value) {
-    return (out << value);
+  state& operator<<(const T& value) {
+    out << value;
+    return *this;
   }
 
-  std::ostream& newline() {
-    return (out << "\n" << std::string(2 * indent, ' '));
+  state& newline() {
+    (out << "\n" << std::string(2 * indent, ' '));;
+    return *this;
   }
   
-  std::ostream& operator<<(std::ostream& (*func)(std::ostream&)) {
-    return out << func;
+  state& operator<<(std::ostream& (*func)(std::ostream&)) {
+    out << func;
+    return *this;
   }
 
   template<class Cont>
@@ -113,11 +116,11 @@ static void compile(const ast::app& self, state& ss) {
 
 static const auto wrap = [](auto expr) {
   return [=](state& ss) {
-    ss << "(function()\n";
+    ss << "(function()";
     ss.with_indent([&] {
-      expr(ss);
+      expr(ss.newline());
     });
-    ss << "\nend)()";
+    ss.newline() << "end)()";
   };
 };
 
@@ -136,11 +139,11 @@ static void compile(const ast::cond& self, state& ss) {
   return wrap([=](auto& ss) {
     ss << "if ";
     compile(self.pred, ss);
-    ss << "\nthen return ";
+    ss.newline() << "then return ";
     compile(self.conseq, ss);
-    ss << "\nelse return ";
+    ss.newline() << "else return ";
     compile(self.alt, ss);
-    ss << "\nend";
+    ss.newline() << "end";
   })(ss);
 }
 
@@ -148,15 +151,16 @@ static void compile(const ast::let& self, state& ss) {
   return wrap([=](state& ss) {
     for(auto def: self.defs) {
       if(auto fun = def.value.cast<ast::abs>()) {
-        ss << "function " << def.name.repr << "(" << fun->arg.name.repr << ")"
-           << "\n return ";
-        compile(fun->body, ss);
-        ss << "\nend";
+        ss.newline() << "function " << def.name.repr << "(" << fun->arg.name.repr << ")";
+        ss.with_indent([&] {
+          ss.newline() << "return ";
+          compile(fun->body, ss);
+        });
+        ss.newline() << "end";
       } else {
-        ss << "local " << def.name.repr << " = ";
+        ss.newline() << "local " << def.name.repr << " = ";
         compile(def.value, ss);
       }
-      ss << '\n';
     }
     
     ss << "return ";
