@@ -16,16 +16,27 @@ struct environment {
 
   environment(): state(luaL_newstate()) {
     luaL_openlibs(state);
+
+    const int error = luaL_dofile(state, find("prelude.lua").c_str());
+    check(error);
   }
 
-  void run(std::string code) {
-    const int error = luaL_dostring(state, code.c_str());
-    
+  void check(int error) const {
     if(error) {
       std::string what = lua_tostring(state, -1);
       lua_pop(state, 1);
       throw std::runtime_error(what);
     }
+  }
+  
+
+  std::string find(std::string filename) const {
+    return SLIP_DIR + std::string("/") + filename;
+  }
+      
+  void run(std::string code) {
+    const int error = luaL_dostring(state, code.c_str());
+    check(error);
   }
   
   ~environment() {
