@@ -1,15 +1,23 @@
-function add(x, y)
-   return x + y
+function add(x)
+   return function(y)
+	  return x + y
+   end
 end
 
-function sub(x, y)
-   return x - y
+function sub(x)
+   return function(y)
+	  return x - y
+   end
 end
 
-function mul(x, y)
-   return x * y
+function mul(x)
+   return function(y)
+	  return x * y
+   end
 end
 
-function eq(x, y)
-   return x == y
+function eq(x)
+   return function(y)
+	  return x == y
+   end
 end

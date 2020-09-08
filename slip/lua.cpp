@@ -79,17 +79,17 @@ static void compile(const ast::app& self, std::ostream& ss) {
 
 static const auto wrap = [](auto expr) {
   return [=](std::ostream& ss) {
-    ss << "(function() ";
+    ss << "(function()\n";
     expr(ss);
-    ss << " end)()";
+    ss << "\nend)()";
   };
 };
 
 
 static void compile(const ast::abs& self, std::ostream& ss) {
-  ss << "(function(" << self.arg.name.repr << ") return ";
+  ss << "(function(" << self.arg.name.repr << ")\n return ";
   compile(self.body, ss);
-  ss << " end)";
+  ss << "\nend)";
 }
 
 
@@ -97,26 +97,31 @@ static void compile(const ast::cond& self, std::ostream& ss) {
   return wrap([=](auto& ss) {
     ss << "if ";
     compile(self.pred, ss);
-    ss << " then return ";
+    ss << "\nthen return ";
     compile(self.conseq, ss);
-    ss << " else return ";
+    ss << "\nelse return ";
     compile(self.alt, ss);
-    ss << " end";
+    ss << "\nend";
   })(ss);
 }
 
 static void compile(const ast::let& self, std::ostream& ss) {
   return wrap([=](std::ostream& ss) {
     for(auto def: self.defs) {
-      ss << "local " << def.name.repr << " = ";
-      compile(def.value, ss);
+      if(auto fun = def.value.cast<ast::abs>()) {
+        ss << "function " << def.name.repr << "(" << fun->arg.name.repr << ")"
+           << "\n return ";
+        compile(fun->body, ss);
+        ss << "\nend";
+      } else {
+        ss << "local " << def.name.repr << " = ";
+        compile(def.value, ss);
+      }
       ss << '\n';
     }
     
     ss << "return ";
     compile(self.body, ss);
-
-    ss << " end";
   })(ss);
 }
 
