@@ -103,6 +103,7 @@ struct storage: array<T> {
   storage(std::size_t mask, Args&&... args):
       array<T>(mask), values{std::forward<Args>(args)...} {
     static_assert(sizeof...(Args) == N, "size error");
+    assert(mask && "empty mask");
   }
 
 
