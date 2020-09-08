@@ -114,7 +114,7 @@ static void compile(const ast::app& self, state& ss) {
 }
 
 
-static const auto wrap = [](auto expr) {
+static const auto thunk = [](auto expr) {
   return [=](state& ss) {
     ss << "(function()";
     ss.with_indent([&] {
@@ -124,6 +124,28 @@ static const auto wrap = [](auto expr) {
   };
 };
 
+
+static void compile(const ast::record& self, state& ss) {
+  ss << "{";
+
+  int sep = 0;
+  for(ast::def def: self.attrs) {
+    if(sep++) {
+      ss << ", ";
+    }
+    
+    ss << def.name.repr << " = ";
+    compile(def.value, ss);
+  }
+  ss << "}";
+}
+
+static void compile(const ast::attr& self, state& ss) {
+  ss << "(";
+  compile(self.arg, ss);
+  ss << ").";
+  ss << self.name.repr;
+}
 
 static void compile(const ast::abs& self, state& ss) {
   ss << "(function(" << self.arg.name.repr << ")";
@@ -136,7 +158,7 @@ static void compile(const ast::abs& self, state& ss) {
 
 
 static void compile(const ast::cond& self, state& ss) {
-  return wrap([=](auto& ss) {
+  return thunk([=](auto& ss) {
     ss << "if ";
     compile(self.pred, ss);
     ss.newline() << "then return ";
@@ -148,22 +170,26 @@ static void compile(const ast::cond& self, state& ss) {
 }
 
 static void compile(const ast::let& self, state& ss) {
-  return wrap([=](state& ss) {
+  return thunk([=](state& ss) {
+    int sep = 0;
     for(auto def: self.defs) {
+      if(sep++) {
+        ss.newline();
+      }
       if(auto fun = def.value.cast<ast::abs>()) {
-        ss.newline() << "function " << def.name.repr << "(" << fun->arg.name.repr << ")";
+        ss << "function " << def.name.repr << "(" << fun->arg.name.repr << ")";
         ss.with_indent([&] {
           ss.newline() << "return ";
           compile(fun->body, ss);
         });
         ss.newline() << "end";
       } else {
-        ss.newline() << "local " << def.name.repr << " = ";
+        ss << "local " << def.name.repr << " = ";
         compile(def.value, ss);
       }
     }
     
-    ss << "return ";
+    ss.newline() << "return ";
     compile(self.body, ss);
   })(ss);
 }
