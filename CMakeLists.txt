@@ -27,7 +27,6 @@ add_executable(compressed compressed.cpp)
 add_executable(hamt hamt.cpp)
 
 add_subdirectory(slip)
-
 add_executable(obj obj.cpp)
 
 
@@ -48,6 +47,8 @@ if(BUILD_MESH)
 endif()
 
 # tests
+option(BUILD_TESTS "" OFF)
+if(BUILD_TESTS)
 find_package(GTest)
 
 if(GTest_FOUND) 
@@ -61,4 +62,4 @@ if(GTest_FOUND)
   target_link_libraries(tests GTest::GTest GTest::Main)
   gtest_discover_tests(tests)
 endif()
-  
+endif()
