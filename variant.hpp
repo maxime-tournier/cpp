@@ -6,123 +6,79 @@
 
 #include "overload.hpp"
 
+namespace detail {
 
-template<std::size_t N, class T, class ... Ts>
-struct type_index;
-
-template<std::size_t N, class T, class ... Ts>
-struct type_index<N, T, T, Ts...> {
-  static_assert(1 + sizeof...(Ts) <= N, "size error");
-  static constexpr std::size_t value = N - (sizeof...(Ts) + 1);
+template<std::size_t I, class T>
+struct type_index {
+    friend constexpr std::integral_constant<std::size_t, I> get_index(type_index, const T*) { return {}; }
 };
 
-template<std::size_t N, class T, class X, class ... Xs>
-struct type_index<N, T, X, Xs...>: type_index<N, T, Xs...> { };
+template<class Is, class... Ts>
+struct type_indices;
+
+template<std::size_t... Is, class... Ts>
+struct type_indices<std::index_sequence<Is...>, Ts...>: type_index<Is, Ts>... { };
+
+} // namespace detail
 
 
-// el-cheapo immutablo varianto
-template<class... Ts>
+template<class... Args>
 class variant {
-  struct base {
-    virtual ~base() {}
-    base(std::size_t index): index(index) {}
-    const std::size_t index;
-  };
+    struct base {
+        const std::size_t index;
+    };
 
-  template<class T>
-  struct derived: base {
-    const T value;
-    
-    derived(std::size_t index, const T& value):
-      base(index), value(value) {}
-  };
-
-  template<class T>
-  struct tag {
-    friend std::shared_ptr<base> construct(const tag& self,
-                                           const T* value) {
-      return std::make_shared<derived<T>>(index(self, value), *value);
-    }
-
-    friend constexpr std::size_t index(const tag&,
-                                       const T* value) {
-      return type_index<sizeof...(Ts), T, Ts...>::value;
-    }
-  };
-
-  struct tags: tag<Ts>... {
     template<class T>
-    static constexpr std::size_t index_of() {
-      return index(tags{}, (const T*)nullptr);
-    }
-  };
+    struct derived: base {
+        const T value;
 
-  using data_type = std::shared_ptr<base>;
-  data_type data;
+        derived(std::size_t index, const T& value): base{index}, value{value} {}
+    };
+
+    std::shared_ptr<const base> storage;
+    using type_index = detail::type_indices<std::index_sequence_for<Args...>, Args...>;
 
 public:
-  variant(const variant&) = default;
-  variant(variant&&) = default;
+    template<class T>
+    variant(const T& value):
+      storage(std::make_shared<derived<T>>(get_index(type_index{}, &value).value, value)) {}
 
-  variant& operator=(const variant&) = default;
-  variant& operator=(variant&&) = default;
+    variant(const variant&) = default;
+    variant(variant&&) = default;
 
-  template<class T>
-  variant(const T& value): data(construct(tags{}, &value)) {}
+    template<class Visitor>
+    friend auto visit(const variant& self, Visitor visitor)  {
+        using result_type =
+            typename std::common_type<typename std::result_of<Visitor(const Args&)>::type...>::type;
+        using thunk_type = result_type (*)(const base*, const Visitor& visitor);
 
-  std::size_t type() const { return data->index; }
+        const thunk_type table[] = {+[](const base* ptr, const Visitor& visitor) -> result_type {
+          return visitor(static_cast<const derived<Args>*>(ptr)->value);
+        }...};
 
-  template<class T, std::size_t I = tags::template index_of<T>()>
-  const T& get() const {
-    assert(data->index == I && "type error");
-    return static_cast<derived<T>*>(data.get())->value;
-  }
+        return table[self.storage->index](self.storage.get(), visitor);
+    }
 
-  template<class T, std::size_t I = tags::template index_of<T>()>
-  const T* cast() const {
-    if(data->index != I) {
+    template<class... Cases>
+    friend auto match(const variant& self, Cases... cases) {
+      return visit(self, overload<Cases...>{cases...});
+    }
+
+    template<class T>
+    const T* cast() const {
+      if(storage->index == get_index(type_index{}, (const T*)nullptr)) {
+        return &get<T>();
+      }
+
       return nullptr;
     }
-    return &get<T>();
-  }
 
-  template<class Visitor, class... Args>
-  friend auto visit(const variant& self, const Visitor& visitor,
-                    Args&&... args) {
-    using result_type = std::common_type_t<decltype(
-        visitor(self.get<Ts>(), std::forward<Args>(args)...))...>;
-
-    using thunk_type =
-        result_type (*)(const variant&, const Visitor& visitor, Args&&...);
-    // TODO should be constexpr
-    static const thunk_type thunks[] = {[](const variant& self,
-                                           const Visitor& visitor,
-                                           Args&&... args) -> result_type {
-      return visitor(self.get<Ts>(), std::forward<Args>(args)...);
-    }...};
-
-    return thunks[self.data->index](self, visitor, std::forward<Args>(args)...);
-  };
-
-
-  template<class... Cases>
-  friend auto match(const variant& self, const Cases&... cases) {
-    return visit(self, overload<Cases...>(cases...));
-  };
-
-
-  bool operator==(const variant& other) const {
-    if(type() != other.type()) {
-      return false;
+    template<class T>
+    const T& get() const {
+      return static_cast<const derived<T>*>(storage.get())->value;
     }
 
-    return match(*this, [&](const auto& self) {
-      using type = typename std::decay<decltype(self)>::type;
-      return self == other.get<type>();
-    });
-  }
-  
-  
+    std::size_t type() const { return storage->index; }
 };
 
 
