@@ -39,7 +39,7 @@ struct var {
 };
 
 struct abs {
-  var arg;
+  list<var> args;
   expr body;
 };
 

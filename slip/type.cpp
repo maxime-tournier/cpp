@@ -683,16 +683,29 @@ static monad<mono> infer(ast::var self) {
 
 
 static monad<mono> infer(ast::abs self) {
-  return fresh() >>= [=](mono arg) {
-    debug("abs:", self.arg.name, "::", show(arg));
-    return scope((def(self.arg.name, poly(arg)) >> infer(self.body))
-                 >>= [=](mono body) {
-                   return substitute(arg >>= body) >>= [=](mono res) {
-                     debug("abs res:", show(res));
-                     return pure(res);
-                   };
-                 });
-  };
+  // return fresh() >>= [=](mono arg) {
+  //   debug("abs:", self.arg.name, "::", show(arg));
+
+  // TODO handle nullary apps
+  
+  const auto defs = sequence(map(self.args, [=](ast::var arg) {
+    return fresh() >>= [=](mono ty) {
+      return def(arg.name, poly(ty)) >> pure(ty);
+    };
+  }));
+    
+  return scope(defs >>= [=](list<mono> args) {
+    return scope(infer(self.body) >>= [=](mono body) {
+      const mono sig = foldr(args, body, [](mono from, mono to) {
+        return from >>= to;
+      });
+      
+      return substitute(sig) >>= [=](mono res) {
+        debug("abs res:", show(res));
+        return pure(res);
+      };
+    });
+  });
   
 };
 

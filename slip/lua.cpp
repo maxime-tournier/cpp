@@ -147,13 +147,36 @@ static void compile(const ast::attr& self, state& ss) {
   ss << self.name.repr;
 }
 
-static void compile(const ast::abs& self, state& ss) {
-  ss << "(function(" << self.arg.name.repr << ")";
+
+static void compile(const ast::abs& self, state& ss, const char* name) {
+  ss << "function";
+
+  if(name) {
+    ss << " " << name;
+  }
+  
+  ss << "(";
+  
+  unsigned sep = 0;
+  for(auto arg: self.args) {
+    if(sep++) {
+      ss << ", ";
+    }
+    ss << arg.name.repr;
+  }
+
+  ss << ")";
   ss.with_indent([&] {
     ss.newline() << "return ";
     compile(self.body, ss);
   });
-  ss.newline() << "end)";
+  ss.newline() << "end";
+}
+
+static void compile(const ast::abs& self, state& ss) {
+  ss << "(";
+  compile(self, ss, nullptr);
+  ss << ")";
 }
 
 
@@ -177,12 +200,7 @@ static void compile(const ast::let& self, state& ss) {
         ss.newline();
       }
       if(auto fun = def.value.cast<ast::abs>()) {
-        ss << "function " << def.name.repr << "(" << fun->arg.name.repr << ")";
-        ss.with_indent([&] {
-          ss.newline() << "return ";
-          compile(fun->body, ss);
-        });
-        ss.newline() << "end";
+        compile(*fun, ss, def.name.repr);
       } else {
         ss << "local " << def.name.repr << " = ";
         compile(def.value, ss);

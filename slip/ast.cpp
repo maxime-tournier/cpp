@@ -171,9 +171,7 @@ static const auto check_abs =
     return pop >>= [=](sexpr body) {
       return empty >> [=](sexpr::list) -> result<expr> {
         return (check_args |= [=](list<var> args) -> expr {
-          return foldr(args, check(body), [](var arg, expr body) -> expr {
-            return abs{arg, body};
-          });
+          return abs{args, check(body)};
         })(args);
       };
     };
