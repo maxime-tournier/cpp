@@ -397,4 +397,4 @@ std::string run(std::shared_ptr<environment> env, const ast::expr& self) {
   return result;
 }
 
-}
+} // namespace lua
