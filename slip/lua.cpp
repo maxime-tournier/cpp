@@ -116,7 +116,7 @@ struct table {
 
 struct getattr {
   expr arg;
-  symbol attr;
+  symbol name;
 };
 
 
@@ -153,11 +153,11 @@ public:
 };
 
 
-namespace alt {
 
 template<class T>
 static expr compile(T) {
-  throw std::runtime_error("unimplemented");
+  throw std::runtime_error("unimplemented compile: " +
+                           std::string(typeid(T).name()));
 }
 
 static expr compile(ast::expr self);
@@ -234,12 +234,14 @@ static expr compile(ast::expr self) {
   });
 }
 
-
+////////////////////////////////////////////////////////////////////////////////
 static void format(expr self, state& ss);
+static void format(term self, state& ss);
 
 template<class T>
 static void format(T self, state& ss) {
-  throw std::runtime_error("unimplemented");
+  throw std::runtime_error("unimplemented format: " +
+                           std::string(typeid(T).name()));
 }
 
 static void format(lit self, state& ss) {
@@ -249,162 +251,142 @@ static void format(lit self, state& ss) {
                [&](auto self) { ss << self; });               
 }
 
-
-
-} // namespace alt
-
-
-template<class T>
-static void compile(const T& self, state&) {
-  throw std::runtime_error("unimplemented");
-}
-
-
-
-static void compile(const ast::expr& self, state& ss);
-
-static void compile(const ast::lit& self, state& ss) {
-  return match(self,
-               [&](bool self) { ss << (self ? "true" : "false"); },
-               [&](std::string self) { ss << '"' << self << '"'; },   
-               [&](auto self) { ss << self; });               
-}
-
-
-static void compile(const ast::var& self, state& ss) {
+static void format(var self, state& ss) {
   ss << self.name.repr;
 }
 
 
-static void compile(const ast::app& self, state& ss) {
-  compile(self.func, ss);
+static void format(ret self, state& ss) {
+  format(self.value, ss << "return ");
+}
+
+static void format(local self, state& ss) {
+  ss << "local " << self.name;
+}
+
+static void format(def self, state& ss) {
+  ss << self.name << " = ";
+  format(self.value, ss);
+}
+
+
+
+static void format(call self, state& ss) {
+  format(self.func, ss);
   ss << "(";
   unsigned sep = 0;
   for(auto arg: self.args) {
     if(sep++) {
       ss << ", ";
     }
-    compile(arg, ss);
+    format(arg, ss);
   }
   ss << ")";
 }
 
 
-static const auto thunk = [](auto expr) {
-  return [=](state& ss) {
-    ss << "(function()";
-    ss.with_indent([&] {
-      expr(ss.newline());
-    });
-    ss.newline() << "end)()";
-  };
-};
+static void format(thunk self, state& ss) {
+  ss << "(function()";
+  ss.with_indent([&] {
+    for(term t: self.body) {
+      format(t, ss.newline());
+    }
+  });
+  ss.newline() << "end)()";
+}
 
 
-static void compile(const ast::record& self, state& ss) {
+
+
+static void format(table self, state& ss) {
   ss << "{";
 
   int sep = 0;
-  for(ast::def def: self.attrs) {
+  for(auto def: self.attrs) {
     if(sep++) {
       ss << ", ";
     }
     
     ss << def.name.repr << " = ";
-    compile(def.value, ss);
+    format(def.value, ss);
   }
   ss << "}";
 }
 
-static void compile(const ast::attr& self, state& ss) {
+
+static void format(getattr self, state& ss) {
   ss << "(";
-  compile(self.arg, ss);
+  format(self.arg, ss);
   ss << ").";
   ss << self.name.repr;
 }
 
 
-static void compile(const ast::abs& self, state& ss, const char* name) {
-  ss << "function";
-
-  if(name) {
-    ss << " " << name;
-  }
-  
-  ss << "(";
+static void format(func self, state& ss) {
+  ss << "function(";
   
   unsigned sep = 0;
   for(auto arg: self.args) {
     if(sep++) {
       ss << ", ";
     }
-    ss << arg.name.repr;
+    ss << arg.repr;
   }
 
   ss << ")";
   ss.with_indent([&] {
-    ss.newline() << "return ";
-    compile(self.body, ss);
+    for(term t: self.body) {
+      format(t, ss.newline());
+    }
   });
   ss.newline() << "end";
 }
 
-static void compile(const ast::abs& self, state& ss) {
-  ss << "(";
-  compile(self, ss, nullptr);
-  ss << ")";
-}
+static void format(cond self, state& ss) {
+  format(self.pred, ss << "if ");
 
-
-static void compile(const ast::cond& self, state& ss) {
-  return thunk([=](auto& ss) {
-    ss << "if ";
-    compile(self.pred, ss);
-    ss.newline() << "then return ";
-    compile(self.conseq, ss);
-    ss.newline() << "else return ";
-    compile(self.alt, ss);
-    ss.newline() << "end";
-  })(ss);
-}
-
-static void compile(const ast::let& self, state& ss) {
-  return thunk([=](state& ss) {
-    int sep = 0;
-    for(auto def: self.defs) {
-      if(sep++) {
-        ss.newline();
-      }
-      if(auto fun = def.value.cast<ast::abs>()) {
-        compile(*fun, ss, def.name.repr);
-      } else {
-        ss << "local " << def.name.repr << " = ";
-        compile(def.value, ss);
-      }
+  ss.newline() << "then";
+  ss.with_indent([&] {
+    for(term t: self.conseq) {
+      format(t, ss.newline());
     }
-    
-    ss.newline() << "return ";
-    compile(self.body, ss);
-  })(ss);
+  });
+  ss.newline() << "else";
+  ss.with_indent([&] {
+    for(term t: self.alt) {
+      format(t, ss.newline());
+    }
+  });
+  ss.newline() << "end";
 }
 
 
 
-static void compile(const ast::expr& self, state& ss) {
+////////////////////////////////////////////////////////////////////////////////
+
+static void format(expr self, state& ss) {
   return match(self, [&](auto self) {
-    return compile(self, ss);
+    return format(self, ss);
   });
 }
+
+static void format(term self, state& ss) {
+  return match(self, [&](auto self) {
+    return format(self, ss);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// TODO optimization
+
 
 
 std::string run(std::shared_ptr<environment> env, const ast::expr& self) {
   std::stringstream buffer;
   state ss(buffer);
-  
-  ss << "return ";
-  
-  compile(self, ss);
-  ss << std::flush;
+
+  const term code = ret{compile(self)};
+  format(code, ss);
 
   std::clog << buffer.str() << std::endl;
 
