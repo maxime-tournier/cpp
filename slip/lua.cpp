@@ -109,7 +109,13 @@ static void compile(const ast::var& self, state& ss) {
 static void compile(const ast::app& self, state& ss) {
   compile(self.func, ss);
   ss << "(";
-  compile(self.arg, ss);
+  unsigned sep = 0;
+  for(auto arg: self.args) {
+    if(sep++) {
+      ss << ", ";
+    }
+    compile(arg, ss);
+  }
   ss << ")";
 }
 

@@ -239,9 +239,9 @@ static const std::map<symbol, special_type> special = {
 };
 
 static expr check_app(sexpr func, sexpr::list args) {
-  return foldl(check(func), args, [](expr func, sexpr arg) -> expr {
-    return app{func, check(arg)};
-  });
+  return app{check(func), foldr(args, list<expr>(), [](auto head, auto tail) {
+    return check(head) %= tail;
+  })};
 }
 
 expr check(const sexpr& e) {

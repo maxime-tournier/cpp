@@ -45,7 +45,7 @@ struct abs {
 
 struct app {
   expr func;
-  expr arg;
+  list<expr> args;
 };
 
 struct def {

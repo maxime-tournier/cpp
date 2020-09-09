@@ -710,14 +710,22 @@ static monad<mono> infer(ast::abs self) {
 };
 
 static monad<mono> infer(ast::app self) {
+  const auto args = sequence(map(self.args, [=](ast::expr arg) {
+    return infer(arg) >>= substitute;
+  }));
+  
   return infer(self.func) >>= [=](mono func) {
-    return infer(self.arg) >>= [=](mono arg) {
+    return args >>= [=](list<mono> args) {
       return fresh() >>= [=](mono ret) {
-        // note: func needs to be substituted *after* arg has been inferred
-        return substitute(arg >>= ret) >>= [=](mono lhs) {
-          return substitute(func) >>= [=](mono rhs) {
+        const mono sig = foldr(args, ret, [](mono from, mono to) {
+          return from >>= to;
+        });
+        
+        // note: func needs to be substituted *after* args have been inferred
+        return substitute(sig) >>= [=](mono sig) {
+          return substitute(func) >>= [=](mono func) {
 
-            return unify(lhs, rhs) >> substitute(ret);
+            return unify(sig, func) >> substitute(ret);
           };
         };
       };
