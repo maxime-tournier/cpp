@@ -49,6 +49,76 @@ std::shared_ptr<environment> make_environment() {
   return std::make_shared<environment>();
 }
 
+struct ret;
+struct def;
+struct local;
+struct call;
+struct thunk;
+struct cond;
+
+struct var;
+struct lit;
+struct func;
+struct table;
+struct getattr;
+
+struct term: variant<ret, local, def, call, cond> {
+  using term::variant::variant;
+};
+
+struct expr: variant<var, lit, call, func, thunk, table, getattr> {
+  using expr::variant::variant;
+};
+
+struct lit: variant<bool, long, double, std::string> {
+  using lit::variant::variant;
+};
+
+struct call {
+  expr func;
+  list<expr> args;
+};
+
+struct func {
+  list<symbol> args;
+  list<term> body;
+};
+
+struct thunk {
+  list<term> body;
+};
+
+struct ret {
+  expr value;
+};
+
+struct local {
+  symbol name;
+};
+
+struct var {
+  symbol name;
+};
+
+struct def {
+  symbol name;
+  expr value;
+};
+
+struct cond {
+  expr pred;
+  list<term> conseq, alt; 
+};
+
+struct table {
+  list<def> attrs;
+};
+
+struct getattr {
+  expr arg;
+  symbol attr;
+};
+
 
 class state {
   std::ostream& out;
@@ -83,6 +153,106 @@ public:
 };
 
 
+namespace alt {
+
+template<class T>
+static expr compile(T) {
+  throw std::runtime_error("unimplemented");
+}
+
+static expr compile(ast::expr self);
+
+
+static expr compile(ast::lit self) {
+  return match(self, [](auto self) -> expr {
+    return lit{self};
+  });
+}
+
+
+static expr compile(ast::app self) {
+  return call{compile(self.func), map(self.args, [](auto arg) {
+    return compile(arg);
+  })};
+}
+
+static expr compile(ast::abs self) {
+  const term body = ret{compile(self.body)};
+  return func{map(self.args, [](auto arg) {
+    return arg.name;
+  }), body %= list<term>() };
+}
+
+static expr compile(ast::var self) {
+  return var{self.name};
+}
+
+
+static expr compile(ast::cond self) {
+  const expr pred = compile(self.pred);
+  const term conseq = ret{compile(self.conseq)};
+  const term alt = ret{compile(self.alt)};
+  
+  const term body = cond{pred,
+    conseq %= list<term>(),
+    alt %= list<term>()};
+  
+  return thunk{body %= list<term>()};
+}
+
+
+static expr compile(ast::let self) {
+  const list<term> decls = map(self.defs, [](ast::def self) -> term {
+    return local{self.name};
+  });
+
+  const list<term> defs = map(self.defs, [](ast::def self) -> term {
+    return def{self.name, compile(self.value)};
+  });
+
+  const term body = ret{compile(self.body)};
+  
+  return thunk{concat(concat(decls, defs),
+                      body %= list<term>())};
+}
+
+
+static expr compile(ast::record self) {
+  return table{map(self.attrs, [](auto attr) {
+    return def{attr.name, compile(attr.value)};
+  })};
+}
+
+static expr compile(ast::attr self) {
+  return getattr{compile(self.arg), self.name};
+}
+
+
+static expr compile(ast::expr self) {
+  return match(self, [](auto self) {
+    return compile(self);
+  });
+}
+
+
+static void format(expr self, state& ss);
+
+template<class T>
+static void format(T self, state& ss) {
+  throw std::runtime_error("unimplemented");
+}
+
+static void format(lit self, state& ss) {
+  return match(self,
+               [&](bool self) { ss << (self ? "true" : "false"); },
+               [&](std::string self) { ss << '"' << self << '"'; },   
+               [&](auto self) { ss << self; });               
+}
+
+
+
+} // namespace alt
+
 
 template<class T>
 static void compile(const T& self, state&) {
@@ -96,7 +266,7 @@ static void compile(const ast::expr& self, state& ss);
 static void compile(const ast::lit& self, state& ss) {
   return match(self,
                [&](bool self) { ss << (self ? "true" : "false"); },
-               [&](std::string self) { ss << '"' << self << '"'; },               
+               [&](std::string self) { ss << '"' << self << '"'; },   
                [&](auto self) { ss << self; });               
 }
 
