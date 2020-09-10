@@ -323,7 +323,7 @@ static void format(getattr self, state& ss) {
 
 
 static void format(func self, state& ss) {
-  ss << "function(";
+  ss << "(function(";
   
   unsigned sep = 0;
   for(auto arg: self.args) {
@@ -339,7 +339,7 @@ static void format(func self, state& ss) {
       format(t, ss.newline());
     }
   });
-  ss.newline() << "end";
+  ss.newline() << "end)";
 }
 
 static void format(cond self, state& ss) {
