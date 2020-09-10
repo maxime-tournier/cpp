@@ -1,6 +1,9 @@
 #include <iostream>
 
 int main() {
-  std::cout << 101 << "\n";
+  std::cout << "cout" << std::endl;
+  std::cerr << "cerr" << std::endl;
+  std::clog << "clog" << std::endl;    
+  
   return 0;
 }
