@@ -29,6 +29,7 @@ add_executable(hamt hamt.cpp)
 add_subdirectory(slip)
 add_executable(obj obj.cpp)
 
+add_executable(termux termux.cpp)
 
 
 # add_executable(cml cml.cpp)
