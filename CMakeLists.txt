@@ -13,7 +13,7 @@ endif()
 
 # add_subdirectory(sparse)
 if(ANDROID)
-  set(CMAKE_EXE_LINKER_FLAGS "-lc++")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
   set(LUA_MATH_LIBRARY "/system/lib/libm.so")
 endif()
   
