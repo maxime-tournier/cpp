@@ -149,20 +149,24 @@ static auto fail(std::string what) {
   };
 };
 
-static auto check_list = [](auto func) {
-  using func_type = decltype(func);
-  using result_type = typename std::result_of<func_type(sexpr)>::type;
-  using value_type = value<result_type>;
-  using list_type = list<value_type>;
-  
-  return fix<list_type>([=](auto self) {
-    return (empty >> pure(list_type{}))
-      | ((pop >>= func) >>= [=](auto first) {
-        return self >>= [=](auto rest) {
-          return pure(first %= rest);
-        };
-      });
+template<class M>
+static auto sequence(list<M> ms) -> monad<list<value<M>>> {
+  const monad<list<value<M>>> init = pure(list<value<M>>());
+  return foldr(ms, init, [](auto head, auto tail) {
+    return head >>= [=](auto head) {
+      return tail >>= [=](auto tail) {
+        return pure(head %= tail);
+      };
+    };
   });
+}
+
+
+
+static auto check_list = [](auto func) {
+  return [=](sexpr::list xs) {
+    return sequence(map(xs, func))(xs);
+  };
  };
 
 
