@@ -38,8 +38,14 @@ struct var {
   symbol name;
 };
 
+struct arg: variant<symbol> {
+  using arg::variant::variant;
+
+  symbol name() const;
+};
+
 struct abs {
-  list<var> args;
+  list<arg> args;
   expr body;
 };
 
@@ -76,6 +82,8 @@ struct attr {
 struct open {
   expr arg;
 };
+
+
 
 
 // TODO recursion schemes?

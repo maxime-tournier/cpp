@@ -12,6 +12,11 @@ struct syntax_error: std::runtime_error {
   syntax_error(std::string what): std::runtime_error("syntax error: " + what) { }
 };
 
+
+symbol arg::name() const {
+  return match(*this, [](symbol self) { return self; });
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // sexpr list parser monad
 template<class T>
@@ -161,7 +166,7 @@ static auto check_list = [](auto func) {
 // check function arguments
 static const auto check_args = check_list([](sexpr item) {
   return expect<symbol>(item) |= [](symbol name) {
-    return var{name};
+    return ast::arg{name};
   };
 });
 
@@ -170,7 +175,7 @@ static const auto check_abs =
   ((pop >>= expect<sexpr::list>) >>= [](sexpr::list args) {
     return pop >>= [=](sexpr body) {
       return empty >> [=](sexpr::list) -> result<expr> {
-        return (check_args |= [=](list<var> args) -> expr {
+        return (check_args |= [=](list<ast::arg> args) -> expr {
           return abs{args, check(body)};
         })(args);
       };

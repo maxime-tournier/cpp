@@ -688,9 +688,9 @@ static monad<mono> infer(ast::abs self) {
 
   // TODO handle nullary apps
   
-  const auto defs = sequence(map(self.args, [=](ast::var arg) {
+  const auto defs = sequence(map(self.args, [=](ast::arg arg) {
     return fresh() >>= [=](mono ty) {
-      return def(arg.name, poly(ty)) >> pure(ty);
+      return def(arg.name(), poly(ty)) >> pure(ty);
     };
   }));
     

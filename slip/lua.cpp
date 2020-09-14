@@ -178,8 +178,8 @@ static expr compile(ast::app self) {
 
 static expr compile(ast::abs self) {
   const term body = ret{compile(self.body)};
-  return func{map(self.args, [](auto arg) {
-    return arg.name;
+  return func{map(self.args, [](ast::arg arg) {
+    return arg.name();
   }), body %= list<term>() };
 }
 
