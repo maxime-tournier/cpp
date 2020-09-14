@@ -34,6 +34,9 @@ static result<T> make_success(T value, sexpr::list rest) {
   return success<T>{value, rest};
 }
 
+template<class T>
+using monad = std::function<result<T>(sexpr::list)>;
+
 template<class Parser>
 using value = typename std::result_of<Parser(sexpr::list)>::type::value_type::value_type;
 
@@ -67,7 +70,8 @@ static auto expect(sexpr self) {
 }
 
 
-static const auto bind = [](auto lhs, auto func) {
+template<class LHS, class Func, class=value<LHS>>
+static auto bind(LHS lhs, Func func) {
   return [=](sexpr::list args) {
     return lhs(args) >>= [=](auto head) {
       return func(head.value)(head.rest);
@@ -75,7 +79,8 @@ static const auto bind = [](auto lhs, auto func) {
   };
 };
 
-static const auto map = [](auto lhs, auto func) {
+template<class LHS, class Func, class=value<LHS>>
+static auto map(LHS lhs, Func func) {
   return [=](sexpr::list args) {
     return lhs(args) >>= [=](auto head) {
       return make_success(func(head.value), head.rest);
@@ -126,7 +131,7 @@ struct fixpoint {
 
 
 template<class T, class Def>
-static fixpoint<T, Def> fix(Def def) { return {def}; }
+static fixpoint<T, Def> fix(const Def& def) { return {def}; }
 
 
 static const auto run = [](auto parser, sexpr::list args) {
