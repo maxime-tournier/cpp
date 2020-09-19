@@ -190,14 +190,14 @@ static const auto check_arg_simple = (pop >>= expect<symbol>) |=
     [](symbol name) { return ast::arg{name}; };
 
 static const auto check_arg_annot = (pop >>= expect<sexpr::list>) >>=
-  nest(repeat((pop >>= expect<symbol>) >>= [](symbol name) {
+  nest((pop >>= expect<symbol>) >>= [](symbol name) {
     return pop >>= [=](sexpr type) {
       const ast::arg res = ast::annot{name, check(type)};
       return empty >> pure(res);
     };
-  }));
+  });
 
-static const auto check_arg = check_arg_simple; //  | check_arg_annot;
+static const auto check_arg = check_arg_simple  | check_arg_annot;
 
 
 // check function arguments
