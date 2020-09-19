@@ -173,9 +173,26 @@ static auto check_list(M parser) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+static const auto check_arg_simple = (pop >>= expect<symbol>) |=
+    [](symbol name) { return ast::arg{name}; };
+
+// static const auto check_arg_annot = (pop >>= expect<list>) >>= [](sexpr::list xs) {
+//   return check_list((pop >>= expect<symbol>) >>= [=](symbol name) {
+//     return pop >>= [=](sexpr type) {
+//       const ast::arg res = ast::annot
+//       return empty >> pure(res);
+//     };
+//   })(xs);
+// };
+
+static const auto check_arg = check_arg_simple ; // | check_arg_annot;
+
+
 // check function arguments
-static const auto check_args = check_list(
-    (pop >>= expect<symbol>) |= [](symbol name) { return ast::arg{name}; });
+static const auto check_args = check_list(check_arg);
+
+
+
 
 // check function definition
 static const auto check_abs =
