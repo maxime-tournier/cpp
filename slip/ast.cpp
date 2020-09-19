@@ -163,21 +163,19 @@ static auto sequence(list<M> ms) -> monad<list<value<M>>> {
 
 
 
-static auto check_list = [](auto func) {
+template<class M, class=value<M>>
+static auto check_list(M parser) {
   return [=](sexpr::list xs) {
-    return sequence(map(xs, func))(xs);
+    return sequence(map(xs, [=](sexpr) { return parser; }))(xs);
   };
- };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////
 
 // check function arguments
-static const auto check_args = check_list([](sexpr item) {
-  return expect<symbol>(item) |= [](symbol name) {
-    return ast::arg{name};
-  };
-});
+static const auto check_args = check_list(
+    (pop >>= expect<symbol>) |= [](symbol name) { return ast::arg{name}; });
 
 // check function definition
 static const auto check_abs =
@@ -211,12 +209,10 @@ static const auto check_def = ((pop >>= expect<symbol>) >>= [](symbol name) {
  }) | fail<def>("(`sym` `expr`) expected for definition");
 
 
-static const auto check_defs = check_list([](sexpr item) {
-  // TODO prevent redefinitions
-  return (expect<sexpr::list>(item) |= [](sexpr::list def) {
+static const auto check_defs = check_list(// TODO prevent redefinitions
+  ((pop >>= expect<sexpr::list>) |= [](sexpr::list def) {
     return run(check_def, def);
-  }) | fail<def>("((`sym` `expr`)...) expected for definitions");
-});
+  }) | fail<def>("((`sym` `expr`)...) expected for definitions"));
 
 
 // let
