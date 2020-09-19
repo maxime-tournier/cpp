@@ -38,7 +38,12 @@ struct var {
   symbol name;
 };
 
-struct arg: variant<symbol> {
+struct annot {
+  symbol name;
+  expr type;
+};
+
+struct arg: variant<symbol, annot> {
   using arg::variant::variant;
 
   symbol name() const;
