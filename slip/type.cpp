@@ -48,6 +48,7 @@ const mono record = type_constant("record", row >>= term);
 const mono empty = type_constant("empty", row);
 
 const mono lst = type_constant("list", term >>= term);
+const mono ty = type_constant("type", term >>= term);
 
 struct type_error: std::runtime_error {
   type_error(std::string what): std::runtime_error("type error: " + what) { }
@@ -523,6 +524,12 @@ static monad<list<value<M>>> sequence(list<M> items) {
   };
 }
 
+// template<class LHS, class RHS, class L=value<LHS>, class R=value<RHS>>
+// static auto coproduct(LHS lhs, RHS rhs) {
+//   return [=](state& s) {
+//   };
+// }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // unification
@@ -682,10 +689,40 @@ static monad<mono> infer(ast::var self) {
 };
 
 
-static monad<mono> infer(ast::abs self) {
-  // return fresh() >>= [=](mono arg) {
-  //   debug("abs:", self.arg.name, "::", show(arg));
+// static monad<mono> check_type(mono type) {
+//   return (fresh() >>= [=](mono arg) {
+//     return unify(ty(arg), type) >> substitute(arg);
+//   }) | (fresh() >>= [=](mono arg) {
+//     return fresh() >>= [=](mono ctor) {
+//       return unify(ty(arg) >>= ctor, type) >> substitute(ctor) >>= [=](mono ctor) {
+//         return check_type(ctor) >>= [=](mono ctor) {
+//           return substitute(arg) >>= [=](mono arg) {
+//             // TODO check that arg is a var that can be quantified
+            
+//             // reconstruct application
+//             return pure(ctor(arg));
+//           };
+//         };
+//       };
+//     };
+//   });
+// }
 
+
+static auto infer(ast::arg self) {
+  return fresh();
+  // return match(self,
+  //              [](symbol self) -> monad<mono> { return fresh(); }// ,
+  //              [](annot self) -> monad<mono> {
+  //                return infer(self.type) >>= [](mono type) {
+  //                  return check_type(type);
+  //                };
+  //              }
+  //   );
+}
+
+
+static monad<mono> infer(ast::abs self) {
   // TODO handle nullary apps
   
   const auto defs = sequence(map(self.args, [=](ast::arg arg) {
