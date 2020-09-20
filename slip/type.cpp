@@ -147,8 +147,11 @@ std::string mono::show(repr_type repr) const {
                    return it->second;
                  },
                  [](App<result> self) -> result {
-                   const std::string ctor = self.ctor.parens ? parens(self.ctor.value) : self.ctor.value;
-                   const std::string arg = self.arg.parens ? parens(self.arg.value) : self.arg.value;
+                   const std::string ctor = self.ctor.parens ?
+                     parens(self.ctor.value) : self.ctor.value;
+                   
+                   const std::string arg = self.arg.parens ?
+                     parens(self.arg.value) : self.arg.value;
                    
                    if(self.ctor.flip) {
                      return {arg + " " + ctor, false, false};
@@ -371,29 +374,64 @@ struct context {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct state {
-  context& ctx;
-  substitution& sub;
+  context ctx;
+  substitution sub;
 };
 
+template<class T>
+struct success {
+  using value_type = T;
+  T value;
+  struct state state;
+};
 
 template<class T>
-using result = either<type_error, T>;
+static success<T> make_success(T value, state s) {
+  return {value, s};
+}
+
 
 template<class T>
-using monad = std::function<result<T>(state&)>;
+using result = either<type_error, success<T>>;
+
+template<class T>
+using monad = std::function<result<T>(state)>;
 
 template<class M>
-using value = typename std::result_of<M(state&)>::type::value_type;
+using value = typename std::result_of<M(state)>::type::value_type::value_type;
 
 template<class T>
 static auto pure(T value) {
-  return [value](state&) -> result<T> { return value; };
+  return [value](state s) -> result<T> {
+    return make_success(value, s);
+  };
 }
+
+template<class M, class Func, class T=value<M>>
+static auto bind(M self, Func func) {
+  return [=](state s) {
+    return self(s) >>= [&](const success<T>& self) {
+      return func(self.value)(self.state);
+    };
+  };
+}
+
+template<class M, class Func, class T=value<M>>
+static auto operator>>=(M self, Func func) {
+  return bind(self, func);
+}
+
+
+template<class LHS, class RHS, class L=value<LHS>, class R=value<RHS>>
+static auto operator>>(LHS lhs, RHS rhs) {
+  return lhs >>= [=](auto&&) { return rhs; };
+}
+
 
 template<class MA, class Func, class A=value<MA>>
 static auto map(MA self, Func func) {
-  return [=](state& s) {
-    return self(s) |= func;
+  return self >>= [=](A value) {
+    return pure(func(value));
   };
 }
 
@@ -403,28 +441,10 @@ static auto operator|=(MA self, Func func) {
 }
 
 
-template<class MA, class Func, class A=value<MA>>
-static auto bind(MA self, Func func) {
-  return [=](state& s) {
-    return self(s) >>= [&](const A& value) {
-      return func(value)(s);
-    };
-  };
-}
-
-template<class MA, class Func, class A=value<MA>>
-static auto operator>>=(MA self, Func func) {
-  return bind(self, func);
-}
-
-template<class MA, class MB, class A=value<MA>, class B=value<MB>>
-static auto operator>>(MA lhs, MB rhs) {
-  return lhs >>= [rhs](auto&) { return rhs; };
-}
 
 static auto upgrade(mono ty, var target) {
   const std::size_t max = target->depth;
-  return [=](state& s) -> result<unit> {
+  return [=](state s) -> result<unit> {
     const auto vars = ty.vars();
     for(auto v: vars) {
       if(v == target) {
@@ -440,67 +460,72 @@ static auto upgrade(mono ty, var target) {
       }
     }
     
-    return unit{};
+    return make_success(unit{}, s);
   };
 }
 
 
 static auto link(var from, mono to) {
-  return [=](state& s) -> result<unit> {
+  return [=](state s) -> result<unit> {
     debug("> link:", show(from), "==", show(to));
-    s.sub = s.sub.link(from, to);
-    return unit{};
+
+    return make_success(unit{}, state{s.ctx, s.sub.link(from, to)});
   };
 }
 
 static auto substitute(mono ty) {
-  return [=](state& s) -> result<mono> {
-    return s.sub(ty);
+  return [=](state s) -> result<mono> {
+    return make_success(s.sub(ty), s);
   };
 }
 
 
 template<class T>
 static auto fail(std::string what) {
-  return [what](state&) -> result<T> {
+  return [what](state) -> result<T> {
     return type_error(what);
   };
 }
 
-template<class M>
+template<class M, class T=value<M>>
 static auto scope(M m) {
-  return [m](state& outer) {
-    context scope = outer.ctx.scope();
-    state inner = {scope, outer.sub};
-    return m(inner);
+  return [m](state s) -> result<T> {
+    context scope = s.ctx.scope();
+    state inner = {scope, s.sub};
+
+    // update substitution from scope, drop context
+    return m(inner) >>= [=](success<T> self) -> result<T> {
+      return make_success(self.value,
+                          state{s.ctx, self.state.sub});
+    };
   };
 }
 
 static auto def(symbol name, poly p) {
-  return [name, p](state& s) -> result<unit> {
-    s.ctx.def(name, p);
-    return unit{};
+  return [name, p](state s) -> result<unit> {
+    s.ctx.def(name, p);         // FIXME return new context?
+    return make_success(unit{}, s);
   };
 };
 
 static auto generalize(mono ty) {
-  return [ty](state& s) -> result<poly> {
-    return s.ctx.generalize(ty);
+  return [ty](state s) -> result<poly> {
+    return make_success(s.ctx.generalize(ty), s);
   };
 }
 
 
 static auto fresh(kind k=term) {
-  return [k](state& s) -> result<var> {
-    return s.ctx.fresh(k);
+  return [k](state s) -> result<var> {
+    return make_success(s.ctx.fresh(k), s);
   };
 }
 
 
 static auto find(symbol name) {
-  return [name](state& s) -> result<poly> {
+  return [name](state s) -> result<poly> {
     if(auto poly = s.ctx.locals.find(name)) {
-      return *poly;
+      return make_success(*poly, s);
     }
     
     return type_error("unbound variable: " + quote(name));
@@ -508,17 +533,18 @@ static auto find(symbol name) {
 };
 
 static auto instantiate(poly p) {
-  return [p](state& s) -> result<mono> {
-    return s.ctx.instantiate(p);
+  return [p](state s) -> result<mono> {
+    return make_success(s.ctx.instantiate(p), s);
   };
 };
 
 
-template<class M>
+template<class M, class T=value<M>>
 static monad<list<value<M>>> sequence(list<M> items) {
-  if(!items) return pure(list<value<M>>{});
-  else return items->head >>= [=](auto head) {
-    return sequence(items->tail) >>= [=](auto tail) {
+  if(!items) {
+    return pure(list<T>{});
+  } else return items->head >>= [=](T head) {
+    return sequence(items->tail) >>= [=](list<T> tail) {
       return pure(head %= tail);
     };
   };
@@ -957,14 +983,17 @@ std::shared_ptr<context> make_context() {
 
 poly infer(std::shared_ptr<context> ctx, const ast::expr& e) {
   substitution sub;
-  state s{*ctx, sub};
+  state s = {*ctx, sub};
   
   const mono ty = match(infer(e)(s),
-                        [](mono self) { return self; },
+                        [=](success<mono> self) {
+                          // note: update context
+                          *ctx = self.state.ctx;
+                          return self.value;
+                        },
                         [](type_error error) -> mono {
                           throw error;
                         });
-  // return ty;
   return ctx->generalize(ty);
 }
 
