@@ -550,11 +550,22 @@ static monad<list<value<M>>> sequence(list<M> items) {
   };
 }
 
-// template<class LHS, class RHS, class L=value<LHS>, class R=value<RHS>>
-// static auto coproduct(LHS lhs, RHS rhs) {
-//   return [=](state& s) {
-//   };
-// }
+template<class LHS, class RHS, class L=value<LHS>, class R=value<RHS>>
+static auto coproduct(LHS lhs, RHS rhs) {
+  return [=](state s) {
+    if(auto res = lhs(s)) {
+      return res;
+    } else {
+      return rhs(s);
+    }
+  };
+}
+
+
+template<class LHS, class RHS, class L=value<LHS>, class R=value<RHS>>
+static auto operator|(LHS lhs, RHS rhs) {
+  return coproduct(lhs, rhs);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -715,36 +726,38 @@ static monad<mono> infer(ast::var self) {
 };
 
 
-// static monad<mono> check_type(mono type) {
-//   return (fresh() >>= [=](mono arg) {
-//     return unify(ty(arg), type) >> substitute(arg);
-//   }) | (fresh() >>= [=](mono arg) {
-//     return fresh() >>= [=](mono ctor) {
-//       return unify(ty(arg) >>= ctor, type) >> substitute(ctor) >>= [=](mono ctor) {
-//         return check_type(ctor) >>= [=](mono ctor) {
-//           return substitute(arg) >>= [=](mono arg) {
-//             // TODO check that arg is a var that can be quantified
+static monad<mono> check_type(mono type) {
+  return (fresh() >>= [=](mono arg) {
+    return unify(ty(arg), type) >> substitute(arg);
+  }) | (fresh() >>= [=](mono arg) {
+    return fresh() >>= [=](mono ctor) {
+      return unify(ty(arg) >>= ctor, type) >> substitute(ctor) >>= [=](mono ctor) {
+        return check_type(ctor) >>= [=](mono ctor) {
+          return substitute(arg) >>= [=](mono arg) {
+            // TODO check that arg is a var that can be quantified
             
-//             // reconstruct application
-//             return pure(ctor(arg));
-//           };
-//         };
-//       };
-//     };
-//   });
-// }
+            // reconstruct application
+            return pure(ctor(arg));
+          };
+        };
+      };
+    };
+  });
+}
 
 
 static auto infer(ast::arg self) {
-  return fresh();
-  // return match(self,
-  //              [](symbol self) -> monad<mono> { return fresh(); }// ,
-  //              [](annot self) -> monad<mono> {
-  //                return infer(self.type) >>= [](mono type) {
-  //                  return check_type(type);
-  //                };
-  //              }
-  //   );
+  return match(self,
+               [](symbol self) -> monad<mono> {
+                 return fresh() |= [](var res) {
+                   return mono(res);
+                 };
+               }, 
+               [](ast::annot self) -> monad<mono> {
+                 return infer(self.type) >>= [](mono type) {
+                   return check_type(type);
+                 };
+               });
 }
 
 
@@ -752,7 +765,7 @@ static monad<mono> infer(ast::abs self) {
   // TODO handle nullary apps
   
   const auto defs = sequence(map(self.args, [=](ast::arg arg) {
-    return fresh() >>= [=](mono ty) {
+    return infer(arg) >>= [=](mono ty) {
       return def(arg.name(), poly(ty)) >> pure(ty);
     };
   }));
@@ -959,7 +972,8 @@ std::shared_ptr<context> make_context() {
 
 
   {
-    const mono module = type_constant("module", term >>= term, false, [=](mono self) {
+    const mono module =
+      type_constant("module", term >>= term, false, [=](mono self) {
       const mono a = res->fresh();
       const mono b = res->fresh();
       return res->generalize(self(a) >>= record(ext("nil")(lst(a))
@@ -977,6 +991,8 @@ std::shared_ptr<context> make_context() {
   res->def("sub", integer >>= integer >>= integer);
   res->def("mul", integer >>= integer >>= integer);      
   
+
+  res->def("int", ty(integer));
   
   return res;
 }
