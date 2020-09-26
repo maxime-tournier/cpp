@@ -1,5 +1,12 @@
 #include "repl.hpp"
 
+#include <cstdlib>
+#include <readline/readline.h>
+#include <readline/history.h>
+
+#include "finally.hpp"
+
+#include <string>
 #include <cstring>
 
 

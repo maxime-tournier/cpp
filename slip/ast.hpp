@@ -27,8 +27,9 @@ struct attr;
 struct record;
 
 struct open;
+struct type;
 
-struct expr: variant<lit, var, abs, app, let, cond, record, attr, open> {
+struct expr: variant<lit, var, abs, app, let, cond, record, attr, open, type> {
   using expr::variant::variant;
 };
 
@@ -88,6 +89,10 @@ struct open {
   expr arg;
 };
 
+struct type {
+  symbol name;
+  expr def;
+};
 
 
 

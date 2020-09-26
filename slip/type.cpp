@@ -19,7 +19,9 @@
 template<class... Args>
 static void debug(const Args&... args) {
   int i = 0;
-  const int expand[] = {((std::clog << (i++ ? " " : "") << args), 0)...}; (void)expand;
+  const int expand[] = {((std::clog << (i++ ? " " : "") << args), 0)...};
+  (void)expand;
+  
   std::clog << std::endl;
 }
 
@@ -726,6 +728,7 @@ static monad<mono> infer(ast::var self) {
 };
 
 
+
 static monad<mono> check_type(mono type) {
   return (fresh() >>= [=](mono arg) {
     return unify(ty(arg), type) >> substitute(arg);
@@ -744,6 +747,19 @@ static monad<mono> check_type(mono type) {
     };
   });
 }
+
+
+// static monad<mono> infer(ast::type self) {
+//   return infer(self.def) >>= [=](mono def) {
+//     return fresh(row) >>= [=](mono row) {
+//       return unify(def, record(row)) >> substitute(row) >>= [=](mono row) {
+//         // check_type for each 
+//       };
+//     };
+//   };
+// }
+
+
 
 
 static auto infer(ast::arg self) {

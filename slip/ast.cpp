@@ -264,6 +264,16 @@ static const auto check_record = check_defs >>= [](list<ast::def> defs) {
   return pure(res);
 };
 
+
+// type
+static const auto check_type = (pop >>= expect<symbol>) >>= [](symbol name) {
+  return pop >>= [=](sexpr def) {
+    const expr res = type{name, check(def)};
+    return empty >> pure(res);
+  };
+};
+
+
 // special forms
 using special_type = std::function<result<expr>(sexpr::list)>;
 
@@ -273,6 +283,7 @@ static const std::map<symbol, special_type> special = {
     {"let", check_let},
     {"open", check_open},
     {"record", check_record},
+    {"type", check_type},
 };
 
 static expr check_app(sexpr func, sexpr::list args) {
