@@ -61,12 +61,13 @@ struct lit;
 struct func;
 struct table;
 struct getattr;
+struct nil;                     // TODO put in literals?
 
 struct term: variant<ret, local, def, call, cond> {
   using term::variant::variant;
 };
 
-struct expr: variant<var, lit, call, func, thunk, table, getattr> {
+struct expr: variant<var, lit, call, func, thunk, table, getattr, nil> { 
   using expr::variant::variant;
 };
 
@@ -118,6 +119,8 @@ struct getattr {
   expr arg;
   symbol name;
 };
+
+struct nil { };
 
 
 class state {
@@ -228,11 +231,17 @@ static expr compile(ast::attr self) {
 }
 
 
+static expr compile(ast::type self) {
+  return nil{};
+}
+
+
 static expr compile(ast::expr self) {
   return match(self, [](auto self) {
     return compile(self);
   });
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 static void format(expr self, state& ss);
@@ -263,6 +272,11 @@ static void format(ret self, state& ss) {
 static void format(local self, state& ss) {
   ss << "local " << self.name;
 }
+
+static void format(nil self, state& ss) {
+  ss << "nil";
+}
+
 
 static void format(def self, state& ss) {
   ss << self.name << " = ";

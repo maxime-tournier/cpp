@@ -58,6 +58,7 @@ struct type_constant_info {
   
   type_constant_info(symbol name, struct kind kind=term, bool flip=false, open_type open={}):
     name(name), kind(kind), flip(flip), open(open) {}
+
 };
 
 

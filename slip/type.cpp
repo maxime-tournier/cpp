@@ -748,16 +748,53 @@ static monad<mono> check_type(mono type) {
   });
 }
 
+template<class Func, class Result=typename std::result_of<Func(symbol, mono)>::type>
+static auto map_row(mono row, Func func) -> list<Result> {
+  return match(row,
+               [&](app self) {
+                 const mono tail = self.arg;
+                 const app ctor = self.ctor.get<app>();
+                 const mono arg = ctor.arg;
+                 const symbol name = ctor.ctor.get<type_constant>()->name;
+                 
+                 return func(name, arg) %= map_row(tail, func);
+               },
+               [](type_constant self) {
+                 if(self == empty.get<type_constant>()) {
+                   return list<Result>();
+                 }
 
-// static monad<mono> infer(ast::type self) {
-//   return infer(self.def) >>= [=](mono def) {
-//     return fresh(row) >>= [=](mono row) {
-//       return unify(def, record(row)) >> substitute(row) >>= [=](mono row) {
-//         // check_type for each 
-//       };
-//     };
-//   };
-// }
+                 throw std::logic_error("derp");
+               },
+               [](auto) -> list<Result> {
+                 throw std::logic_error("derp");
+               });
+};
+
+  
+
+static monad<mono> infer(ast::type self) {
+  return infer(self.def) >>= [=](mono def) {
+    return fresh(row) >>= [=](mono row) {
+      return unify(def, record(row)) >> substitute(row) >>= [=](mono row) {
+        return sequence(map_row(row, [](symbol name, mono arg) {
+          return check_type(arg) |= [=](mono arg) {
+            return ext(name)(arg);
+          };
+        })) |= [](list<mono> ctors) {
+          const mono def = ty(record(foldr(ctors, empty, [](mono ctor, mono tail) {
+            return ctor(tail);
+          })));
+
+          return def;
+          
+          // TODO need to know type variables to create type constructor, cannot
+          // simply put behind fn
+        };
+      };
+    };
+  };
+}
 
 
 
@@ -1009,7 +1046,10 @@ std::shared_ptr<context> make_context() {
   
 
   res->def("int", ty(integer));
-  
+  {
+    const mono a = res->fresh();    
+    res->def("list", ty(a) >>= ty(lst(a)));  
+  }
   return res;
 }
 
