@@ -786,10 +786,15 @@ static monad<mono> infer(ast::type self) {
             return ctor(tail);
           })));
 
+          // TODO we should probably prevent bound type variables
+
+          // TODO hence we should also accept parametric expressions like
+          // (type foo (fn (a) (record (bar (list a)))))
+
+          // TODO 
+          
           return def;
           
-          // TODO need to know type variables to create type constructor, cannot
-          // simply put behind fn
         };
       };
     };
