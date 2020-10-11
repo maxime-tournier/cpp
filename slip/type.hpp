@@ -80,13 +80,13 @@ struct App {
 };
 
 template<class T>
-struct Mono: variant<type_constant, var, App<T>> {
-  using Mono::variant::variant;
+struct Type: variant<type_constant, var, App<T>> {
+  using Type::variant::variant;
 
   template<class Func>
-  friend auto map(const Mono& self, Func func) {
+  friend auto map(const Type& self, Func func) {
     using type = typename std::result_of<Func(T)>::type;
-    using result_type = Mono<type>;
+    using result_type = Type<type>;
     return match(self,
                  [](type_constant self) -> result_type { return self; },
                  [](var self) -> result_type { return self; },
@@ -97,10 +97,11 @@ struct Mono: variant<type_constant, var, App<T>> {
 };
 
 
+
 // TODO use hamt::map instead?
 using repr_type = std::map<var, std::string>;
 
-struct mono: fix<Mono, mono> {
+struct mono: fix<Type, mono> {
   using mono::fix::fix;
   
   std::string show(repr_type={}) const;
@@ -142,6 +143,7 @@ struct Poly: variant<mono, Forall<T>> {
 
 };
 
+
 struct poly: fix<Poly, poly> {
   using poly::fix::fix;
 
@@ -152,6 +154,31 @@ struct poly: fix<Poly, poly> {
 };
 
 using forall = Forall<poly>;
+
+// system F types
+template<class T>
+struct Sigma: variant<Type<T>, Forall<T>> {
+  using Sigma::variant::variant;
+
+  template<class Func>
+  friend auto map(const Sigma& self, Func func) {
+    using type = typename std::result_of<Func(T)>::type;
+    using result_type = Sigma<type>;
+    return match(self,
+                 [&](Type<T> self) -> result_type { return map(self, func); },
+                 [&](Forall<T> self) -> result_type {
+                   return Forall<type>{self.arg, func(self.body)};
+                 });
+  }
+  
+};
+
+struct sigma: fix<Sigma, sigma> {
+  using sigma::fix::fix;
+  
+};
+
+using rho = Type<sigma>;
 
 ////////////////////////////////////////////////////////////////////////////////
 struct context;

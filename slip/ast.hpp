@@ -26,10 +26,7 @@ struct cond;
 struct attr;
 struct record;
 
-struct open;
-struct type;
-
-struct expr: variant<lit, var, abs, app, let, cond, record, attr, open, type> {
+struct expr: variant<lit, var, abs, app, let, cond, record, attr> {
   using expr::variant::variant;
 };
 

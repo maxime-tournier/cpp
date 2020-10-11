@@ -135,7 +135,7 @@ std::string mono::show(repr_type repr) const {
   };
 
   // TODO handle parens
-  return cata(*this, [&](Mono<result> self) {
+  return cata(*this, [&](Type<result> self) {
     return match(self,
                  [](type_constant self) -> result {
                    return {self->name.repr, self->flip};
@@ -166,7 +166,7 @@ std::string mono::show(repr_type repr) const {
 
 
 struct kind mono::kind() const {
-  return cata(*this, [](Mono<struct kind> self) {
+  return cata(*this, [](Type<struct kind> self) {
     return match(self,
                  [](type_constant self) { return self->kind; },
                  [](var self) { return self->kind; },
@@ -188,7 +188,7 @@ static list<T> unique(list<T> source) {
 }
 
 list<var> mono::vars() const {
-  return unique(cata(*this, [](Mono<list<var>> self) {
+  return unique(cata(*this, [](Type<list<var>> self) {
     return match(self,
                  [](var self) { return self %= list<var>{}; },
                  [](App<list<var>> self) {
@@ -288,7 +288,7 @@ public:
   }
   
   mono operator()(mono ty) const {
-    return cata(ty, [&](Mono<mono> self) {
+    return cata(ty, [&](Type<mono> self) {
       return match(self,
                    [&](var self) -> mono {
                      if(auto res = table.find(self.get())) {
