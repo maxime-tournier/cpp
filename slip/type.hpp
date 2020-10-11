@@ -155,30 +155,6 @@ struct poly: fix<Poly, poly> {
 
 using forall = Forall<poly>;
 
-// system F types
-template<class T>
-struct Sigma: variant<Type<T>, Forall<T>> {
-  using Sigma::variant::variant;
-
-  template<class Func>
-  friend auto map(const Sigma& self, Func func) {
-    using type = typename std::result_of<Func(T)>::type;
-    using result_type = Sigma<type>;
-    return match(self,
-                 [&](Type<T> self) -> result_type { return map(self, func); },
-                 [&](Forall<T> self) -> result_type {
-                   return Forall<type>{self.arg, func(self.body)};
-                 });
-  }
-  
-};
-
-struct sigma: fix<Sigma, sigma> {
-  using sigma::fix::fix;
-  
-};
-
-using rho = Type<sigma>;
 
 ////////////////////////////////////////////////////////////////////////////////
 struct context;
@@ -186,6 +162,7 @@ struct context;
 std::shared_ptr<context> make_context();
 
 poly infer(std::shared_ptr<context> ctx, const ast::expr&);
+
 
 }
 
