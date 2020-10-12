@@ -8,6 +8,8 @@
 
 namespace hmf {
 
+const rho func = type_constant("->", term >>= term >>= term, true);
+
 struct context {
   std::size_t depth = 0;
   hamt::map<symbol, sigma> locals;
@@ -110,6 +112,12 @@ static const auto find = [](symbol name) {
 };
 
 
+static auto fresh(kind k = term) {
+  return [=](state s) -> result<var> {
+    return make_success(var(s.ctx.depth, k), s);
+  };
+}
+
 
 
 namespace impl {
@@ -177,6 +185,13 @@ static const auto scope = [](auto m) {
 };
 
 
+static auto generalize(rho self) {
+  return [=](state s) -> result<sigma> {
+    throw std::runtime_error("not implemented");
+  };
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 static monad<sigma> infer(ast::expr self);
 
@@ -203,6 +218,29 @@ static monad<sigma> infer(ast::let self) {
   return scope(defs >> infer(self.body));
 }
 
+static rho peel(sigma self) {
+  return match(self,
+               [](forall self) { return peel(self.body); },
+               [](rho self) { return self; });
+}
+
+
+static monad<sigma> infer(ast::abs self) {
+  // TODO handle typed args
+  const auto defs = sequence(map(self.args, [=](ast::arg arg) {
+    return fresh() >>= [=](var self) {
+      return def(arg.name(), rho(self)) >> pure(self);
+    };
+  }));
+
+  return scope(defs >>= [=](list<var> defs) {
+    return infer(self.body) >>= [=](sigma body) {
+      return generalize(foldr(defs, peel(body), [](rho arg, rho result) -> rho {
+        return app{rho{app{func, arg}}, result};
+      }));
+    };
+  });
+};
 
 static monad<sigma> infer(ast::expr self) {
   return match(self, [](auto self) { return infer(self); });

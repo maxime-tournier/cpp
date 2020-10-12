@@ -17,6 +17,14 @@ using type::type_constant_info;
 
 using type::App;
 
+using type::kind;
+using type::term;
+using type::row;
+
+struct sigma;
+using rho = Type<sigma>;
+
+
 // system F types
 template<class T>
 struct Sigma: variant<Type<T>, Forall<T>> {
@@ -32,17 +40,20 @@ struct Sigma: variant<Type<T>, Forall<T>> {
                    return Forall<type>{self.arg, func(self.body)};
                  });
   }
-  
+
+
 };
 
 struct sigma: fix<Sigma, sigma> {
   using sigma::fix::fix;
-  
 };
 
 using rho = Type<sigma>;
 using forall = Forall<sigma>;
 using app = App<sigma>;
+
+extern const rho func;
+
 
 struct context;
 std::shared_ptr<context> make_context();
