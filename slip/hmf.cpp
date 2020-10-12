@@ -184,10 +184,52 @@ static const auto scope = [](auto m) {
   };
 };
 
+using set = hamt::map<const var_info*, unit>;
+static list<var> free_vars(sigma self, set bound={});
 
+static list<var> free_vars(rho self, set bound) {
+  return match(self,
+               [=](type_constant self) { return list<var>{}; },
+               [=](var self) {
+                 if(bound.find(self.get())) {
+                   return list<var>{};
+                 }
+
+                 return self %= list<var>{};
+               },
+               [=](app self) {
+                 return concat(free_vars(self.ctor, bound),
+                               free_vars(self.arg, bound));
+               });
+}
+
+
+static list<var> free_vars(sigma self, set bound) {
+  return match(self,
+               [=](forall self) {
+                 return free_vars(self.body, bound.set(self.arg.get(), {}));
+               },
+               [=](rho self) {
+                 return free_vars(self, bound);
+               });
+}
+
+
+// note: self must be fully substituted
 static auto generalize(rho self) {
+
+  // TODO instantiate/substitute variables ?
   return [=](state s) -> result<sigma> {
-    throw std::runtime_error("not implemented");
+    const sigma res = foldr(free_vars(self), sigma(self), [=](var v, sigma body) -> sigma {
+      if(v->depth < s.ctx.depth) {
+        // var is bound somewhere in enclosing scope: skip
+        return body;
+      } else {
+        return forall{v, body};
+      }
+    });
+    
+    return make_success(res, s);
   };
 }
 
