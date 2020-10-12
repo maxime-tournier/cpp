@@ -12,15 +12,20 @@ struct context {
   hamt::map<symbol, sigma> locals;
 };
 
+using substitution = hamt::map<const var_info*, sigma>;
+
 
 struct state {
   context ctx;
+  substitution sub;
 };
 
 template<class T>
-struct success: T, state {
+struct success {
   using value_type = T;
-  success(T value, state s): T(value), state(s) { }
+  T value;
+  
+  struct state state;
 };
 
 template<class T>
@@ -81,18 +86,64 @@ static auto operator|=(MA self, Func func) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+static const auto find = [](symbol name) {
+  return [=](state s) -> result<sigma> {
+    if(auto res = s.ctx.locals.find(name)) {
+      return make_success(*res, s);
+    }
+
+    return type_error("unbound variable: " + quote(name));    
+  };
+};
+
+
+
+
+namespace impl {
+
+static sigma substitute(substitution sub, sigma self);
+
+static sigma substitute(substitution sub, rho self) {
+  return match(self,
+               [](type_constant self) -> sigma { return rho(self); },
+               [&](var self) -> sigma {
+                 if(auto res = sub.find(self.get())) {
+                   return substitute(sub, *res);
+                 }
+
+                 return rho(self);
+               },
+               [&](app self) -> sigma {
+                 return rho(app{substitute(sub, self.ctor),
+                                substitute(sub, self.arg)});
+               });
+}
+
+static sigma substitute(substitution sub, sigma self) {
+  return match(self,
+               [=](forall self) -> sigma {
+                 // TODO check that sub does not involve quantified variable
+                 return forall{self.arg, substitute(sub, self.body)};
+               },
+               [=](rho self) -> sigma {
+                 return substitute(sub, self);
+               });
+};
+
+} // namespace impl
+
+
+static monad<sigma> substitute(sigma self) {
+  return [=](state s) -> result<sigma> {
+    return make_success(impl::substitute(s.sub, self), s);
+  };
+};
 
 
 
 ////////////////////////////////////////////////////////////////////////////////
 static monad<sigma> infer(ast::var self) {
-  return [=](state s) -> result<sigma> {
-    if(auto res = s.ctx.locals.find(self.name)) {
-      return make_success(*res, s);
-    }
-
-    return type_error("unbound variable: " + quote(self.name));    
-  };
+  return find(self.name) >>= substitute;
 }
 
 

@@ -9,6 +9,14 @@ using type::Type;
 using type::mono;
 using type::Forall;
 
+using type::var;
+using type::var_info;
+
+using type::type_constant;
+using type::type_constant_info;
+
+using type::App;
+
 // system F types
 template<class T>
 struct Sigma: variant<Type<T>, Forall<T>> {
@@ -34,7 +42,7 @@ struct sigma: fix<Sigma, sigma> {
 
 using rho = Type<sigma>;
 using forall = Forall<sigma>;
-
+using app = App<sigma>;
 
 struct context;
 std::shared_ptr<context> make_context();
