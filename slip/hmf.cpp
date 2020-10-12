@@ -1,6 +1,7 @@
 #include "hmf.hpp"
 
 #include "hamt.hpp"
+#include "unit.hpp"
 #include "either.hpp"
 #include "ast.hpp"
 #include "common.hpp"
@@ -84,6 +85,18 @@ static auto operator|=(MA self, Func func) {
   return map(self, func);
 }
 
+template<class M, class T = value<M>>
+static monad<list<T>> sequence(list<M> ms) {
+  monad<list<T>> init = pure(list<T>{});
+  return foldr(ms, init, [](M m, monad<list<T>> tail) -> monad<list<T>> {
+    return m >>= [=](T head) {
+      return tail >>= [=](list<T> tail) {
+        return pure(head %= tail);
+      };
+    };
+  });
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 static const auto find = [](symbol name) {
@@ -122,7 +135,7 @@ static sigma substitute(substitution sub, rho self) {
 static sigma substitute(substitution sub, sigma self) {
   return match(self,
                [=](forall self) -> sigma {
-                 // TODO check that sub does not involve quantified variable
+                 assert(!sub.find(self.arg.get()));
                  return forall{self.arg, substitute(sub, self.body)};
                },
                [=](rho self) -> sigma {
@@ -133,19 +146,67 @@ static sigma substitute(substitution sub, sigma self) {
 } // namespace impl
 
 
-static monad<sigma> substitute(sigma self) {
+static auto substitute(sigma self) {
   return [=](state s) -> result<sigma> {
     return make_success(impl::substitute(s.sub, self), s);
   };
 };
 
 
+static auto def(symbol name, sigma value) {
+  return [=](state s) -> result<unit> {
+    return make_success(
+        unit{},
+        state{context{s.ctx.depth, s.ctx.locals.set(name, sigma(value))},
+              s.sub});
+  };
+}
+
+
+static const auto scope = [](auto m) {
+  return [m](state s) {
+    context ctx = {s.ctx.depth + 1,
+                   s.ctx.locals};
+    state inner = {ctx, s.sub};
+
+    // update substitution from scope, drop context    
+    return m(inner) |= [=](auto self) {
+      return make_success(self.value, state{s.ctx, self.state.sub});
+    };
+  };
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////
+static monad<sigma> infer(ast::expr self);
+
+template<class T>
+static monad<sigma> infer(T self) {
+  return [=](state) {
+    return type_error("unimplemented: " + std::string(typeid(T).name()));
+  };
+}
+
 static monad<sigma> infer(ast::var self) {
   return find(self.name) >>= substitute;
 }
 
+
+static monad<sigma> infer(ast::let self) {
+  // TODO handle (mutually) recursive defs
+  const auto defs = sequence(map(self.defs, [](auto self) {
+    return infer(self.value) >>= [=](sigma value) {
+      return def(self.name, value);
+    };
+  }));
+
+  return scope(defs >> infer(self.body));
+}
+
+
+static monad<sigma> infer(ast::expr self) {
+  return match(self, [](auto self) { return infer(self); });
+}
 
 
 
