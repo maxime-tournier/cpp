@@ -2,6 +2,8 @@
 #include "ast.hpp"
 #include "type.hpp"
 
+#include "hmf.hpp"
+
 #include "repl.hpp"
 #include "lua.hpp"
 
@@ -26,7 +28,7 @@ static auto program() {
 int main_repl() {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
 
-  auto ctx = type::make_context();
+  auto ctx = hmf::make_context();
   auto env = lua::make_environment();
   const auto history = ".slip";
 
@@ -34,7 +36,7 @@ int main_repl() {
     return handle([&] {
       const auto s = parser::run(parser, input);
       const auto e = ast::check(s);
-      const auto p = type::infer(ctx, e);
+      const auto p = hmf::infer(ctx, e);
       const auto v = lua::run(env, e);
       std::cout << " :: " << p.show() << " = " << v << std::endl;      
     });

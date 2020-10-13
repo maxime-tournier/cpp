@@ -46,6 +46,8 @@ struct Sigma: variant<Type<T>, Forall<T>> {
 
 struct sigma: fix<Sigma, sigma> {
   using sigma::fix::fix;
+
+  std::string show() const;
 };
 
 using rho = Type<sigma>;

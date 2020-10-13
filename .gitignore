@@ -15,3 +15,5 @@ build
 /Makefile.viewer
 *.so*
 /.qglviewer.xml
+/.clangd/
+/compile_commands.json

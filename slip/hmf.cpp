@@ -6,9 +6,91 @@
 #include "ast.hpp"
 #include "common.hpp"
 
+#include <algorithm>
+
 namespace hmf {
 
 const rho func = type_constant("->", term >>= term >>= term, true);
+
+namespace impl {
+
+static std::string var_name(std::size_t index, kind k) {
+  std::string res;
+
+  static constexpr std::size_t basis = 26;
+  
+  do {
+    const std::size_t digit = index % basis;
+    res += 'a' + digit;
+    index /= basis;
+  } while(index);
+
+  res += "'";
+  
+  std::reverse(res.begin(), res.end());
+  
+  if(k == row) {
+    res += "...";
+  }
+
+  return res;
+}
+
+
+struct show_info {
+  hamt::map<const var_info*, std::string> table;
+  std::size_t count = 0;
+
+  show_info add(const var_info* v) const {
+    return {table.set(v, var_name(count, v->kind)), count + 1};
+  }
+
+  const std::string* find(const var_info* v) const { return table.find(v); }
+};
+
+static std::string var_id(var self) {
+  std::stringstream ss;
+  ss << self.get();
+  std::string s = ss.str();
+  
+  return s.substr(s.size() - 6);
+};
+
+
+static std::string show(sigma self, show_info info = {});
+
+static std::string show(rho self, show_info info) {
+  return match(self,
+               [](type_constant self) -> std::string { return self->name.repr; },
+               [=](var self) {
+                 if(auto repr = info.find(self.get())) {
+                   return *repr;
+                 }
+
+                 return var_id(self);
+               },
+               [=](app self) {
+                 // TODO parens, nested foralls, etc
+                 return show(self.ctor, info) + " " + show(self.arg, info);
+               });
+}
+
+static std::string show(sigma self, show_info info) {
+  return match(self,
+               [=](forall self) { return show(self.body, info.add(self.arg.get())); },
+               [=](rho self) { return show(self, info); });
+}
+
+} // namespace impl
+
+
+std::string sigma::show() const {
+  return impl::show(*this);
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
 
 struct context {
   std::size_t depth = 0;
@@ -16,7 +98,6 @@ struct context {
 };
 
 using substitution = hamt::map<const var_info*, sigma>;
-
 
 struct state {
   context ctx;
@@ -288,6 +369,16 @@ static monad<sigma> infer(ast::expr self) {
   return match(self, [](auto self) { return infer(self); });
 }
 
+std::shared_ptr<context> make_context() {
+  return std::make_shared<context>();
+}
 
+
+sigma infer(std::shared_ptr<context> ctx, const ast::expr& self) {
+  state s{*ctx, {}};
+  return match(infer(self)(s),
+               [](auto result) { return result.value; },
+               [](type_error e) -> sigma { throw e; });
+}
 
 } // namespace hmf
