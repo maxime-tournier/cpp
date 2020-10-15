@@ -365,6 +365,24 @@ static monad<sigma> infer(ast::abs self) {
   });
 };
 
+
+// static monad<sigma> infer(ast::app self) {
+//   return infer(self.func) >>= [=](sigma func) {
+//     // TODO funmatch on peel(func)
+//     return funmatch(peel(func), [=](sigma expected, sigma ret) {
+//       // TODO multiple args
+//       return infer(self.args->head) >>= [=](sigma offered) {
+//         return subsume(expected, offered) >>= [=](substitution poly) {
+//           return substitute(ret) >>= [=](sigma ret) {
+//             return poly(ret);
+//           };
+//         };
+//       };
+//     });
+//   };
+// }
+
+
 static monad<sigma> infer(ast::expr self) {
   return match(self, [](auto self) { return infer(self); });
 }
