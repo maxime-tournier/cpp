@@ -234,7 +234,6 @@ static sigma substitute(substitution sub, sigma self) {
 
 } // namespace impl
 
-
 static auto substitute(sigma self) {
   return [=](state s) -> result<sigma> {
     return make_success(impl::substitute(s.sub, self), s);
@@ -358,9 +357,15 @@ static monad<sigma> infer(ast::abs self) {
 
   return scope(defs >>= [=](list<var> defs) {
     return infer(self.body) >>= [=](sigma body) {
-      return generalize(foldr(defs, peel(body), [](rho arg, rho result) -> rho {
-        return app{rho{app{func, arg}}, result};
-      }));
+      const monad<rho> init = pure(peel(body));
+      return foldr(defs, init, [](rho arg, monad<rho> res) -> monad<rho> {
+        return substitute(arg) >>= [=](sigma arg) {
+          // TODO check arg is monomorphic
+          return res |= [=](rho res) -> rho {
+            return app{rho{app{func, arg}}, res};
+          };
+        };
+      }) |= [](rho res) -> sigma { return res; };
     };
   });
 };
