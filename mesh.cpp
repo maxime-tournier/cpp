@@ -51,8 +51,8 @@ struct Viewer: QOpenGLWidget {
   }
 
   void paintGL() override {
-    const auto cam = this->cam.use();
-    const auto geo = this->geo.use();
+    const auto cam = this->cam.lock();
+    const auto geo = this->geo.lock();
     
     glDrawArrays(GL_TRIANGLES, 0, 6);
   }

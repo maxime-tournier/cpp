@@ -45,7 +45,7 @@ struct camera {
   }
   
 
-  void enable() {
+  void enable() const {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadMatrixf(projection().data());
@@ -56,7 +56,7 @@ struct camera {
   }
 
   
-  void disable() {
+  void disable() const {
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
 
@@ -64,7 +64,7 @@ struct camera {
     glPopMatrix();
   }
 
-  auto use() {
+  auto lock() const {
     enable();
     return finally([this] { disable(); });
   }

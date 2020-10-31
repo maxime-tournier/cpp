@@ -42,31 +42,33 @@ struct buffer {
   }
 
 
+  // convenience
   template<class Container>
   void data(const Container& container, GLenum mode) {
     data(container.data(), container.size(), mode);
   }
 };
 
+
 template<class T>
-struct traits;
+struct value_traits;
 
 template<std::size_t N>
-struct traits<std::array<GLfloat, N>> {
+struct value_traits<std::array<GLfloat, N>> {
   static constexpr GLenum type = GL_FLOAT;
   static constexpr GLuint size = N;
   static_assert(N <= 4, "size error");
 };
 
-static void error_check() {
+static bool error_check(std::ostream& out=std::cerr) {
   GLenum err = glGetError();
   if(err == GL_NO_ERROR) {
-    return;
+    return false;
   }
 
-  std::cerr << "error: " << err << std::endl;
+  out << "error: " << err << "\n";
   
-  error_check();
+  return error_check(out) || true;
 }
 
 // old-school vertex/color/normal pointers
@@ -110,12 +112,12 @@ struct attrib {
   GLuint size;
   GLuint type;
 
-  auto enable(GLenum stride = 0, std::size_t offset = 0) {
+  auto enable(GLenum stride = 0, std::size_t offset = 0) const {
     attrib_traits<kind>::enable(size, type, stride, (void*)offset);
     glEnableClientState(kind);
   }
 
-  auto disable() { glDisableClientState(kind); };
+  auto disable() const { glDisableClientState(kind); };
 };
 
 struct geometry {
@@ -127,7 +129,7 @@ struct geometry {
     template<class Container>
     auto data(const Container& container, GLenum mode = GL_STATIC_DRAW) {
       buffer.bind().data(container, mode);
-      using traits_type = gl::traits<typename Container::value_type>;
+      using traits_type = gl::value_traits<typename Container::value_type>;
       this->size = traits_type::size;
       this->type = traits_type::type;
     }
@@ -138,37 +140,37 @@ struct geometry {
   attrib_buffer<GL_COLOR_ARRAY> color;
   attrib_buffer<GL_TEXTURE_COORD_ARRAY> texcoord;
 
-  template<class Cont>
-  void foreach(Cont cont) {
-    if(vertex.buffer.id) {
-      cont(vertex);
+  template<class Self, class Cont>
+  friend void foreach(Self&& self, Cont cont) {
+    if(self.vertex.buffer.id) {
+      cont(self.vertex);
     }
 
-    if(normal.buffer.id) {
-      cont(normal);
+    if(self.normal.buffer.id) {
+      cont(self.normal);
     }
 
-    if(color.buffer.id) {
-      cont(color);
+    if(self.color.buffer.id) {
+      cont(self.color);
     }
 
-    if(texcoord.buffer.id) {
-      cont(texcoord);
+    if(self.texcoord.buffer.id) {
+      cont(self.texcoord);
     }
   }
 
   auto enable() {
-    foreach([](auto& attrib) {
+    foreach(*this, [](auto& attrib) {
       attrib.buffer.bind();
       attrib.enable();
     });
   }
 
-  auto disable() {
-    foreach([](auto& attrib) { attrib.disable(); });
+  auto disable() const {
+    foreach(*this, [](auto& attrib) { attrib.disable(); });
   }
 
-  auto use() {
+  auto lock() {
     enable();
     return finally([this] { disable(); });
   }
