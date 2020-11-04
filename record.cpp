@@ -24,11 +24,13 @@ struct event {
   enum { BEGIN, END } kind;
 
   // named constructors
-  static inline event begin(id_type id) {
+  static inline event begin(id_type id) { 
     return {id, clock_type::now(), BEGIN};
   }
 
-  static inline event end(id_type id) { return {id, clock_type::now(), END}; }
+  static inline event end(id_type id) {
+    return {id, clock_type::now(), END};
+  }
 };
 
 
@@ -52,7 +54,7 @@ class timeline {
     return instance;
   }
 
-  public:
+public:
   static void push(event ev) { current().storage.push_back(ev); }
 
   void clear() { current().storage.clear(); }
@@ -65,6 +67,8 @@ class timeline {
 
 timeline::instances_type timeline::instances;
 
+
+// scope-guard for recording events
 class timer {
   event::id_type id;
   timer(const timer&) = delete;
@@ -76,21 +80,24 @@ class timer {
 };
 
 
+// general tree structure
 template<class Derived>
 struct tree {
   std::vector<Derived> children;
+
+  // TODO catamorphisms
 };
 
-struct call_tree: tree<call_tree> {
+struct call: tree<call> {
   event::id_type id;
 
   // total duration is the sum of this (used to show stats)
   using duration_type = std::chrono::microseconds;
   std::vector<duration_type> duration;
   
-  call_tree() = default;
+  call() = default;
   
-  call_tree(const timeline& events) {
+  call(const timeline& events) {
     auto it = events.begin();
     auto end = events.end();
     if(!parse(*this, it, end)) {
@@ -101,12 +108,12 @@ struct call_tree: tree<call_tree> {
 
   // TODO optimize when lhs is moved-from?
   // TODO
-  friend call_tree merge(const call_tree& lhs, const call_tree& rhs) {
+  friend call merge(const call& lhs, const call& rhs) {
     if(lhs.id != rhs.id) {
       throw std::logic_error("cannot merge unrelated call trees");
     }
 
-    call_tree result;
+    call result;
     result.id = lhs.id;
 
     // concatenate durations
@@ -118,7 +125,7 @@ struct call_tree: tree<call_tree> {
               std::back_inserter(result.duration));
 
     // note: callees may differ due to different runtime conditions
-    std::map<event::id_type, std::vector<const call_tree*>> sources;
+    std::map<event::id_type, std::vector<const call*>> sources;
     for(auto& callee: lhs.children) {
       sources[callee.id].emplace_back(&callee);
     }
@@ -148,18 +155,18 @@ struct call_tree: tree<call_tree> {
   }
 
 
-  call_tree simplify() const {
-    std::map<event::id_type, std::vector<call_tree>> simplified;
+  call simplify() const {
+    std::map<event::id_type, std::vector<call>> simplified;
     for(auto& it: children) {
       simplified[it.id].emplace_back(it.simplify());
     }
 
-    call_tree result;
+    call result;
     result.id = id;
     result.duration = duration;
       
     for(auto& it: simplified) {
-      call_tree merged;
+      call merged;
       merged.id = it.first;
       
       for(auto& callee: it.second) {
@@ -174,7 +181,7 @@ struct call_tree: tree<call_tree> {
 
 private:
   template<class Iterator>
-  static bool parse(call_tree& result, Iterator& first, Iterator last) {
+  static bool parse(call& result, Iterator& first, Iterator last) {
     switch(first->kind) {
     case event::END:
       return false;
@@ -184,7 +191,7 @@ private:
       ++first;
 
       // try to parse callees
-      for(call_tree child; parse(child, first, last);
+      for(call child; parse(child, first, last);
           result.children.emplace_back(std::move(child))) {
       }
 
@@ -217,8 +224,8 @@ struct report: tree<report> {
   std::size_t count = 0;
   const char* id;
 
-  report(const call_tree& self, double caller_total=0) {
-    call_tree::duration_type sum(0);
+  report(const call& self, double caller_total=0) {
+    call::duration_type sum(0);
     assert(!self.duration.empty());
     
     for(auto& duration: self.duration) {
@@ -298,7 +305,7 @@ int main(int, char**) {
 
   for(auto& events: timeline::all()) {
     report::write_header(std::cout);
-    report(call_tree(*events).simplify()).write(std::cout);
+    report(call(*events).simplify()).write(std::cout);
 
     events->clear();
   }
