@@ -86,14 +86,14 @@ class timer {
 template<class Derived>
 struct tree {
   std::vector<Derived> children;
-
-  // TODO catamorphisms
 };
 
+
+// call tree
 struct call: tree<call> {
   event::id_type id;
 
-  // total duration is the sum of this (used to show stats)
+  // total duration is the sum of these (used to produce stats)
   using duration_type = std::chrono::microseconds;
   std::vector<duration_type> duration;
   
@@ -109,7 +109,7 @@ struct call: tree<call> {
 
 
   // TODO optimize when lhs is moved-from?
-  // TODO
+  // TODO check this is associative
   friend call merge(const call& lhs, const call& rhs) {
     if(lhs.id != rhs.id) {
       throw std::logic_error("cannot merge unrelated call trees");
@@ -137,8 +137,6 @@ struct call: tree<call> {
     }
 
     // TODO preserve ordering as much as possible?
-    // TODO or at least make merge associative (or is it already since we order
-    // by id?)
     for(auto& source: sources) {
       switch(source.second.size()) {
       case 2:
@@ -156,7 +154,7 @@ struct call: tree<call> {
     return result;
   }
 
-
+  // merge all callees with same id into a single one
   call simplify() const {
     std::map<event::id_type, std::vector<call>> simplified;
     for(auto& it: children) {
@@ -217,7 +215,7 @@ private:
     }
 };
 
-
+// call tree reporing
 struct report: tree<report> {
   double total = 0;
   double mean = 0;
