@@ -6,13 +6,13 @@
 #include <map>
 #include <vector>
 
-// #include <memory>
 #include <stdexcept>
 #include <thread>
 
 #include <iomanip>
 #include <ostream>
 
+// basic event
 struct event {
   using clock_type = std::chrono::high_resolution_clock;
   using time_type = clock_type::time_point;
@@ -32,6 +32,7 @@ struct event {
 };
 
 
+// thread-local event sequence
 class timeline {
   std::thread::id thread;
 
@@ -296,19 +297,10 @@ int main(int, char**) {
   work();
 
   for(auto& events: timeline::all()) {
-    // for(auto& ev: *events) {
-    //   std::clog << (ev.kind == event::BEGIN ? ">> " : "<< ") << ev.id << "\n";
-    // }
-
-    call_tree calls(*events);
-    
     report::write_header(std::cout);
-    report(calls.simplify()).write(std::cout);
-    // if(call_tree::parse(calls, it, events->end())) {
-    //   report(calls).write(std::cout);
-    // } else {
-    //   throw std::runtime_error("parse error");
-    // }
+    report(call_tree(*events).simplify()).write(std::cout);
+
+    events->clear();
   }
 
   return 0;
