@@ -9,8 +9,10 @@
 #include <stdexcept>
 #include <thread>
 
+#include <cmath>
 #include <iomanip>
 #include <ostream>
+
 
 // basic event
 struct event {
@@ -234,10 +236,19 @@ struct report: tree<report> {
     }
 
     // note: milliseconds
-    total = sum.count() / 1000.0;
+    const double ms = 1000;
+    total = sum.count() / ms;
     percent = caller_total ? (total / caller_total) * 100 : 100;
     mean = count ? total / count : 0;
     id = self.id;
+
+    for(auto& duration: self.duration) {
+      const double delta = (duration.count() / ms - mean);
+      dev += delta * delta;
+    }
+
+    dev = count > 1 ? std::sqrt(dev / (count - 1)) : 0;
+
 
     for(auto& callee: self.children) {
       children.emplace_back(callee, total);
@@ -245,11 +256,12 @@ struct report: tree<report> {
   }
 
 
-  template<class Count, class Total, class Mean, class Percent, class Id>
+  template<class Count, class Total, class Mean, class Dev, class Percent, class Id>
   static void write_row(std::ostream& out,
                         Count count,
                         Total total,
                         Mean mean,
+                        Dev dev,
                         Percent percent,
                         Id id,
                         std::size_t depth = 0) {
@@ -258,6 +270,7 @@ struct report: tree<report> {
         << std::right << std::setw(width / 2) << count
         << std::right << std::setw(width) << total
         << std::right << std::setw(width) << mean
+        << std::right << std::setw(width) << dev      
         << std::right << std::setw(width) << percent
         << std::left << std::setw(width) << " " + std::string(depth, '.') + id
         << '\n';
@@ -265,11 +278,11 @@ struct report: tree<report> {
   }
 
   static void write_header(std::ostream& out) {
-    return write_row(out, "count", "total", "mean", "%", "id");
+    return write_row(out, "count", "total", "mean", "dev", "%", "id");
   }
 
   void write(std::ostream& out, std::size_t depth = 0) const {
-    write_row(out, count, total, mean, percent, id, depth);
+    write_row(out, count, total, mean, dev, percent, id, depth);
     for(auto& it: children) {
       it.write(out, depth + 1);
     }
