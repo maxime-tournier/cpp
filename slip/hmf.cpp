@@ -200,6 +200,16 @@ static auto fresh(kind k = term) {
 }
 
 
+static auto skolem(kind k = term) {
+  return [=](state s) -> result<var> {
+    type::flags_type flags;
+    flags.set(type::skolem);
+    
+    return make_success(var(s.ctx.depth, k, flags), s);
+  };
+}
+
+
 
 namespace impl {
 
@@ -210,6 +220,8 @@ static sigma substitute(substitution sub, rho self) {
                [](type_constant self) -> sigma { return rho(self); },
                [&](var self) -> sigma {
                  if(auto res = sub.find(self.get())) {
+                   // TODO can we ever unify a var and a sigma type? apparently
+                   // yes
                    return substitute(sub, *res);
                  }
 
@@ -233,7 +245,6 @@ static sigma substitute(substitution sub, sigma self) {
 };
 
 } // namespace impl
-
 
 static auto substitute(sigma self) {
   return [=](state s) -> result<sigma> {
@@ -301,7 +312,8 @@ static auto generalize(rho self) {
 
   // TODO instantiate/substitute variables ?
   return [=](state s) -> result<sigma> {
-    const sigma res = foldr(free_vars(self), sigma(self), [=](var v, sigma body) -> sigma {
+    const sigma res =
+    foldr(free_vars(self), sigma(self), [=](var v, sigma body) -> sigma {
       if(v->depth < s.ctx.depth) {
         // var is bound somewhere in enclosing scope: skip
         return body;
@@ -348,6 +360,55 @@ static rho peel(sigma self) {
 }
 
 
+namespace impl {
+
+template<class Func>
+static monad<substitution> instantiate(sigma self, Func func) {
+  return match(self,
+               [=](forall self) -> monad<substitution> {
+                 return func(self.arg->kind) >>= [=](rho v) {
+                   return instantiate(self.body, func) |= [=](substitution sub) {
+                     return sub.set(self.arg.get(), v);
+                   };
+                 };
+               },
+               [=](rho self) -> monad<substitution>  {
+                 return pure(substitution());
+               });
+};
+
+
+template<class Func>
+static monad<rho> instantiate_substitute(sigma self, Func func) {
+  return impl::instantiate(self, func) |= [=](substitution sub) {
+    return match(impl::substitute(sub, peel(self)),
+                 [](forall) -> rho { throw std::logic_error("derp"); },
+                 [](rho self) { return self; });
+  };
+}
+
+}
+
+
+static monad<rho> instantiate(sigma self) {
+  return impl::instantiate_substitute(self, fresh);
+};
+
+static monad<rho> skolemize(sigma self) { 
+  return impl::instantiate_substitute(self, skolem);  
+};
+
+static monad<rho> instantiate_subsume(sigma self) { 
+  // TODO we could store instantiated variables in state here
+  
+};
+
+
+static monad<unit> unify(sigma lhs, sigma rhs) {
+  
+}
+
+
 static monad<sigma> infer(ast::abs self) {
   // TODO handle typed args
   const auto defs = sequence(map(self.args, [=](ast::arg arg) {
@@ -357,14 +418,33 @@ static monad<sigma> infer(ast::abs self) {
   }));
 
   return scope(defs >>= [=](list<var> defs) {
-    return infer(self.body) >>= [=](sigma body) {
-      return generalize(foldr(defs, peel(body), [](rho arg, rho result) -> rho {
-        return app{rho{app{func, arg}}, result};
-      }));
+    // TODO optimize generalization/instantiation
+    return (infer(self.body) >>= instantiate) >>= [=](rho body) {
+      const monad<rho> init = pure(body);
+      return foldr(defs, init, [](rho arg, monad<rho> res) -> monad<rho> {
+        return substitute(arg) >>= [=](sigma arg) {
+          // TODO check arg is monomorphic
+          return res |= [=](rho res) -> rho {
+            return app{rho{app{func, arg}}, res};
+          };
+        };
+      }) |= [](rho res) -> sigma { return res; };
     };
   });
 };
 
+
+
+
+static monad<unit> subsume(sigma expected, sigma offered) {
+// TODO assert both are in normal form  
+  return skolemize(expected) >>= [=](rho expected) {
+    return instantiate_subsume(offered) >>= [=](rho offered) {
+      // TODO cleanup substitution from instantiated vars in offered
+      return unify(expected, offered);
+    };
+  };
+};
 
 // static monad<sigma> infer(ast::app self) {
 //   return infer(self.func) >>= [=](sigma func) {

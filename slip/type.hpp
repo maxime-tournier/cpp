@@ -9,6 +9,7 @@
 
 #include <map>
 #include <functional>
+#include <bitset>
 
 namespace ast {
 struct expr;
@@ -63,10 +64,19 @@ struct type_constant_info {
 };
 
 
+enum {
+  skolem,
+  unify_skolem,
+  flags_size
+};
+
+
+using flags_type = std::bitset<flags_size>;
 
 struct var_info {
   std::size_t depth;
   struct kind kind;
+  flags_type flags;
 };
 
 using var = shared<var_info>;
