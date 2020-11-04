@@ -1,0 +1,294 @@
+
+#include <cassert>
+#include <chrono>
+
+#include <deque>
+#include <map>
+#include <vector>
+
+// #include <memory>
+#include <stdexcept>
+#include <thread>
+
+#include <iomanip>
+#include <ostream>
+
+struct event {
+  using clock_type = std::chrono::high_resolution_clock;
+  using time_type = clock_type::time_point;
+  using id_type = const char*;
+
+  id_type id;
+  time_type time;
+
+  enum { BEGIN, END } kind;
+
+  // named constructors
+  static inline event begin(id_type id) {
+    return {id, clock_type::now(), BEGIN};
+  }
+
+  static inline event end(id_type id) { return {id, clock_type::now(), END}; }
+};
+
+
+class timeline {
+  std::thread::id thread;
+
+  using storage_type = std::deque<event>;
+  storage_type storage;
+
+  using instances_type = std::deque<timeline*>;
+  static instances_type instances;
+
+  timeline(): thread(std::this_thread::get_id()) {
+    instances.emplace_back(this);
+  }
+
+  static timeline& current() {
+    // note: magic statics protect writing to `instances`
+    static thread_local timeline instance;
+    return instance;
+  }
+
+  public:
+  static void push(event ev) { current().storage.push_back(ev); }
+
+  void clear() { current().storage.clear(); }
+
+  auto begin() const { return storage.begin(); }
+  auto end() const { return storage.end(); }
+
+  static const auto& all() { return instances; }
+};
+
+timeline::instances_type timeline::instances;
+
+class timer {
+  event::id_type id;
+  timer(const timer&) = delete;
+
+  public:
+  timer(event::id_type id): id(id) { timeline::push(event::begin(id)); }
+
+  ~timer() { timeline::push(event::end(id)); }
+};
+
+
+template<class Derived>
+struct tree {
+  std::vector<Derived> children;
+};
+
+struct call_tree: tree<call_tree> {
+  event::id_type id;
+
+  // total duration is the sum of this (used to show stats)
+  using duration_type = std::chrono::microseconds;
+  std::vector<duration_type> duration;
+  
+  call_tree() = default;
+  
+  call_tree(const timeline& events) {
+    auto it = events.begin();
+    auto end = events.end();
+    if(!parse(*this, it, end)) {
+      throw std::runtime_error("parse error");
+    }
+  }
+
+
+  // TODO optimize when lhs is moved-from?
+  // TODO
+  friend call_tree merge(const call_tree& lhs, const call_tree& rhs) {
+    if(lhs.id != rhs.id) {
+      throw std::logic_error("cannot merge unrelated call trees");
+    }
+
+    call_tree result;
+    result.id = lhs.id;
+
+    // concatenate durations
+    std::copy(lhs.duration.begin(),
+              lhs.duration.end(),
+              std::back_inserter(result.duration));
+    std::copy(rhs.duration.begin(),
+              rhs.duration.end(),
+              std::back_inserter(result.duration));
+
+    // note: callees may differ due to different runtime conditions
+    std::map<event::id_type, std::vector<const call_tree*>> sources;
+    for(auto& callee: lhs.children) {
+      sources[callee.id].emplace_back(&callee);
+    }
+
+    for(auto& callee: rhs.children) {
+      sources[callee.id].emplace_back(&callee);
+    }
+
+    // TODO preserve ordering as much as possible?
+    // TODO or at least make merge associative (or is it already since we order
+    // by id?)
+    for(auto& source: sources) {
+      switch(source.second.size()) {
+      case 2:
+        result.children.emplace_back(
+            merge(*source.second.front(), *source.second.back()));
+        break;
+      case 1:
+        result.children.emplace_back(*source.second.front());
+        break;
+      default:
+        assert(false);
+      }
+    }
+
+    return result;
+  }
+
+
+  call_tree simplify() const {
+    std::map<event::id_type, std::vector<call_tree>> simplified;
+    for(auto& it: children) {
+      simplified[it.id].emplace_back(it.simplify());
+    }
+
+    call_tree result;
+    result.id = id;
+    result.duration = duration;
+      
+    for(auto& it: simplified) {
+      call_tree merged;
+      merged.id = it.first;
+      
+      for(auto& callee: it.second) {
+        merged = merge(merged, callee);
+      }
+
+      result.children.emplace_back(std::move(merged));
+    }
+
+    return result;
+  }
+
+private:
+    template<class Iterator>
+  static bool parse(call_tree& result, Iterator& first, Iterator last) {
+    switch(first->kind) {
+    case event::END:
+      return false;
+    case event::BEGIN: {
+      result.id = first->id;
+      const event::time_type begin = first->time;
+      ++first;
+
+      // try to parse callees
+      for(call_tree child; parse(child, first, last);
+          result.children.emplace_back(std::move(child))) {
+      }
+
+      // try to finish this parse
+      assert(first->kind == event::END);
+      if(first->id == result.id) {
+        result.duration.clear();
+        result.duration.emplace_back(std::chrono::duration_cast<duration_type>(first->time - begin));
+        
+        ++first;
+        return true;
+      }
+
+      return false;
+    }
+
+    default:
+      throw std::logic_error("invalid event kind");
+    };
+  }
+};
+
+
+struct report: tree<report> {
+  double total = 0;
+  double mean = 0;
+  double dev = 0;
+  double percent = 0;
+  std::size_t count = 0;
+  const char* id;
+
+  report(const call_tree& self) {
+    call_tree::duration_type sum(0);
+    assert(!self.duration.empty());
+    
+    for(auto& duration: self.duration) {
+      sum += duration;
+      ++count;
+    }
+
+    // note: milliseconds
+    total = sum.count() / 1000.0;
+    mean = count ? total / count : 0;
+    id = self.id;
+
+    for(auto& callee: self.children) {
+      children.emplace_back(callee);
+    }
+  }
+
+  void write(std::ostream& out, std::size_t depth = 0) const {
+    const std::size_t width = 14;
+    out << std::left << std::fixed << std::setprecision(2)
+        << std::right << std::setw(width / 2) << count
+        << std::right << std::setw(width) << total
+        << std::right << std::setw(width) << mean
+        << std::left << std::setw(width) << " " + std::string(depth, '.') + id
+        << '\n';
+
+    for(auto& it: children) {
+      it.write(out, depth + 1);
+    }
+  }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+
+#include <iostream>
+
+void work() {
+  const timer foo("foo");
+  for(std::size_t i = 0; i < 2; ++i) {
+    const timer bar("bar");
+    for(std::size_t j = 0; j < 10; ++j) {
+      {
+        const timer bar("baz");
+        std::clog << i << " " << j << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      
+      {
+        const timer quxx("quxx");
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
+    }
+  }
+}
+
+
+int main(int, char**) {
+  work();
+
+  for(auto& events: timeline::all()) {
+    for(auto& ev: *events) {
+      std::clog << (ev.kind == event::BEGIN ? ">> " : "<< ") << ev.id << "\n";
+    }
+
+    call_tree calls(*events);
+    report(calls.simplify()).write(std::cout);
+    // if(call_tree::parse(calls, it, events->end())) {
+    //   report(calls).write(std::cout);
+    // } else {
+    //   throw std::runtime_error("parse error");
+    // }
+  }
+
+  return 0;
+}
