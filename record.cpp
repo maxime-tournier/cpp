@@ -172,7 +172,7 @@ struct call_tree: tree<call_tree> {
   }
 
 private:
-    template<class Iterator>
+  template<class Iterator>
   static bool parse(call_tree& result, Iterator& first, Iterator last) {
     switch(first->kind) {
     case event::END:
@@ -191,8 +191,9 @@ private:
       assert(first->kind == event::END);
       if(first->id == result.id) {
         result.duration.clear();
-        result.duration.emplace_back(std::chrono::duration_cast<duration_type>(first->time - begin));
-        
+        result.duration.emplace_back(
+            std::chrono::duration_cast<duration_type>(first->time - begin));
+
         ++first;
         return true;
       }
@@ -203,7 +204,7 @@ private:
     default:
       throw std::logic_error("invalid event kind");
     };
-  }
+    }
 };
 
 
@@ -215,7 +216,7 @@ struct report: tree<report> {
   std::size_t count = 0;
   const char* id;
 
-  report(const call_tree& self) {
+  report(const call_tree& self, double caller_total=0) {
     call_tree::duration_type sum(0);
     assert(!self.duration.empty());
     
@@ -226,23 +227,41 @@ struct report: tree<report> {
 
     // note: milliseconds
     total = sum.count() / 1000.0;
+    percent = caller_total ? (total / caller_total) * 100 : 100;
     mean = count ? total / count : 0;
     id = self.id;
 
     for(auto& callee: self.children) {
-      children.emplace_back(callee);
+      children.emplace_back(callee, total);
     }
   }
 
-  void write(std::ostream& out, std::size_t depth = 0) const {
+
+  template<class Count, class Total, class Mean, class Percent, class Id>
+  static void write_row(std::ostream& out,
+                        Count count,
+                        Total total,
+                        Mean mean,
+                        Percent percent,
+                        Id id,
+                        std::size_t depth = 0) {
     const std::size_t width = 14;
     out << std::left << std::fixed << std::setprecision(2)
         << std::right << std::setw(width / 2) << count
         << std::right << std::setw(width) << total
         << std::right << std::setw(width) << mean
+        << std::right << std::setw(width) << percent
         << std::left << std::setw(width) << " " + std::string(depth, '.') + id
         << '\n';
 
+  }
+
+  static void write_header(std::ostream& out) {
+    return write_row(out, "count", "total", "mean", "%", "id");
+  }
+
+  void write(std::ostream& out, std::size_t depth = 0) const {
+    write_row(out, count, total, mean, percent, id, depth);
     for(auto& it: children) {
       it.write(out, depth + 1);
     }
@@ -277,11 +296,13 @@ int main(int, char**) {
   work();
 
   for(auto& events: timeline::all()) {
-    for(auto& ev: *events) {
-      std::clog << (ev.kind == event::BEGIN ? ">> " : "<< ") << ev.id << "\n";
-    }
+    // for(auto& ev: *events) {
+    //   std::clog << (ev.kind == event::BEGIN ? ">> " : "<< ") << ev.id << "\n";
+    // }
 
     call_tree calls(*events);
+    
+    report::write_header(std::cout);
     report(calls.simplify()).write(std::cout);
     // if(call_tree::parse(calls, it, events->end())) {
     //   report(calls).write(std::cout);
