@@ -251,13 +251,6 @@ static const auto check_let = (((pop >>= expect<sexpr::list>) >>=
  }) | fail<expr>("(let ((`sym` `expr`)...) `expr`)");
 
 
-// open
-static const auto check_open = pop >>= [](sexpr arg) {
-  const expr res = open{check(arg)};
-  return empty >> pure(res);
-};
-
-
 // record
 static const auto check_record = check_defs >>= [](list<ast::def> defs) {
   const expr res = record{defs};
@@ -281,7 +274,6 @@ static const std::map<symbol, special_type> special = {
     {"fn", check_abs},
     {"if", check_cond},
     {"let", check_let},
-    {"open", check_open},
     {"record", check_record},
     {"type", check_type},
 };

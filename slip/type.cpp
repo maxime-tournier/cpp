@@ -38,6 +38,7 @@ namespace type {
 
 const kind term = kind_constant("*");
 const kind row = kind_constant("@");
+const kind tag = kind_constant("#");
 
 const mono func = type_constant("->", term >>= term >>= term, true);
 
@@ -49,8 +50,11 @@ const mono string = type_constant("str");
 const mono record = type_constant("record", row >>= term);
 const mono empty = type_constant("empty", row);
 
+const mono box = type_constant("box", tag >>= term >>= term);
+
 const mono lst = type_constant("list", term >>= term);
 const mono ty = type_constant("type", term >>= term);
+
 
 struct type_error: std::runtime_error {
   type_error(std::string what): std::runtime_error("type error: " + what) { }
@@ -748,6 +752,7 @@ static monad<mono> check_type(mono type) {
   });
 }
 
+
 template<class Func, class Result=typename std::result_of<Func(symbol, mono)>::type>
 static auto map_row(mono row, Func func) -> list<Result> {
   return match(row,
@@ -843,28 +848,24 @@ static monad<mono> infer(ast::abs self) {
   
 };
 
-static monad<mono> infer(ast::app self) {
-  const auto args = sequence(map(self.args, [=](ast::expr arg) {
-    return infer(arg) >>= substitute;
-  }));
-  
-  return infer(self.func) >>= [=](mono func) {
-    return args >>= [=](list<mono> args) {
-      return fresh() >>= [=](mono ret) {
-        const mono sig = foldr(args, ret, [](mono from, mono to) {
-          return from >>= to;
-        });
-        
-        // note: func needs to be substituted *after* args have been inferred
-        return substitute(sig) >>= [=](mono sig) {
-          return substitute(func) >>= [=](mono func) {
 
-            return unify(sig, func) >> substitute(ret);
-          };
+static monad<mono> infer_app(monad<mono> func, ast::expr arg) {
+  return func >>= [=](mono func) {
+    return infer(arg) >>= [=](mono arg) {
+      return substitute(func) >>= [=](mono func) {
+        return fresh() >>= [=](mono ret) {
+          const mono sig = arg >>= ret;
+          return unify(sig, func) >> substitute(ret);
         };
       };
     };
   };
+}
+  
+
+
+static monad<mono> infer(ast::app self) {
+  return foldl(infer(self.func), self.args, infer_app);
 };
 
 
@@ -942,25 +943,25 @@ static monad<type_constant> constructor(mono ty) {
                });
 }
 
-static monad<mono> infer(ast::open self) {
-  // attempt to extract ctor info
-  return infer(self.arg) >>= [=](mono arg) {
-    return constructor(arg) >>= [=](type_constant ctor) -> monad<mono> {
+// static monad<mono> infer(ast::open self) {
+//   // attempt to extract ctor info
+//   return infer(self.arg) >>= [=](mono arg) {
+//     return constructor(arg) >>= [=](type_constant ctor) -> monad<mono> {
 
-      if(!ctor->open) {
-        // TODO use some default opening scheme instead?
-        return fail<mono>("type " + quote(arg.show()) + " cannot be opened");
-      }
+//       if(!ctor->open) {
+//         // TODO use some default opening scheme instead?
+//         return fail<mono>("type " + quote(arg.show()) + " cannot be opened");
+//       }
 
-      // instantiate open type and unify with arg
-      return instantiate(ctor->open(ctor)) >>= [=](mono open) {
-        return fresh() >>= [=](mono result) {
-          return unify(arg >>= result, open) >> substitute(result);
-        };
-      };
-    };
-  };
-}
+//       // instantiate open type and unify with arg
+//       return instantiate(ctor->open(ctor)) >>= [=](mono open) {
+//         return fresh() >>= [=](mono result) {
+//           return unify(arg >>= result, open) >> substitute(result);
+//         };
+//       };
+//     };
+//   };
+// }
 
 // row extension type constructor ::: * -> @ -> @
 static mono ext(symbol name) {

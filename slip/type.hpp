@@ -33,7 +33,7 @@ struct kind: variant<kind_constant, ctor> {
   std::string show() const;
 };
 
-extern const kind term, row;
+extern const kind term, row, tag;
 
 struct ctor {
   kind from;
@@ -116,8 +116,10 @@ struct mono: fix<Mono, mono> {
 
 using app = App<mono>;
 
-extern const mono func, boolean, integer, number, string;
+extern const mono func;
+extern const mono boolean, integer, number, string;
 extern const mono record;
+extern const mono box;
 
 template<class T>
 struct Forall {
