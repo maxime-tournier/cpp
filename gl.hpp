@@ -113,8 +113,8 @@ struct attrib {
   GLuint type;
 
   auto enable(GLenum stride = 0, std::size_t offset = 0) const {
-    attrib_traits<kind>::enable(size, type, stride, (void*)offset);
     glEnableClientState(kind);
+    attrib_traits<kind>::enable(size, type, stride, (void*)offset);
   }
 
   auto disable() const { glDisableClientState(kind); };

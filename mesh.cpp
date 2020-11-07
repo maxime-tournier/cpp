@@ -94,13 +94,14 @@ struct Viewer: QOpenGLWidget {
 
 
 int main(int argc, char** argv) {
+  if(argc <= 1) {
+    std::cerr << "usage: " << argv[0] << " filename" << std::endl;
+    return 1;
+  }
+
   QApplication app(argc, argv);
   Viewer widget;
   widget.show();
-
-  if(argc <= 1) {
-    return 1;
-  }
 
   std::ifstream in(argv[1]);
   if(!in) {
