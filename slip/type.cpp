@@ -1111,6 +1111,14 @@ std::shared_ptr<context> make_context() {
     const mono e = res->fresh(tag);
     const mono a = res->fresh();
     res->def("module", res->generalize(box(e)(module(a))));
+
+    {
+      const mono e = res->fresh(tag);
+      const mono a = res->fresh();
+      const mono b = res->fresh();      
+
+      res->def("share", res->generalize(box(e)(module(a)) >>= b >>= integer));
+    }
   }
 
 
