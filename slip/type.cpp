@@ -447,6 +447,23 @@ static auto operator|=(MA self, Func func) {
 }
 
 
+template<class MA, class MB, class A=value<MA>, class B=value<MB>>
+static auto coprod(MA ma, MB mb) {
+  return [=](state s) {
+    if(auto res = ma(s)) {
+      return res;
+    }
+    
+    return mb(s);
+  };
+}
+
+
+template<class MA, class MB, class A=value<MA>, class B=value<MB>>
+static auto operator||(MA ma, MB mb) {
+  return coprod(ma, mb);
+}
+
 
 static auto upgrade(mono ty, var target) {
   const std::size_t max = target->depth;
@@ -620,6 +637,7 @@ static const auto row_match = [](mono ty, auto cont) {
 
 static mono ext(symbol name);
 
+// TODO nicer errors
 static monad<unit> unify_app_rows(app lhs, app rhs) {
   return row_match(lhs, [&](symbol lattr, mono lty, mono ltail) -> monad<unit> {
     return row_match(rhs, [&](symbol rattr, mono rty, mono rtail) -> monad<unit> {
@@ -641,7 +659,14 @@ static monad<unit> unify_app_rows(app lhs, app rhs) {
 
 // note: lhs/rhs must be fully substituted
 static monad<unit> unify(mono lhs, mono rhs) {
-  assert(lhs.kind() == rhs.kind() && "kind error");
+  if(lhs.kind() != rhs.kind()) {
+    repr_type repr;
+    repr = label(lhs.vars(), std::move(repr));
+    repr = label(rhs.vars(), std::move(repr));  
+    
+    return fail<unit>("cannot unify types " + quote(lhs.show(repr)) +
+                      " and " + quote(rhs.show(repr)));
+  }
   
   debug("unifying:", show(lhs), "==", show(rhs));
   
@@ -849,13 +874,73 @@ static monad<mono> infer(ast::abs self) {
 };
 
 
+static monad<type_constant> constructor(mono ty) {
+  return match(ty,
+               [](type_constant self) -> monad<type_constant> { return pure(self); },
+               [](app self) { return constructor(self.ctor); },
+               [](var self) -> monad<type_constant> {
+                 return fail<type_constant> ("type constructor is not a constant");
+               });
+}
+
+static monad<mono> check_annot(mono offered) {
+  // match annotated type
+  return fresh(tag) >>= [=](mono label) {
+    return fresh() >>= [=](mono body) {
+      return ((unify(box(label)(body), offered) >> substitute(label)) >>= generalize)
+        // check whether label is generalized
+        >>= [=](poly label) {
+          return match(label,
+                       [=](forall) -> monad<mono> {
+                         // label is generalizable: either type is used-provided
+                         // or has no sharing through free type
+                         // variables.
+                         return substitute(body);
+                       },
+                       [](mono) -> monad<mono> { 
+                         // type has sharing without type annotation, cannot open
+                         return fail<mono>("cannot open type");
+                       });
+        };
+    };
+  };
+};
+
+
+// try to open type
+static monad<mono> open(mono offered) {
+  return check_annot(offered) >>= [=](mono offered) {
+    // TODO find a way to put opening type in box instead
+    return constructor(offered) >>= [=](type_constant ctor) {
+      return instantiate(ctor->open(ctor)) >>= [=](mono open) {
+        return fresh() >>= [=](mono res) {
+          return unify(offered >>= res, open) >> substitute(res);
+        };
+      };
+    };
+  };
+};
+
+
+static monad<unit> subsume(mono requested, mono offered) {
+  // try standard unification, fallback to opening offered type if possible
+  return unify(requested, offered) || (open(offered) >>= [=](mono opened) {
+    debug("opened", show(offered), "as", show(opened));    
+    return unify(requested, opened);
+  });
+}
+
 static monad<mono> infer_app(monad<mono> func, ast::expr arg) {
   return func >>= [=](mono func) {
-    return infer(arg) >>= [=](mono arg) {
+    return infer(arg) >>= [=](mono off) {
       return substitute(func) >>= [=](mono func) {
         return fresh() >>= [=](mono ret) {
-          const mono sig = arg >>= ret;
-          return unify(sig, func) >> substitute(ret);
+          return fresh() >>= [=](mono req) {
+            // funmatch
+            return (unify(req >>= ret, func) >> substitute(req)) >>= [=](mono req) {
+              return subsume(req, off) >> substitute(ret);
+            };
+          };
         };
       };
     };
@@ -934,14 +1019,6 @@ static monad<mono> infer(ast::let self) {
 };
 
 
-static monad<type_constant> constructor(mono ty) {
-  return match(ty,
-               [](type_constant self) -> monad<type_constant> { return pure(self); },
-               [](app self) { return constructor(self.ctor); },
-               [](var self) -> monad<type_constant> {
-                 return fail<type_constant> ("type constructor is not a constant");
-               });
-}
 
 // static monad<mono> infer(ast::open self) {
 //   // attempt to extract ctor info
@@ -980,7 +1057,7 @@ static mono ext(symbol name) {
 
 
 // attribute projection type: forall a.rho.{name: a; rho} -> a
-static poly attr(symbol name) {
+static poly proj(symbol name) {
   const var a(0ul, term), rho(0ul, row);
   const mono body = record(ext(name)(a)(rho)) >>= a;
   
@@ -990,16 +1067,7 @@ static poly attr(symbol name) {
 
 
 static monad<mono> infer(ast::attr self) {
-  return infer(self.arg) >>= [=](mono arg) {
-    return fresh() >>= [=](mono res) {
-      return instantiate(attr(self.name)) >>= [=](mono proj) {
-        return (unify(proj, arg >>= res) >> substitute(res)) >>= [=](mono res) {
-          debug("attr:", show(res));
-          return pure(res);
-        };
-      };
-    };
-  };
+  return infer_app(instantiate(proj(self.name)), self.arg);
 };
 
 template<class T>
@@ -1040,8 +1108,9 @@ std::shared_ptr<context> make_context() {
                                                  (empty))));
     });
 
+    const mono e = res->fresh(tag);
     const mono a = res->fresh();
-    res->def("module", res->generalize(module(a)));
+    res->def("module", res->generalize(box(e)(module(a))));
   }
 
 

@@ -1,14 +1,14 @@
 
-BUILD=build
-CMAKECACHE=$(BUILD)/CMakeCache.txt
-GENERATOR=Ninja
-CONFIG=
-CMAKE_DEFINITIONS=
+build=build
+cmakecache=$(BUILD)/CMakeCache.txt
+generator=Ninja
+config=
+cmakedefs=
 
-ifeq ($(CONFIG), release)
-CMAKE_DEFINITIONS+= -DCMAKE_BUILD_TYPE=Release
-else ifeq ($(CONFIG), debug)
-CMAKE_DEFINITIONS+= -DCMAKE_BUILD_TYPE=Debug -DASAN=ON -DBUILD_TESTS=ON
+ifeq ($(config), release)
+cmakedefs += -DCMAKE_BUILD_TYPE=Release
+else ifeq ($(config), debug)
+cmakedefs += -DCMAKE_BUILD_TYPE=Debug -DASAN=ON -DBUILD_TESTS=ON
 endif
 
 
@@ -16,20 +16,20 @@ first: all
 
 all: compile
 
-$(BUILD):
-	mkdir $(BUILD)
+$(build):
+	mkdir $(build)
 
-$(CMAKECACHE): $(BUILD)
-	cmake -S . -B $(BUILD) -G $(GENERATOR) $(CMAKE_DEFINITIONS)
+$(cmakecache): $(build)
+	cmake -S . -B $(build) -G $(generator) $(cmakedefs)
 
-cmake: $(CMAKECACHE)
+cmake: $(cmakecache)
 
-compile: $(CMAKECACHE)
-	cmake --build $(BUILD)
+compile: $(cmakecache)
+	cmake --build $(build)
 
 test: compile
-	cd $(BUILD) && ctest
+	cd $(build) && ctest
 
 distclean:
-	rm -rf $(BUILD)
+	rm -rf $(build)
 

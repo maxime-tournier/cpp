@@ -29,6 +29,7 @@ struct kind: variant<kind_constant, ctor> {
 
   kind operator>>=(kind other) const;
   bool operator==(kind other) const;
+  bool operator!=(kind other) const { return !operator==(other); }
 
   std::string show() const;
 };

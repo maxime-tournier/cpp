@@ -35,8 +35,10 @@ int main_repl() {
       const auto s = parser::run(parser, input);
       const auto e = ast::check(s);
       const auto p = type::infer(ctx, e);
-      const auto v = lua::run(env, e);
-      std::cout << " :: " << p.show() << " = " << v << std::endl;      
+      // const auto v = lua::run(env, e);
+      std::cout << " :: " << p.show()
+                // << " = " << v
+                << std::endl;      
     });
   }, "> ", history);
 
@@ -51,8 +53,10 @@ int main_load(std::string filename) try {
     for(auto s: parser::run(program(), ifs)) {
       const auto e = ast::check(s);
       const auto p = infer(ctx, e);
-      const auto v = lua::run(env, e);
-      std::cout << " :: " << p.show() << " = " << v << std::endl;
+      // const auto v = lua::run(env, e);
+      std::cout << " :: " << p.show()
+                // << " = " << v
+                << std::endl;
     }
     
     return 0;
