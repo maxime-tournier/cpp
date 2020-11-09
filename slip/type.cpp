@@ -739,7 +739,7 @@ static monad<unit> unify_app_terms(app lhs, app rhs) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-monad<mono> infer(ast::expr e);
+static monad<mono> infer(ast::expr e);
 
 static monad<mono> infer(ast::lit self) {
   return pure(match(self,
@@ -1075,11 +1075,25 @@ static monad<mono> infer(T) {
   return fail<mono>("unimplemented: " + std::string(typeid(T).name()));
 }
 
+
+
+
+
 monad<mono> infer(ast::expr e) {
   return match(e, [=](const auto& self) {
     return infer(self);
   });
 }
+
+
+// static monad<mono> infer(ast::expr e) {
+//   return cata(e, [](ast::Expr<monad<mono>> self) -> monad<mono> {
+//       return match(self, [](auto self) {
+//         return infer(self);
+//       });
+//     });
+// }
+
 
 
 // user-facing api
@@ -1135,6 +1149,8 @@ std::shared_ptr<context> make_context() {
   }
   return res;
 }
+
+
 
 poly infer(std::shared_ptr<context> ctx, const ast::expr& e) {
   substitution sub;

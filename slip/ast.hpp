@@ -118,14 +118,14 @@ struct Expr: variant<lit, var, Abs<E>, App<E>, Let<E>,
                  [&](Abs<E> self) -> Expr<G> {
                    return Abs<G>{map(self.args, [&](Arg<E> arg) {
                      return map(arg, f);
-                   }), map(self.body, f)};
+                   }), f(self.body)};
                  },
                  [&](App<E> self) -> Expr<G> {
                    return App<G>{f(self.func), map(self.args, f)};
                  },
                  [&](Let<E> self) -> Expr<G> {
                    return Let<G>{map(self.defs, [&](Def<E> self) {
-                     return map(self, f);
+                     return Def<G>{self.name, f(self.value)};
                    }), f(self.body)};
                  },
                  [&](Cond<E> self) -> Expr<G> {
@@ -133,7 +133,7 @@ struct Expr: variant<lit, var, Abs<E>, App<E>, Let<E>,
                  },
                  [&](Record<E> self) -> Expr<G> {
                    return Record<G>{map(self.attrs, [&](Def<E> self) {
-                     return map(self, f);
+                     return Def<G>{self.name, f(self.value)};
                    })};
                  },
                  [&](Attr<E> self) -> Expr<G> {
