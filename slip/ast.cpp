@@ -13,11 +13,6 @@ struct syntax_error: std::runtime_error {
 };
 
 
-symbol arg::name() const {
-  return match(*this,
-               [](symbol self) { return self; },
-               [](annot self) { return self.name; });
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // sexpr list parser monad
@@ -289,7 +284,7 @@ expr check(const sexpr& e) {
       e,
       [](auto self) -> expr { return lit{self}; },
       [](attrib self) -> expr {
-        return attr{check(self.arg), self.name};
+        return attr{self.name, check(self.arg)};
       },
       [](symbol self) -> expr {
         static const std::map<symbol, expr> special = {

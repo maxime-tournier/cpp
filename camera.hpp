@@ -64,7 +64,7 @@ struct camera {
     glPopMatrix();
   }
 
-  auto use() {
+  auto lock() {
     enable();
     return finally([this] { disable(); });
   }

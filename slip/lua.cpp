@@ -221,7 +221,7 @@ static expr compile(ast::let self) {
 
 
 static expr compile(ast::record self) {
-  return table{map(self.attrs, [](auto attr) {
+  return table{map(self.attrs, [](ast::def attr) {
     return def{attr.name, compile(attr.value)};
   })};
 }
