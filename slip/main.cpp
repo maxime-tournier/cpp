@@ -23,7 +23,7 @@ static auto program() {
 }
 
 
-int main_repl() {
+int main_repl(bool eval=true) {
   const auto parser = sexpr::parser() >>= drop(parser::eos);
 
   auto ctx = type::make_context();
@@ -35,17 +35,20 @@ int main_repl() {
       const auto s = parser::run(parser, input);
       const auto e = ast::check(s);
       const auto p = type::infer(ctx, e);
-      // const auto v = lua::run(env, e);
-      std::cout << " :: " << p.show()
-                // << " = " << v
-                << std::endl;      
+      std::cout << " :: " << p.show();
+      if(eval) {
+        const auto v = lua::run(env, e);
+        std::cout << " = " << v;
+      }
+      
+      std::cout << std::endl;      
     });
   }, "> ", history);
 
   return 0;
 }
 
-int main_load(std::string filename) try {
+int main_load(std::string filename, bool eval=true) try {
   auto ctx = type::make_context();
   auto env = lua::make_environment();
   
@@ -53,10 +56,14 @@ int main_load(std::string filename) try {
     for(auto s: parser::run(program(), ifs)) {
       const auto e = ast::check(s);
       const auto p = infer(ctx, e);
-      // const auto v = lua::run(env, e);
-      std::cout << " :: " << p.show()
-                // << " = " << v
-                << std::endl;
+      std::cout << " :: " << p.show();
+      
+      if(eval) {
+        const auto v = lua::run(env, e);
+        std::cout << " = " << v;
+      }
+
+      std::cout << std::endl;
     }
     
     return 0;
@@ -69,9 +76,10 @@ int main_load(std::string filename) try {
 }
 
 int main(int argc, char** argv) {
+  const bool eval = true;
   if(argc > 1) {
-    return main_load(argv[1]);
+    return main_load(argv[1], eval);
   } else {
-    return main_repl();
+    return main_repl(eval);
   }
 }

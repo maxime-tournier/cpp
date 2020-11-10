@@ -700,7 +700,7 @@ static monad<unit> unify(mono lhs, mono rhs) {
 
 
 static monad<unit> unify_vars(mono lhs, mono rhs) {
-  assert(lhs.kind() == rhs.kind());
+   assert(lhs.kind() == rhs.kind());
   
   const auto lvar = lhs.cast<var>();
   const auto rvar = rhs.cast<var>();  
@@ -893,8 +893,7 @@ static monad<mono> check_annot(mono offered) {
           return match(label,
                        [=](forall) -> monad<mono> {
                          // label is generalizable: either type is used-provided
-                         // or has no sharing through free type
-                         // variables.
+                         // or has no sharing through context
                          return substitute(body);
                        },
                        [](mono) -> monad<mono> { 
