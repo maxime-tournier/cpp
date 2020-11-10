@@ -1,7 +1,7 @@
 #ifndef HAMT_HPP
 #define HAMT_HPP
 
-#include "compressed.hpp"
+#include "sparse.hpp"
 
 namespace hamt {
 

@@ -1,6 +1,5 @@
 // -*- compile-command: "c++ -std=c++14 compressed.cpp -o compressed -lstdc++ -g" -*-
 
-#include "compressed.hpp"
 #include <iostream>
 
 #include <chrono>
