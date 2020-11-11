@@ -298,7 +298,8 @@ struct file {
     // }
     const auto parser = file >>= drop(eos);
 
-    self = run(parser, in);
+    const std::string contents = parser::read(in);
+    self = run(parser, contents);
     return in;
   }
 };

@@ -30,6 +30,12 @@ struct range {
     last(last) {
     assert(first <= last);
   }
+
+  range(const std::string& contents):
+    first(contents.data()),
+    last(contents.data() + contents.size()) { }
+
+  range(std::string&&) = delete;
   
   explicit operator bool() const { return first != last; }
 
@@ -431,21 +437,10 @@ static value<Parser> run(Parser parser, range in) {
       [](success<value<Parser>>& ok) { return std::move(ok.value); });
 }
 
-template<class Parser>
-static value<Parser> run(Parser parser, const char* in) {
-  return run(parser, range{in, in + std::strlen(in)});
-}
-
-
 static std::string read(std::istream& in) {
   return {std::istreambuf_iterator<char>(in), {}};
 }
 
-
-template<class Parser>
-static auto run(Parser parser, std::istream& in) {
-  return run(parser, read(in).c_str());
-}
 
 
 // range TODO put in range?

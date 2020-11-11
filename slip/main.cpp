@@ -44,7 +44,7 @@ static const auto with_repl = [](auto process) {
   const auto parser = sexpr::parse() >>= drop(parser::eos);
   const auto history = ".slip";
 
-  repl([&](const char* input) {
+  repl([&](std::string input) {
     try {
       return with_show_errors([&] {
         const auto s = parser::run(parser, input);
@@ -63,7 +63,8 @@ static const auto with_load = [](std::string filename, auto process) -> int {
   try {
     with_show_errors([&] {
       if(std::ifstream ifs{filename}) {
-        for(auto s: parser::run(program(), ifs)) {
+        const std::string contents = parser::read(ifs);
+        for(auto s: parser::run(program(), contents)) {
           process(s);
         }
 
