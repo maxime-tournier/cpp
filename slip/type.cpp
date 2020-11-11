@@ -382,6 +382,7 @@ struct context {
 struct state {
   context ctx;
   substitution sub;
+  hamt::array<mono> types;
 };
 
 template<class T>
@@ -460,8 +461,29 @@ static auto coprod(MA ma, MB mb) {
 
 
 template<class MA, class MB, class A=value<MA>, class B=value<MB>>
-static auto operator||(MA ma, MB mb) {
+static auto operator|(MA ma, MB mb) {
   return coprod(ma, mb);
+}
+
+
+template<class M, class T=value<M>>
+static monad<list<value<M>>> sequence(list<M> items) {
+  if(!items) {
+    return pure(list<T>{});
+  } else return items->head >>= [=](T head) {
+    return sequence(items->tail) >>= [=](list<T> tail) {
+      return pure(head %= tail);
+    };
+  };
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template<class T>
+static auto fail(std::string what) {
+  return [what](state) -> result<T> {
+    return type_error(what);
+  };
 }
 
 
@@ -503,12 +525,6 @@ static auto substitute(mono ty) {
 }
 
 
-template<class T>
-static auto fail(std::string what) {
-  return [what](state) -> result<T> {
-    return type_error(what);
-  };
-}
 
 template<class M, class T=value<M>>
 static auto scope(M m) {
@@ -562,33 +578,6 @@ static auto instantiate(poly p) {
 };
 
 
-template<class M, class T=value<M>>
-static monad<list<value<M>>> sequence(list<M> items) {
-  if(!items) {
-    return pure(list<T>{});
-  } else return items->head >>= [=](T head) {
-    return sequence(items->tail) >>= [=](list<T> tail) {
-      return pure(head %= tail);
-    };
-  };
-}
-
-template<class LHS, class RHS, class L=value<LHS>, class R=value<RHS>>
-static auto coproduct(LHS lhs, RHS rhs) {
-  return [=](state s) {
-    if(auto res = lhs(s)) {
-      return res;
-    } else {
-      return rhs(s);
-    }
-  };
-}
-
-
-template<class LHS, class RHS, class L=value<LHS>, class R=value<RHS>>
-static auto operator|(LHS lhs, RHS rhs) {
-  return coproduct(lhs, rhs);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -849,28 +838,18 @@ static auto infer(ast::arg self) {
 }
 
 
-static monad<mono> infer(ast::abs self) {
-  // TODO handle nullary apps
-  
-  const auto defs = sequence(map(self.args, [=](ast::arg arg) {
-    return infer(arg) >>= [=](mono ty) {
-      return def(arg.name(), poly(ty)) >> pure(ty);
+
+static monad<mono> infer_abs(ast::arg arg, monad<mono> body) {
+  return infer(arg) >>= [=](mono from) {
+    return scope(def(arg.name(), poly(from)) >> body) >>= [=](mono to) {
+      return substitute(from >>= to);
     };
-  }));
-    
-  return scope(defs >>= [=](list<mono> args) {
-    return scope(infer(self.body) >>= [=](mono body) {
-      const mono sig = foldr(args, body, [](mono from, mono to) {
-        return from >>= to;
-      });
-      
-      return substitute(sig) >>= [=](mono res) {
-        debug("abs res:", show(res));
-        return pure(res);
-      };
-    });
-  });
-  
+  };
+}
+
+static monad<mono> infer(ast::abs self) {
+  // TODO handle nullary apps  
+  return foldr(self.args, infer(self.body), infer_abs);
 };
 
 
@@ -923,7 +902,7 @@ static monad<mono> open(mono offered) {
 
 static monad<unit> subsume(mono requested, mono offered) {
   // try standard unification, fallback to opening offered type if possible
-  return unify(requested, offered) || (open(offered) >>= [=](mono opened) {
+  return unify(requested, offered) | (open(offered) >>= [=](mono opened) {
     debug("opened", show(offered), "as", show(opened));    
     return unify(requested, opened);
   });

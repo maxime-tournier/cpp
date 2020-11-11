@@ -79,6 +79,7 @@ public:
     }
 
     std::size_t type() const { return storage->index; }
+    std::size_t id() const { return std::size_t(storage.get()); }
 };
 
 
