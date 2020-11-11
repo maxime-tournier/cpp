@@ -39,8 +39,12 @@ struct Arg: variant<symbol, Annot<E>> {
   template<class F, class G=typename std::result_of<F(E)>::type>
   friend Arg<G> map(Arg self, const F& f) {
     return match(self,
-                 [](symbol self) -> Arg<G> { return self; },
-                 [&](Annot<E> self) -> Arg<G> { return Annot<G>{self.name, f(self.type)}; });
+                 [](symbol self) -> Arg<G> {
+                   return self;
+                 },
+                 [&](Annot<E> self) -> Arg<G> {
+                   return Annot<G>{self.name, f(self.type)};
+                 });
   }
 };
 
@@ -147,7 +151,8 @@ struct Expr: variant<lit, var, Abs<E>, App<E>, Let<E>,
 
 struct expr: fix<Expr, expr> {
   using expr::fix::fix;
-  
+
+  std::shared_ptr<sexpr> source = {};
 };
 
 expr check(const sexpr&);

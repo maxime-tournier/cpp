@@ -20,7 +20,7 @@ static void with_show_errors(Cont cont, std::ostream& err=std::cerr) try {
 static auto program() {
   using namespace parser;
   const auto space = skip(pred(std::isspace));
-  return parser::list(sexpr::parser(), space) >>= drop(space >> eos);
+  return parser::list(sexpr::parse(), space) >>= drop(space >> eos);
 }
 
 
@@ -41,7 +41,7 @@ static const auto process = [](auto ctx, auto env) {
 
 
 static const auto with_repl = [](auto process) {
-  const auto parser = sexpr::parser() >>= drop(parser::eos);
+  const auto parser = sexpr::parse() >>= drop(parser::eos);
   const auto history = ".slip";
 
   repl([&](const char* input) {

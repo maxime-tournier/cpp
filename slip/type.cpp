@@ -6,10 +6,12 @@
 #include "common.hpp"
 
 #include <functional>
+#include <stack>
 #include <sstream>
 #include <algorithm>
 #include <sstream>
 
+#include "sexpr.hpp"
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -115,6 +117,7 @@ mono mono::operator()(mono arg) const {
                  return app{*this, arg};
                },
                [](auto) -> mono {
+                 assert(false);
                  throw kind_error("type constructor expected");
                });
 }
@@ -418,8 +421,10 @@ static success<T> make_success(T value, state s) {
 }
 
 
+using call_stack = std::stack<std::string>;
+
 template<class T>
-using result = either<type_error, success<T>>;
+using result = either<call_stack, success<T>>;
 
 template<class T>
 using monad = std::function<result<T>(state)>;
@@ -502,7 +507,9 @@ static monad<list<value<M>>> sequence(list<M> items) {
 template<class T>
 static auto fail(std::string what) {
   return [what](state) -> result<T> {
-    return type_error(what);
+    call_stack res;
+    res.push(what);
+    return res;
   };
 }
 
@@ -514,8 +521,8 @@ static auto upgrade(mono ty, var target) {
     for(auto v: vars) {
       if(v == target) {
         const auto repr = label(vars);
-        return type_error("type variable " + quote(mono(target).show(repr)) +
-                          " occurs in type " + quote(ty.show(repr)));
+        return fail<unit>("type variable " + quote(mono(target).show(repr)) +
+                          " occurs in type " + quote(ty.show(repr)))(s);
       }
       
       if(v->depth > max) {
@@ -588,7 +595,7 @@ static auto find(symbol name) {
       return make_success(*poly, s);
     }
     
-    return type_error("unbound variable: " + quote(name));
+    return fail<poly>("unbound variable: " + quote(name))(s);
   };
 };
 
@@ -605,6 +612,21 @@ static auto decorate(ast::expr e, mono t) {
     return make_success(unit{}, s);
   };
 }
+
+
+template<class Lazy,
+         class M,
+         class T=value<M>>
+static auto with_context(Lazy lazy, M m) {
+  return [=](state s) {
+    return match(m(s),
+                 [](success<T> self) -> result<T> { return self; },
+                 [=](call_stack error) -> result<T> {
+                   error.push(lazy());
+                   return error;
+                 });
+  };
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // unification
@@ -774,22 +796,16 @@ static monad<mono> infer(ast::var self) {
 
 
 static monad<mono> check_type(mono type) {
-  return (fresh() >>= [=](mono arg) {
-    return unify(ty(arg), type) >> substitute(arg);
-  }) | (fresh() >>= [=](mono arg) {
-    return fresh() >>= [=](mono ctor) {
-      return unify(ty(arg) >>= ctor, type) >> substitute(ctor) >>= [=](mono ctor) {
-        return check_type(ctor) >>= [=](mono ctor) {
-          return substitute(arg) >>= [=](mono arg) {
-            // TODO check that arg is a var that can be quantified
-            
-            // reconstruct application
-            return pure(ctor(arg));
-          };
-        };
-      };
-    };
-  });
+  return (fresh() >>=
+          [=](mono arg) { return unify(ty(arg), type) >> substitute(arg); }) |
+         (fresh() >>= [=](mono arg) {
+           return fresh() >>= [=](mono ctor) {
+             return unify(ty(arg) >>= ctor, type) >> substitute(ctor) >>=
+                    [=](mono ctor) {
+                      return check_type(ctor);
+                    };
+           };
+         });
 }
 
 
@@ -859,11 +875,11 @@ static monad<poly> infer(ast::arg self) {
                [](ast::annot self) -> monad<poly> {
                  return fresh() >>= [=](mono body) {
                    return scope(fresh(tag) >>= [=](var label) {
-                     const mono annot = box(label)(body);                     
+                     const mono annot = box(label)(body);
                      return infer(self.type) >>= [=](mono reified) {
                        return check_type(reified) >>= [=](mono type) {
-                         return unify(annot, type) >> substitute(annot)
-                           >>= generalize;                             
+                         return unify(annot, type) >> substitute(annot) >>=
+                                generalize;
                        };
                      };
                    });
@@ -1091,11 +1107,14 @@ static monad<mono> infer(T) {
 
 
 monad<mono> infer(ast::expr e) {
-  return match(e, [=](auto self) -> monad<mono> {
-    return infer(self) >>= [=](mono result) {
-      return decorate(e, result) >> pure(result);
-    };
-  });
+  return with_context([=] { 
+    return "when typing expression " + std::string(e.source->source.first,
+                                                   e.source->source.last);
+  },  match(e, [=](auto self) -> monad<mono> {
+      return infer(self) >>= [=](mono result) {
+        return decorate(e, result) >> pure(result);
+      };
+    }));
 }
 
 
@@ -1182,8 +1201,16 @@ poly infer(std::shared_ptr<context> ctx, const ast::expr& e, hamt::array<mono>* 
                           
                           return self.value;
                         },
-                        [](type_error error) -> mono {
-                          throw error;
+                        [](call_stack error) -> mono {
+                          std::stringstream ss;
+                          while(!error.empty()) {
+                            ss << error.top();
+                            error.pop();
+                            if(!error.empty()) {
+                              ss << '\n';
+                            }
+                          }
+                          throw std::runtime_error(ss.str());
                         });
   
   return ctx->generalize(ty);

@@ -23,6 +23,14 @@ struct range {
   const char* first;
   const char* last;
 
+  range(): first(nullptr), last(nullptr) {}
+  range(const char* first,
+        const char* last):
+    first(first),
+    last(last) {
+    assert(first <= last);
+  }
+  
   explicit operator bool() const { return first != last; }
 
   std::size_t size() const { return last - first; }
@@ -81,7 +89,7 @@ using value =
 
 // type-erased parser
 template<class T>
-using any = std::function<result<T>(range in)>;
+using monad = std::function<result<T>(range in)>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // combinators
@@ -310,8 +318,12 @@ static fixpoint<T, Def> fix(Def def) {
 ////////////////////////////////////////////////////////////////////////////////
 // concrete parsers
 
+static result<const char*> cursor(range in) {
+  return make_success(in.first, in);
+};
+
 // char parser  
-static result<char> _char(range in) {
+static result<char> character(range in) {
   if(!in) {
     return error(in);
   }
@@ -322,10 +334,10 @@ static result<char> _char(range in) {
 // parse char matching a predicate  
 template<class Pred>
 static auto pred(Pred pred) {
-  return _char >>= guard(pred);
+  return character >>= guard(pred);
 }
 
-static auto pred(int (*pred)(int)) { return _char >>= guard(pred); }
+static auto pred(int (*pred)(int)) { return character >>= guard(pred); }
   
 // parse a given char  
 static auto single(char c) {
@@ -425,10 +437,70 @@ static value<Parser> run(Parser parser, const char* in) {
 }
 
 
+static std::string read(std::istream& in) {
+  return {std::istreambuf_iterator<char>(in), {}};
+}
+
+
 template<class Parser>
 static auto run(Parser parser, std::istream& in) {
-  const std::string contents(std::istreambuf_iterator<char>(in), {});
-  return run(parser, range{contents.data(), contents.data() + contents.size()});
+  return run(parser, read(in).c_str());
+}
+
+
+// range TODO put in range?
+static std::size_t line(range what, range context) {
+  assert(what.last <= context.last);
+  assert(what.first >= context.first);
+
+  std::size_t result = 0;
+  for(const char* it = context.first; it != what.first; ++it) {
+    if(*it == '\n') {
+      ++result;
+    }
+  }
+
+  return result;
+}
+
+
+static range grow(range what, range context, std::size_t lines=1) {
+  assert(what.last <= context.last);
+  assert(what.first >= context.first);
+
+  range result;
+
+  {
+    std::size_t count = 0;
+    for(auto it = what.first; it >= context.first; --it) {
+      if(*it == '\n') {
+        if(++count == lines) {
+          result.first = it + 1;
+        }
+      }
+    }
+
+    if(!count) {
+      result.first = context.first;
+    }
+  }
+
+  {
+    std::size_t count = 0;
+    for(auto it = what.last; it <= context.last; ++it) {
+      if(*it == '\n') {
+        if(++count == lines) {
+          result.last = it;
+        }
+      }
+    }
+
+    if(!count) {
+      result.first = context.last;
+    }
+  }
+  
+  return result;
 }
 
 } // namespace parser

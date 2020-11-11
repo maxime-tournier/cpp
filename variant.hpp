@@ -46,6 +46,7 @@ public:
     variant(const variant&) = default;
     variant(variant&&) = default;
 
+    // TODO rvalues overload
     template<class Visitor>
     friend auto visit(const variant& self, Visitor visitor)  {
         using result_type =

@@ -2,14 +2,26 @@
 #include "sexpr.hpp"
 #include "either.hpp"
 #include "repl.hpp"
+#include "common.hpp"
 
 #include <map>
 #include <functional>
 
 namespace ast {
 
+static std::string locate(sexpr where) {
+  if(where.source) {
+    return std::string(where.source.first,
+                       where.source.last);
+  }
+
+  throw std::logic_error("sexpr has no source");
+}
+
 struct syntax_error: std::runtime_error {
-  syntax_error(std::string what): std::runtime_error("syntax error: " + what) { }
+  syntax_error(sexpr where, std::string what):
+      std::runtime_error("syntax error near " + quote(locate(where)) + ": " +
+                         what) {}
 };
 
 
@@ -131,13 +143,13 @@ template<class T, class Def>
 static fixpoint<T, Def> fix(const Def& def) { return {def}; }
 
 
-static const auto run = [](auto parser, sexpr::list args) {
-  if(auto result = parser(args)) {
-    return result.right().value;
-  } else {
-    throw syntax_error(result.left());
-  }
-};
+// static const auto run = [](auto parser, sexpr::list args) {
+//   if(auto result = parser(args)) {
+//     return result.right().value;
+//   } else {
+//     throw syntax_error(result.left());
+//   }
+// };
 
 template<class T>
 static auto fail(std::string what) {
@@ -280,7 +292,7 @@ static expr check_app(sexpr func, sexpr::list args) {
 }
 
 expr check(const sexpr& e) {
-  return match(
+  expr res = match(
       e,
       [](auto self) -> expr { return lit{self}; },
       [](attrib self) -> expr {
@@ -296,20 +308,28 @@ expr check(const sexpr& e) {
         
         return var{self};
       },
-      [](sexpr::list self) -> expr {
+      [=](sexpr::list self) -> expr {
         if(!self) {
-          throw syntax_error("empty list in application");
+          throw syntax_error(self, "empty list in application");
         }
         return match(self->head,
             [=](symbol first) -> expr {
               const auto it = special.find(first);
               if(it != special.end()) {
-                return run(it->second, self->tail);
+                if(auto result = it->second(self->tail)) {
+                  return result.right().value;
+                } else {
+                  throw syntax_error(e, result.left());
+                }
               }
               return check_app(first, self->tail);
             },
             [=](sexpr func) -> expr { return check_app(func, self->tail); });
       });
+
+  res.source = std::make_shared<sexpr>(e);
+
+  return res;
 }
 
 }
