@@ -51,6 +51,8 @@ struct range {
     return {first + 1, last};
   }
 
+
+  std::string show() const { return {first, last}; }
 };
 
   

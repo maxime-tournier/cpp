@@ -4,6 +4,8 @@
 #include <sstream>
 #include <iostream>
 
+#include "sexpr.hpp"
+
 extern "C" {
 #include <lua.h>
 #include <lualib.h>
@@ -209,7 +211,9 @@ static expr compile(context ctx, ast::app self) {
   assert(ctx.types.find(self.func.id()));
   const std::size_t expected = arity(ctx.types.get(self.func.id()));
   const std::size_t given = size(self.args);
+
   // std::clog << "expected: " << expected << " given: " << given << std::endl;
+  // std::clog << "for " << self.func.source->source.show() << std::endl;
   
   if(expected == given) {
     // TODO evaluation order?

@@ -540,6 +540,7 @@ static auto upgrade(mono ty, var target) {
 static auto link(var from, mono to) {
   return [=](state s) -> result<unit> {
     debug("> link:", show(from), "==", show(to));
+    
     s.sub = s.sub.link(from, to);
     return make_success(unit{}, s);
   };
@@ -674,25 +675,36 @@ static const auto row_match = [](mono ty, auto cont) {
 
 static mono ext(symbol name);
 
+
+static monad<unit> unify_sub(mono lhs, mono rhs) {
+  return substitute(lhs) >>= [=](mono lhs) {
+    return substitute(rhs) >>= [=](mono rhs) {
+      return unify(lhs, rhs);
+    };
+  };
+}
+
+
 // TODO nicer errors
 static monad<unit> unify_app_rows(app lhs, app rhs) {
   return row_match(lhs, [&](symbol lattr, mono lty, mono ltail) -> monad<unit> {
     return row_match(rhs, [&](symbol rattr, mono rty, mono rtail) -> monad<unit> {
       if(lattr == rattr) {
-        return unify(lty, rty) >> unify(ltail, rtail);
+        // labels match: unify value types
+        return unify(lty, rty) >> unify_sub(ltail, rtail);
       } else {
+        // labels mismatch: look for labels in each tails
         return fresh(row) >>= [=](mono ldummy) {
           return fresh(row) >>= [=](mono rdummy) {
-            return
-              unify(ltail, ext(rattr)(rty)(rdummy)) >>
-              unify(rtail, ext(lattr)(lty)(ldummy));
+            return unify(ltail, ext(rattr)(rty)(rdummy)) >>
+                   unify_sub(rtail, ext(lattr)(lty)(ldummy));
+            // TODO proceed with tails?
           };
         };
       }        
     });
   });
 }
-
 
 // note: lhs/rhs must be fully substituted
 static monad<unit> unify(mono lhs, mono rhs) {
@@ -704,8 +716,11 @@ static monad<unit> unify(mono lhs, mono rhs) {
     return fail<unit>("cannot unify types " + quote(lhs.show(repr)) +
                       " and " + quote(rhs.show(repr)));
   }
-  
-  debug("unifying:", show(lhs), "==", show(rhs));
+
+  const auto trace = [=](state s) -> result<unit> {
+    debug("unifying:", show(lhs), "==", show(rhs));
+    return make_success(unit{}, s);
+  };
   
   const auto kind = lhs.kind();
 
@@ -715,10 +730,10 @@ static monad<unit> unify(mono lhs, mono rhs) {
   // both applications
   if(lapp && rapp) {
     if(kind == row) {
-      return unify_app_rows(*lapp, *rapp);
+      return trace >> unify_app_rows(*lapp, *rapp);
     }
 
-    return unify_app_terms(*lapp, *rapp);
+    return trace >> unify_app_terms(*lapp, *rapp);
   }    
 
   const auto lcst = lhs.cast<type_constant>();
@@ -727,12 +742,12 @@ static monad<unit> unify(mono lhs, mono rhs) {
   // both constants
   if(lcst && rcst) {
     if(*lcst == *rcst) {
-      return pure(unit{});
+      return trace >> pure(unit{});
     }
   }
   
   // variables
-  return unify_vars(lhs, rhs);
+  return trace >> unify_vars(lhs, rhs);
 }
 
 
@@ -764,12 +779,7 @@ static monad<unit> unify_vars(mono lhs, mono rhs) {
 
 
 static monad<unit> unify_app_terms(app lhs, app rhs) {
-  return unify(lhs.ctor, rhs.ctor) >>
-    (substitute(lhs.arg) >>= [=](mono larg) {
-      return substitute(rhs.arg) >>= [=](mono rarg) {
-        return unify(larg, rarg);
-      };
-    });
+  return unify(lhs.ctor, rhs.ctor) >> unify_sub(lhs.arg, rhs.arg);
 };
 
 
@@ -1196,7 +1206,10 @@ poly infer(std::shared_ptr<context> ctx, const ast::expr& e, hamt::array<mono>* 
                           *ctx = self.state.ctx;
                           
                           if(types) {
-                            *types = self.state.types;
+                            // store substituted types
+                            self.state.types.iter([&](std::size_t i, mono t) {
+                              *types = types->set(i, self.state.sub(t));
+                            });
                           }
                           
                           return self.value;
