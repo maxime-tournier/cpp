@@ -157,45 +157,49 @@ public:
 };
 
 
+struct context {
+  hamt::array<type::mono> types;
+};
+
 
 template<class T>
-static expr compile(T) {
+static expr compile(context, T) {
   throw std::runtime_error("unimplemented compile: " +
                            std::string(typeid(T).name()));
 }
 
-static expr compile(ast::expr self);
+static expr compile(context, ast::expr self);
 
 
-static expr compile(ast::lit self) {
+static expr compile(context, ast::lit self) {
   return match(self, [](auto self) -> expr {
     return lit{self};
   });
 }
 
 
-static expr compile(ast::app self) {
-  return call{compile(self.func), map(self.args, [](auto arg) {
-    return compile(arg);
+static expr compile(context ctx, ast::app self) {
+  return call{compile(ctx, self.func), map(self.args, [=](auto arg) {
+    return compile(ctx, arg);
   })};
 }
 
-static expr compile(ast::abs self) {
-  const term body = ret{compile(self.body)};
+static expr compile(context ctx, ast::abs self) {
+  const term body = ret{compile(ctx, self.body)};
   return func{map(self.args, [](ast::arg arg) {
     return arg.name();
   }), body %= list<term>() };
 }
 
-static expr compile(ast::var self) {
+static expr compile(context, ast::var self) {
   return var{self.name};
 }
 
 
-static expr compile(ast::cond self) {
-  const expr pred = compile(self.pred);
-  const term conseq = ret{compile(self.conseq)};
-  const term alt = ret{compile(self.alt)};
+static expr compile(context ctx, ast::cond self) {
+  const expr pred = compile(ctx, self.pred);
+  const term conseq = ret{compile(ctx, self.conseq)};
+  const term alt = ret{compile(ctx, self.alt)};
   
   const term body = cond{pred,
     conseq %= list<term>(),
@@ -205,30 +209,30 @@ static expr compile(ast::cond self) {
 }
 
 
-static expr compile(ast::let self) {
+static expr compile(context ctx, ast::let self) {
   const list<term> decls = map(self.defs, [](ast::def self) -> term {
     return local{self.name};
   });
 
-  const list<term> defs = map(self.defs, [](ast::def self) -> term {
-    return def{self.name, compile(self.value)};
+  const list<term> defs = map(self.defs, [=](ast::def self) -> term {
+    return def{self.name, compile(ctx, self.value)};
   });
 
-  const term body = ret{compile(self.body)};
+  const term body = ret{compile(ctx, self.body)};
   
   return thunk{concat(concat(decls, defs),
                       body %= list<term>())};
 }
 
 
-static expr compile(ast::record self) {
-  return table{map(self.attrs, [](ast::def attr) {
-    return def{attr.name, compile(attr.value)};
+static expr compile(context ctx, ast::record self) {
+  return table{map(self.attrs, [=](ast::def attr) {
+    return def{attr.name, compile(ctx, attr.value)};
   })};
 }
 
-static expr compile(ast::attr self) {
-  return getattr{compile(self.arg), self.name};
+static expr compile(context ctx, ast::attr self) {
+  return getattr{compile(ctx, self.arg), self.name};
 }
 
 
@@ -237,9 +241,9 @@ static expr compile(ast::type self) {
 }
 
 
-static expr compile(ast::expr self) {
-  return match(self, [](auto self) {
-    return compile(self);
+static expr compile(context ctx, ast::expr self) {
+  return match(self, [=](auto self) {
+    return compile(ctx, self);
   });
 }
 
@@ -402,7 +406,10 @@ std::string run(std::shared_ptr<environment> env,
   std::stringstream buffer;
   state ss(buffer);
 
-  const term code = ret{compile(self)};
+  context ctx;
+  ctx.types = types;
+  
+  const term code = ret{compile(ctx, self)};
   format(code, ss);
 
   // debug
