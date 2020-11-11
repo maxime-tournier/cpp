@@ -849,16 +849,24 @@ static monad<mono> infer(ast::type self) {
 
 
 
-static auto infer(ast::arg self) {
+static monad<poly> infer(ast::arg self) {
   return match(self,
-               [](symbol self) -> monad<mono> {
-                 return fresh() |= [](var res) {
+               [](symbol self) -> monad<poly> {
+                 return fresh() |= [](var res) -> poly {
                    return mono(res);
                  };
                }, 
-               [](ast::annot self) -> monad<mono> {
-                 return infer(self.type) >>= [](mono type) {
-                   return check_type(type);
+               [](ast::annot self) -> monad<poly> {
+                 return fresh() >>= [=](mono body) {
+                   return scope(fresh(tag) >>= [=](var label) {
+                     const mono annot = box(label)(body);                     
+                     return infer(self.type) >>= [=](mono reified) {
+                       return check_type(reified) >>= [=](mono type) {
+                         return unify(annot, type) >> substitute(annot)
+                           >>= generalize;                             
+                       };
+                     };
+                   });
                  };
                });
 }
@@ -866,9 +874,11 @@ static auto infer(ast::arg self) {
 
 
 static monad<mono> infer_abs(ast::arg arg, monad<mono> body) {
-  return infer(arg) >>= [=](mono from) {
-    return scope(def(arg.name(), poly(from)) >> body) >>= [=](mono to) {
-      return substitute(from >>= to);
+  return infer(arg) >>= [=](poly from) {
+    return scope(def(arg.name(), from) >> body) >>= [=](mono to) {
+      return instantiate(from) >>= [=](mono from) {
+        return substitute(from >>= to);
+      };
     };
   };
 }
@@ -1127,7 +1137,7 @@ std::shared_ptr<context> make_context() {
 
     const mono e = res->fresh(tag);
     const mono a = res->fresh();
-    res->def("module", res->generalize(box(e)(module(a))));
+    res->def("module", res->generalize(ty(a) >>= ty(box(e)(module(a)))));
 
     {
       const mono e = res->fresh(tag);
@@ -1136,6 +1146,8 @@ std::shared_ptr<context> make_context() {
 
       res->def("share", res->generalize(box(e)(module(a)) >>= b >>= integer));
     }
+
+    
   }
 
 

@@ -59,19 +59,21 @@ static const auto with_repl = [](auto process) {
 };
 
 
-static const auto with_load = [](std::string filename, auto process) {
+static const auto with_load = [](std::string filename, auto process) -> int {
   try {
-    if(std::ifstream ifs{filename}) {
-      with_show_errors([&] {
+    with_show_errors([&] {
+      if(std::ifstream ifs{filename}) {
         for(auto s: parser::run(program(), ifs)) {
           process(s);
         }
-      });
-    
-      return 0;
-    }
-  
-    throw std::runtime_error("cannot read file: " + filename);
+
+        return;
+      }
+
+      throw std::runtime_error("cannot read file: " + filename);
+    });
+
+    return 0;
   } catch(std::runtime_error& e) {
     return 1;
   }
