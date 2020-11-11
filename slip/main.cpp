@@ -9,10 +9,11 @@
 #include <fstream>
 
 template<class Cont>
-static void handle(Cont cont, std::ostream& err=std::cerr) try {
+static void with_show_errors(Cont cont, std::ostream& err=std::cerr) try {
   return cont();
 } catch(std::exception& e) {
   err << e.what() << std::endl;
+  throw;
 };
 
 
@@ -23,63 +24,65 @@ static auto program() {
 }
 
 
-int main_repl(bool eval=true) {
-  const auto parser = sexpr::parser() >>= drop(parser::eos);
+static const auto process = [](auto ctx, auto env) {
+  return [=](sexpr s) {
+      const auto e = ast::check(s);
+      hamt::array<type::mono> types;
+      const auto p = type::infer(ctx, e, &types);
+      std::cout << " :: " << p.show();
+      if(env) {
+        const auto v = lua::run(env, e, types);
+        std::cout << " = " << v;
+      }
+      
+      std::cout << '\n';
+  };
+};
 
-  auto ctx = type::make_context();
-  auto env = lua::make_environment();
+
+static const auto with_repl = [](auto process) {
+  const auto parser = sexpr::parser() >>= drop(parser::eos);
   const auto history = ".slip";
 
   repl([&](const char* input) {
-    return handle([&] {
-      const auto s = parser::run(parser, input);
-      const auto e = ast::check(s);
-      const auto p = type::infer(ctx, e);
-      std::cout << " :: " << p.show();
-      if(eval) {
-        const auto v = lua::run(env, e);
-        std::cout << " = " << v;
-      }
+    try {
+      return with_show_errors([&] {
+        const auto s = parser::run(parser, input);
+        process(s);
+      });
+    } catch(std::runtime_error&) {
       
-      std::cout << std::endl;      
-    });
+    }
   }, "> ", history);
 
   return 0;
-}
+};
 
-int main_load(std::string filename, bool eval=true) try {
-  auto ctx = type::make_context();
-  auto env = lua::make_environment();
-  
-  if(std::ifstream ifs{filename}) {
-    for(auto s: parser::run(program(), ifs)) {
-      const auto e = ast::check(s);
-      const auto p = infer(ctx, e);
-      std::cout << " :: " << p.show();
-      
-      if(eval) {
-        const auto v = lua::run(env, e);
-        std::cout << " = " << v;
-      }
 
-      std::cout << std::endl;
-    }
+static const auto with_load = [](std::string filename, auto process) {
+  try {
+    if(std::ifstream ifs{filename}) {
+      with_show_errors([&] {
+        for(auto s: parser::run(program(), ifs)) {
+          process(s);
+        }
+      });
     
-    return 0;
-  }
+      return 0;
+    }
   
-  throw std::runtime_error("cannot read file: " + filename);
-} catch(std::runtime_error& e) {
-  std::cerr << e.what() << std::endl;
-  return 1;
-}
-
+    throw std::runtime_error("cannot read file: " + filename);
+  } catch(std::runtime_error& e) {
+    return 1;
+  }
+};
+  
 int main(int argc, char** argv) {
-  const bool eval = true;
+  const auto p = process(type::make_context(),
+                         lua::make_environment());
   if(argc > 1) {
-    return main_load(argv[1], eval);
+    return with_load(argv[1], p);
   } else {
-    return main_repl(eval);
+    return with_repl(p);
   }
 }

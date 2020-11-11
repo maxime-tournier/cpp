@@ -7,6 +7,8 @@
 #include "list.hpp"
 #include "shared.hpp"
 
+#include "hamt.hpp"
+
 #include <map>
 #include <functional>
 
@@ -161,7 +163,9 @@ struct context;
 
 std::shared_ptr<context> make_context();
 
-poly infer(std::shared_ptr<context> ctx, const ast::expr&);
+
+poly infer(std::shared_ptr<context> ctx, const ast::expr&,
+           hamt::array<mono>* types=nullptr);
 
 }
 

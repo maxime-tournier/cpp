@@ -513,8 +513,8 @@ static auto upgrade(mono ty, var target) {
 static auto link(var from, mono to) {
   return [=](state s) -> result<unit> {
     debug("> link:", show(from), "==", show(to));
-
-    return make_success(unit{}, state{s.ctx, s.sub.link(from, to)});
+    s.sub = s.sub.link(from, to);
+    return make_success(unit{}, s);
   };
 }
 
@@ -528,41 +528,42 @@ static auto substitute(mono ty) {
 
 template<class M, class T=value<M>>
 static auto scope(M m) {
-  return [m](state s) -> result<T> {
-    context scope = s.ctx.scope();
-    state inner = {scope, s.sub};
+  return [m=std::move(m)](state s) -> result<T> {
 
-    // update substitution from scope, drop context
+    state inner = s;
+    inner.ctx = s.ctx.scope();
+
+    // update substitution from inner scope, drop context
     return m(inner) >>= [=](success<T> self) -> result<T> {
-      return make_success(self.value,
-                          state{s.ctx, self.state.sub});
+      self.state.ctx = s.ctx;
+      return make_success(self.value, self.state);
     };
   };
 }
 
 static auto def(symbol name, poly p) {
-  return [name, p](state s) -> result<unit> {
+  return [=](state s) -> result<unit> {
     s.ctx.def(name, p);         // FIXME return new context?
     return make_success(unit{}, s);
   };
 };
 
 static auto generalize(mono ty) {
-  return [ty](state s) -> result<poly> {
+  return [=](state s) -> result<poly> {
     return make_success(s.ctx.generalize(ty), s);
   };
 }
 
 
 static auto fresh(kind k=term) {
-  return [k](state s) -> result<var> {
+  return [=](state s) -> result<var> {
     return make_success(s.ctx.fresh(k), s);
   };
 }
 
 
 static auto find(symbol name) {
-  return [name](state s) -> result<poly> {
+  return [=](state s) -> result<poly> {
     if(auto poly = s.ctx.locals.find(name)) {
       return make_success(*poly, s);
     }
@@ -572,13 +573,18 @@ static auto find(symbol name) {
 };
 
 static auto instantiate(poly p) {
-  return [p](state s) -> result<mono> {
+  return [=](state s) -> result<mono> {
     return make_success(s.ctx.instantiate(p), s);
   };
 };
 
 
-
+static auto decorate(ast::expr e, mono t) {
+  return [=](state s) -> result<unit> {
+    s.types = s.types.set(e.id(), mono(t));
+    return make_success(unit{}, s);
+  };
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // unification
@@ -1054,12 +1060,11 @@ static monad<mono> infer(T) {
 }
 
 
-
-
-
 monad<mono> infer(ast::expr e) {
-  return match(e, [=](const auto& self) {
-    return infer(self);
+  return match(e, [=](auto self) -> monad<mono> {
+    return infer(self) >>= [=](mono result) {
+      return decorate(e, result) >> pure(result);
+    };
   });
 }
 
@@ -1130,22 +1135,27 @@ std::shared_ptr<context> make_context() {
 
 
 
-poly infer(std::shared_ptr<context> ctx, const ast::expr& e) {
+poly infer(std::shared_ptr<context> ctx, const ast::expr& e, hamt::array<mono>* types) {
   substitution sub;
   state s = {*ctx, sub};
   
   const mono ty = match(infer(e)(s),
                         [=](success<mono> self) {
-                          // note: update context
+                          // update context/types
                           *ctx = self.state.ctx;
+                          
+                          if(types) {
+                            *types = self.state.types;
+                          }
+                          
                           return self.value;
                         },
                         [](type_error error) -> mono {
                           throw error;
                         });
+  
   return ctx->generalize(ty);
 }
-
  
 } // namespace type
 

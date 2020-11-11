@@ -1,4 +1,5 @@
 #include "ast.hpp"
+#include "type.hpp"
 
 #include <sstream>
 #include <iostream>
@@ -395,18 +396,21 @@ static void format(term self, state& ss) {
 
 
 
-std::string run(std::shared_ptr<environment> env, const ast::expr& self) {
+std::string run(std::shared_ptr<environment> env,
+                const ast::expr& self,
+                const hamt::array<type::mono>& types) {
   std::stringstream buffer;
   state ss(buffer);
 
   const term code = ret{compile(self)};
   format(code, ss);
 
+  // debug
   std::clog << buffer.str() << std::endl;
 
   env->run(buffer.str());
   
-  std::string result = luaL_tolstring(env->state, -1, nullptr);
+  const std::string result = luaL_tolstring(env->state, -1, nullptr);
   lua_pop(env->state, 1);
   return result;
 }
