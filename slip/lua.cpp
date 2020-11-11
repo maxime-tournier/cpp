@@ -107,6 +107,10 @@ struct def {
   expr value;
 };
 
+struct block {
+  list<term> body;
+};
+
 struct cond {
   expr pred;
   list<term> conseq, alt; 
@@ -178,10 +182,76 @@ static expr compile(context, ast::lit self) {
 }
 
 
+static std::size_t arity(type::mono self) {
+  // std::clog << "arity: " << self.show() << std::endl;
+  return match(self,
+               [=](type::app outer) {
+                 // std::clog << "outer " << std::endl;
+                 return match(outer.ctor,
+                              [=](type::app inner) -> std::size_t {
+                                // std::clog << "inner" << std::endl;
+                                if(inner.ctor == type::func) {
+                                  return 1 + arity(outer.arg);
+                                }
+                                std::clog << inner.ctor.show() << std::endl;
+                                std::clog << inner.ctor.id() << std::endl;
+                                std::clog << type::func.id() << std::endl; 
+                                
+                                return 0;
+                              },
+                              [](auto) { return 0; });
+               },
+               [](auto) { return 0; });
+}
+
+
 static expr compile(context ctx, ast::app self) {
-  return call{compile(ctx, self.func), map(self.args, [=](auto arg) {
-    return compile(ctx, arg);
-  })};
+  assert(ctx.types.find(self.func.id()));
+  const std::size_t expected = arity(ctx.types.get(self.func.id()));
+  const std::size_t given = size(self.args);
+  // std::clog << "expected: " << expected << " given: " << given << std::endl;
+  
+  if(expected == given) {
+    // TODO evaluation order?
+    return call{compile(ctx, self.func), map(self.args, [=](ast::expr arg) {
+      return compile(ctx, arg);
+    })};
+  } else if(expected > given) {
+    // under-saturated call: closure
+    const std::size_t rest = expected - given;
+
+    // name func + given args
+    const auto given_args = map(self.args, [=](ast::expr arg) {
+      return def{symbol::unique("__tmp"), compile(ctx, arg)};
+    });
+
+    const def f = {symbol::unique("__func"), compile(ctx, self.func)};
+    
+    const list<def> defs = f %= given_args;
+    
+    // name remaining args
+    list<symbol> rest_args;
+    for(std::size_t i = 0; i < rest; ++i) {
+      rest_args = symbol::unique("__arg") %= rest_args;
+    }
+    
+    const list<expr> call_args =
+      concat(map(given_args, [](def arg) -> expr { return var{arg.name}; }),
+             map(rest_args, [](symbol arg) -> expr { return var{arg};}));
+    
+
+    const list<term> body = ret{call{var{f.name}, call_args}} %= list<term>();
+    const list<term> init = ret{func{rest_args, body}} %= list<term>();
+    
+    return thunk{foldr(defs, init, [](term head, list<term> tail) {
+      return head %= tail;
+    })};
+  } else {
+    // over-saturated call: cannot happen yet, but will become possible once
+    // proper tuple types are used for functions args.
+    throw std::runtime_error("unimplemented: over-saturated calls");
+  }
+
 }
 
 static expr compile(context ctx, ast::abs self) {

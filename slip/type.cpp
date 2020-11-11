@@ -203,7 +203,27 @@ list<var> mono::vars() const {
 }
 
 
+bool mono::operator==(mono other) const {
+  if(this->type() != other.type()) {
+    return false;
+  }
+
+  return match(*this,
+               [&](var self) { return self == other.get<var>(); },
+               [&](type_constant self) {
+                 return self == other.get<type_constant>();
+               },
+               [&](app self) {
+                 return self.ctor == other.get<app>().ctor
+                   && self.arg == other.get<app>().arg;
+               });
+  
+}
+
 ////////////////////////////////////////////////////////////////////////////////
+// polytypes
+////////////////////////////////////////////////////////////////////////////////
+
 mono poly::body() const {
   return cata(*this, [](Poly<mono> self) {
     return match(self,

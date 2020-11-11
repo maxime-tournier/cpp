@@ -300,8 +300,7 @@ expr check(const sexpr& e) {
         if(!self) {
           throw syntax_error("empty list in application");
         }
-        return match(
-            self->head,
+        return match(self->head,
             [=](symbol first) -> expr {
               const auto it = special.find(first);
               if(it != special.end()) {

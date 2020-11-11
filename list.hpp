@@ -64,6 +64,11 @@ struct cons {
       return rhs;
     }
   }
+
+
+  friend std::size_t size(list<T> self) {
+    return foldr(self, 0, [](auto lhs, auto rhs) { return 1 + rhs; });
+  }
   
   // // quick
   // template<class What>

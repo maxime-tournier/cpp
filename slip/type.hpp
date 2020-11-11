@@ -97,6 +97,7 @@ struct Mono: variant<type_constant, var, App<T>> {
                    return App<type>{func(self.ctor), func(self.arg)};
                  });
   }
+
 };
 
 
@@ -113,6 +114,9 @@ struct mono: fix<Mono, mono> {
 
   mono operator>>=(mono to) const;
   mono operator()(mono arg) const;
+
+  bool operator==(mono other) const;
+  bool operator!=(mono other) const { return !operator==(other); }
 };
 
 
