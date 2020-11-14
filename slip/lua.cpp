@@ -310,6 +310,17 @@ static expr compile(context ctx, ast::attr self) {
 }
 
 
+static expr compile(context ctx, ast::pattern self) {
+  const list<def> choices = map(self.choices, [=](ast::choice self) {
+    const ast::abs abs{self.arg %= list<ast::arg>(), self.value};
+    return def{self.name, compile(ctx, abs)};
+  });
+  
+  return call{compile(ctx, self.arg),
+    table{choices} %= list<expr>()};
+}
+
+
 static expr compile(ast::type self) {
   return nil{};
 }
