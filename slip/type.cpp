@@ -50,6 +50,8 @@ const mono number = type_constant("num");
 const mono string = type_constant("str");
 
 const mono record = type_constant("record", row >>= term);
+const mono sum = type_constant("sum", row >>= term);
+
 const mono empty = type_constant("empty", row);
 
 const mono box = type_constant("box", tag >>= term >>= term);
@@ -917,10 +919,12 @@ static monad<mono> infer(ast::abs self) {
 
 static monad<type_constant> constructor(mono ty) {
   return match(ty,
-               [](type_constant self) -> monad<type_constant> { return pure(self); },
+               [](type_constant self) -> monad<type_constant> {
+                 return pure(self);
+               },
                [](app self) { return constructor(self.ctor); },
                [](var self) -> monad<type_constant> {
-                 return fail<type_constant> ("type constructor is not a constant");
+                 return fail<type_constant>("type constructor is not a constant");
                });
 }
 
@@ -1007,7 +1011,8 @@ static monad<mono> infer(ast::cond self) {
 
 static monad<mono> infer(ast::record self) {
   const monad<mono> init = pure(empty);
-  return foldr(self.attrs, init, [](ast::def self, monad<mono> tail) -> monad<mono> {
+  return foldr(self.attrs, init,
+               [](ast::def self, monad<mono> tail) -> monad<mono> {
     return infer(self.value) >>= [=](mono ty) {
       return tail |= [=](mono rows) -> mono {
         return ext(self.name)(ty)(rows);
@@ -1030,35 +1035,67 @@ static monad<mono> infer(ast::let self) {
   return scope(create_vars >>= [=](auto vars) {
 
     // populate defs scope (monomorphic)
-    const auto populate_defs = sequence(zip(self.defs, vars, [](ast::def self, var a) {
-      return def(self.name, mono(a));
-    }));
+    const auto populate_defs =
+      sequence(zip(self.defs, vars, [](ast::def self, var a) {
+        return def(self.name, mono(a));
+      }));
 
     // infer + unify defs with vars
-    const auto infer_defs = sequence(zip(self.defs, vars, [](ast::def self, var a) {
-      return infer(self.value) >>= [=](mono ty) {
-        return substitute(a) >>= [=](mono a) {
-          // TODO detect useless definitions
-          return unify(a, ty);
+    const auto infer_defs =
+      sequence(zip(self.defs, vars, [](ast::def self, var a) {
+        return infer(self.value) >>= [=](mono ty) {
+          return substitute(a) >>= [=](mono a) {
+            // TODO detect useless definitions
+            return unify(a, ty);
+          };
         };
-      };
-    }));
+      }));
 
     // generalize vars + populate body scope (polymorphic)
-    const auto populate_body = sequence(zip(self.defs, vars, [](ast::def self, var a) {
-      return substitute(a) >>= [=](mono ty) {
-        return generalize(ty) >>= [=](poly p) {
-          return def(self.name, p);
+    const auto populate_body =
+      sequence(zip(self.defs, vars, [](ast::def self, var a) {
+        return substitute(a) >>= [=](mono ty) {
+          return generalize(ty) >>= [=](poly p) {
+            return def(self.name, p);
+          };
         };
-      };
-    }));
+      }));
     
     return scope(populate_defs >> infer_defs) >>
       populate_body >> infer(self.body);
   });
 };
 
+static auto infer_choice(mono res) {
+  return [=](ast::choice self, monad<mono> tail) -> monad<mono> {
+    return infer_abs(self.arg, infer(self.value)) >>= [=](mono sig) {
+      return fresh() >>= [=](mono arg) {
+        return substitute(res) >>= [=](mono res) {
+          return unify(arg >>= res, sig) >> substitute(arg) >>= [=](mono arg) {
+            // note: tail still needs substitution
+            return tail |= [=](mono tail) {
+              return ext(self.name)(arg)(tail);
+            };
+          };
+        };
+      };
+    };
+  };
+}
 
+static monad<mono> infer(ast::pattern self) {
+  return infer(self.arg) >>= [=](mono arg) {  
+    return fresh() >>= [=](mono res) {
+      const monad<mono> init = pure(empty);
+      return (foldr(self.choices, init, infer_choice(res)) >>= substitute)
+        >>= [=](mono row) {
+          return substitute(arg) >>= [=](mono arg) {
+            return unify(arg, sum(row)) >> substitute(res);
+          };
+        };
+      };
+  };
+}
 
 // static monad<mono> infer(ast::open self) {
 //   // attempt to extract ctor info

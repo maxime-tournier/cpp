@@ -244,8 +244,8 @@ static const auto check_def = ((pop >>= expect<symbol>) >>= [](symbol name) {
 
 // TODO prevent redefinitions
 static const auto check_defs =
-  repeat(((pop >>= expect<sexpr::list>) >>= nest(check_def))
-         | fail<def>("((`sym` `expr`)...) expected for definitions"));
+  repeat(((pop >>= expect<sexpr::list>) >>= nest(check_def)))
+  | fail<list<def>>("((`sym` `expr`)...) expected for definitions");
 
 
 // let
@@ -265,6 +265,29 @@ static const auto check_record = check_defs >>= [](list<ast::def> defs) {
 };
 
 
+static const auto check_choice = ((pop >>= expect<symbol>) >>= [](symbol name) {
+  return check_arg >>= [=](ast::arg arg) {
+    return pop >>= [=](sexpr body) {
+      return empty >> pure(choice{name, arg, check(body)});
+    };
+  };
+}) | fail<choice>("(`sym` `arg` `expr`) expected for choice");
+
+static const auto check_choices =
+  repeat(((pop >>= expect<sexpr::list>) >>= nest(check_choice)))
+  | fail<list<choice>>("((`sym` `arg` `expr`)...) expected for choices");
+  
+
+// match
+static const auto check_match = pop >>= [](sexpr arg) {
+  return check_choices >>= [=](list<ast::choice> choices) {
+    const expr res = pattern{check(arg), choices};
+    return pure(res);
+  };
+};
+
+
+
 // type
 static const auto check_type = (pop >>= expect<symbol>) >>= [](symbol name) {
   return pop >>= [=](sexpr def) {
@@ -282,6 +305,7 @@ static const std::map<symbol, special_type> special = {
     {"if", check_cond},
     {"let", check_let},
     {"record", check_record},
+    {"match", check_match},    
     {"type", check_type},
 };
 

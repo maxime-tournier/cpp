@@ -94,6 +94,22 @@ struct Record {
   list<Def<E>> attrs;
 };
 
+
+template<class E>
+struct Choice {
+  symbol name;
+  Arg<E> arg;
+  E value;
+};
+
+
+template<class E>
+struct Pattern {
+  E arg;
+  list<Choice<E>> choices;
+  // TODO fallback?
+};
+
 template<class E>
 struct Attr {
   symbol name;
@@ -111,6 +127,7 @@ template<class E>
 struct Expr: variant<lit, var, Abs<E>, App<E>, Let<E>,
                      Cond<E>,
                      Record<E>, Attr<E>,
+                     Pattern<E>,
                      Type<E>> {
   using Expr::variant::variant;
 
@@ -164,11 +181,14 @@ using app = App<expr>;
 using def = Def<expr>;
 using let = Let<expr>;
 using cond = Cond<expr>;
+
 using type = Type<expr>;
+
 using record = Record<expr>;
 using attr = Attr<expr>;
 
-// TODO recursion schemes?
+using pattern = Pattern<expr>;
+using choice = Choice<expr>;
 
 }
 
