@@ -806,19 +806,28 @@ static monad<mono> infer(ast::var self) {
   };
 };
 
+template<class Cont>
+static auto funmatch(mono t, Cont cont) {
+  return fresh() >>= [=](mono from) {
+    return fresh() >>= [=](mono to) {
+      // note: from/to need substitution
+      return unify(from >>= to, t) >> cont(from, to);
+    };
+  };
+}
 
 
 static monad<mono> check_type(mono type) {
+  // note: type must be fully substituted
   return (fresh() >>= [=](mono arg) {
-    return unify(ty(arg), type) >> substitute(arg); }) |
-         (fresh() >>= [=](mono arg) {
-           return fresh() >>= [=](mono ctor) {
-             return unify(ty(arg) >>= ctor, type) >> substitute(ctor) >>=
-               [=](mono ctor) {
-                 return check_type(ctor);
-               };
-           };
-         });
+    return unify(ty(arg), type) >> substitute(arg);
+  }) | funmatch(type, [=](mono from, mono to) {
+    return (substitute(from) >>= check_type) >>= [=](mono from) {
+      return (substitute(to) >>= check_type) >>= [=](mono to) {
+        return pure(to);
+      };
+    };
+  });
 }
 
 
@@ -977,18 +986,16 @@ static monad<unit> subsume(mono requested, mono offered) {
   });
 }
 
+
 static monad<mono> infer_app(monad<mono> func, ast::expr arg) {
   return func >>= [=](mono func) {
     return infer(arg) >>= [=](mono off) {
       return substitute(func) >>= [=](mono func) {
-        return fresh() >>= [=](mono ret) {
-          return fresh() >>= [=](mono req) {
-            // funmatch
-            return (unify(req >>= ret, func) >> substitute(req)) >>= [=](mono req) {
-              return subsume(req, off) >> substitute(ret);
-            };
+        return funmatch(func, [=](mono req, mono ret) {
+          return substitute(req) >>= [=](mono req) {
+            return subsume(req, off) >> substitute(ret);
           };
-        };
+        });
       };
     };
   };
@@ -1017,6 +1024,34 @@ static mono module(ast::module_type type) {
   }
 }
 
+template<class Init, class Func>
+static Init foldr(mono t, Init init, Func func) {
+  // note: func should substitute `from` type
+  return funmatch(t, [=](mono from, mono to) -> Init {
+    return func(from, foldr(to, init, func));
+  }) | init;
+}
+                    
+
+static monad<mono> make_module(mono sig) {
+  // // infer constructor kind
+  // const monad<list<mono>> init = pure(list<mono>());
+  // return foldr(sig, init, [=](mono head, monad<list<kind>> tail) {
+  //   return (substitute(head) >>= infer_param) >>= [=](mono head) {
+  //     return tail >>= [=](list<kind> tail) {
+  //       return pure(head.kind() >>= tail);
+  //     };
+  //   };
+  // }) >>= [=](list<kind> k) {
+  //   // create constructor and apply it
+  //   const mono ctor = type_constant("module", k);
+  //   const monad<mono> init = pure(ctor);
+    
+  //   return foldr(sig, init, [=](mono head, monad<mono> tail) {
+      
+  // };
+};
+
 
 static monad<mono> infer(ast::module self) {
   const monad<mono> init = pure(empty);
@@ -1024,7 +1059,7 @@ static monad<mono> infer(ast::module self) {
     return ty(module(self.type)(row));
   };
   
-  return foldr(self.sig.args, defs, infer_abs);
+  return foldr(self.sig.args, defs, infer_abs) >>= make_module;
 };
 
 
