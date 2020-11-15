@@ -846,34 +846,33 @@ static auto map_row(mono row, Func func) -> list<Result> {
 
   
 
-static monad<mono> infer(ast::type self) {
-  return infer(self.def) >>= [=](mono def) {
-    return fresh(row) >>= [=](mono row) {
-      return unify(def, record(row)) >> substitute(row) >>= [=](mono row) {
-        return sequence(map_row(row, [](symbol name, mono arg) {
-          return check_type(arg) |= [=](mono arg) {
-            return ext(name)(arg);
-          };
-        })) |= [](list<mono> ctors) {
-          const mono def = ty(record(foldr(ctors, empty, [](mono ctor, mono tail) {
-            return ctor(tail);
-          })));
+// static monad<mono> infer(ast::type self) {
+//   return infer(self.def) >>= [=](mono def) {
+//     return fresh(row) >>= [=](mono row) {
+//       return unify(def, record(row)) >> substitute(row) >>= [=](mono row) {
+//         return sequence(map_row(row, [](symbol name, mono arg) {
+//           return check_type(arg) |= [=](mono arg) {
+//             return ext(name)(arg);
+//           };
+//         })) |= [](list<mono> ctors) {
+//           const mono def = ty(record(foldr(ctors, empty, [](mono ctor, mono tail) {
+//             return ctor(tail);
+//           })));
 
-          // TODO we should probably prevent bound type variables
+//           // TODO we should probably prevent bound type variables
 
-          // TODO hence we should also accept parametric expressions like
-          // (type foo (fn (a) (record (bar (list a)))))
+//           // TODO hence we should also accept parametric expressions like
+//           // (type foo (fn (a) (record (bar (list a)))))
 
-          // TODO 
+//           // TODO 
           
-          return def;
+//           return def;
           
-        };
-      };
-    };
-  };
-}
-
+//         };
+//       };
+//     };
+//   };
+// }
 
 
 
