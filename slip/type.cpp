@@ -675,6 +675,7 @@ static const auto row_match = [](mono ty, auto cont) {
   });
 };
 
+// row extension type constructor ::: * -> @ -> @
 static mono ext(symbol name);
 
 
@@ -844,9 +845,8 @@ static auto map_row(mono row, Func func) -> list<Result> {
                });
 };
 
-  
 
-// static monad<mono> infer(ast::type self) {
+
 //   return infer(self.def) >>= [=](mono def) {
 //     return fresh(row) >>= [=](mono row) {
 //       return unify(def, record(row)) >> substitute(row) >>= [=](mono row) {
@@ -914,6 +914,10 @@ static monad<mono> infer(ast::abs self) {
   // TODO handle nullary apps  
   return foldr(self.args, infer(self.body), infer_abs);
 };
+
+
+
+
 
 
 static monad<type_constant> constructor(mono ty) {
@@ -995,6 +999,36 @@ static monad<mono> infer_app(monad<mono> func, ast::expr arg) {
 static monad<mono> infer(ast::app self) {
   return foldl(infer(self.func), self.args, infer_app);
 };
+
+
+
+static monad<mono> infer_def(ast::def def, monad<mono> tail) {
+  return (infer(def.value) >>= check_type) >>= [=](mono type) {
+    return tail |= [=](mono tail) {
+      debug("tail:", tail);
+      return ext(def.name)(type)(tail);
+    };
+  };
+}
+
+static mono module(ast::module_type type) {
+  switch(type) {
+  case ast::STRUCT: return record;
+  case ast::UNION: return sum;    
+  }
+}
+
+
+static monad<mono> infer(ast::module self) {
+  const monad<mono> init = pure(empty);
+  const monad<mono> defs = foldr(self.defs, init, infer_def) |= [=](mono row) {
+    debug("row:", row);
+    return ty(module(self.type)(row));
+  };
+  
+  return foldr(self.sig.args, defs, infer_abs);
+};
+
 
 
 static monad<mono> infer(ast::cond self) {

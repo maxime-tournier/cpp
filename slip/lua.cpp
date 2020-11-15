@@ -320,7 +320,7 @@ static expr compile(context ctx, ast::pattern self) {
 }
 
 
-static expr compile(ast::module self) {
+static expr compile(context ctx, ast::module self) {
   return nil{};
 }
 
