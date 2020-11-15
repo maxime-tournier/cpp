@@ -809,14 +809,14 @@ static monad<mono> infer(ast::var self) {
 
 
 static monad<mono> check_type(mono type) {
-  return (fresh() >>=
-          [=](mono arg) { return unify(ty(arg), type) >> substitute(arg); }) |
+  return (fresh() >>= [=](mono arg) {
+    return unify(ty(arg), type) >> substitute(arg); }) |
          (fresh() >>= [=](mono arg) {
            return fresh() >>= [=](mono ctor) {
              return unify(ty(arg) >>= ctor, type) >> substitute(ctor) >>=
-                    [=](mono ctor) {
-                      return check_type(ctor);
-                    };
+               [=](mono ctor) {
+                 return check_type(ctor);
+               };
            };
          });
 }
@@ -1005,7 +1005,6 @@ static monad<mono> infer(ast::app self) {
 static monad<mono> infer_def(ast::def def, monad<mono> tail) {
   return (infer(def.value) >>= check_type) >>= [=](mono type) {
     return tail |= [=](mono tail) {
-      debug("tail:", tail);
       return ext(def.name)(type)(tail);
     };
   };
@@ -1022,7 +1021,6 @@ static mono module(ast::module_type type) {
 static monad<mono> infer(ast::module self) {
   const monad<mono> init = pure(empty);
   const monad<mono> defs = foldr(self.defs, init, infer_def) |= [=](mono row) {
-    debug("row:", row);
     return ty(module(self.type)(row));
   };
   
@@ -1259,8 +1257,21 @@ std::shared_ptr<context> make_context() {
   res->def("int", ty(integer));
   {
     const mono a = res->fresh();    
-    res->def("list", ty(a) >>= ty(lst(a)));  
+    res->def("list", res->generalize(ty(a) >>= ty(lst(a))));
   }
+
+  {
+    const mono a = res->fresh();
+    const mono b = res->fresh();        
+    res->def("arrow", res->generalize(ty(a) >>= ty(b) >>= ty(a >>= b)));  
+  }
+
+  {
+    const mono a = res->fresh();
+    res->def("type", res->generalize(ty(a) >>= ty(ty(a)))); // oh wow
+  }
+
+  
   return res;
 }
 
