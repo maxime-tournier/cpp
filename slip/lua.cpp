@@ -316,8 +316,7 @@ static expr compile(context ctx, ast::pattern self) {
     return def{self.name, compile(ctx, abs)};
   });
   
-  return call{compile(ctx, self.arg),
-    table{choices} %= list<expr>()};
+  return call{compile(ctx, self.arg), table{choices} %= list<expr>()};
 }
 
 
