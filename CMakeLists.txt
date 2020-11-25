@@ -24,6 +24,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(compressed compressed.cpp)
 add_executable(hamt hamt.cpp)
+add_executable(record record.cpp)
 
 add_subdirectory(slip)
 add_executable(obj obj.cpp)

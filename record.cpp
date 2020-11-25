@@ -33,13 +33,21 @@ struct event {
   static inline event end(id_type id) {
     return {id, clock_type::now(), END};
   }
+
+  std::size_t timestamp() const {
+    return (time - origin).count();
+  }
+  
+  static const time_type origin;
 };
 
+const event::time_type event::origin = event::clock_type::now();
 
 // thread-local event sequence
 class timeline {
-  std::thread::id thread;
-
+public:
+  const std::thread::id thread;
+private:
   using storage_type = std::deque<event>;
   storage_type storage;
 
@@ -215,6 +223,7 @@ private:
     }
 };
 
+
 // call tree reporing
 struct report: tree<report> {
   double total = 0;
@@ -287,9 +296,128 @@ struct report: tree<report> {
   }
 };
 
+
+struct flame {
+  using stack_type = std::deque<event::id_type>;
+  stack_type stack;
+  
+  std::size_t count;
+};
+
+
+#include <iostream>
+
+call::duration_type flame_graph(std::deque<flame>& flames, const call& self) {
+  // push ourselves to the stack
+  flames.back().stack.emplace_back(self.id);
+
+  // save stack
+  const auto stack = flames.back().stack;
+  
+  call::duration_type children_duration(0);
+  for(const auto& child: self.children) {
+    children_duration += flame_graph(flames, child);
+
+    // add a new frame next child/ourselves
+    flames.emplace_back();
+    flames.back().stack = stack;
+  }
+
+  // make sure we did not screw the stack
+  // assert(flames.back().stack.back() == self.id);
+
+  // add remaining time
+  call::duration_type current_duration(0);
+  for(auto duration: self.duration) {
+    current_duration += duration;
+  }
+
+  const call::duration_type remaining = current_duration - children_duration;
+  flames.back().count = remaining.count();
+
+  // std::clog << self.id << " remaining: " << remaining.count() << std::endl;
+  
+  // this stack frame is finished, pop ourselves
+  // flames.back().stack = stack;
+  // flames.back().stack.pop_back();
+
+  return current_duration;
+}
+
+
+
+// flame graph
+void flame_graph(std::ostream& out, const call& self) {
+  std::deque<flame> flames;
+  flames.emplace_back();
+  
+  flame_graph(flames, self);
+
+  for(const auto& it: flames) {
+    assert(!it.stack.empty());
+
+    bool first = true;
+    for(auto id: it.stack) {
+      if(first) { first = false; }
+      else {
+        out << ";";
+      }
+      
+      out << id;
+    };
+
+    out << " " << it.count << '\n';
+  }
+}
+
+
+
+
+void trace_timeline(std::ostream& out, const timeline& self) {
+
+  const auto quote = [&](std::string what) {
+    return std::string("\"" + what + "\"");
+  };
+  
+  const auto attr = [&](auto name, auto value) -> std::ostream& {
+    return out << quote(name) << ": " << value;
+  };
+
+  out << "{\n";
+  out << quote("traceEvents") << ": [\n";
+  bool first = true;
+  for(event ev: self) {
+    if(first) { first = false; }
+    else  {
+      out << ",";
+    }
+    out << "{";
+    attr("pid", 1) << ", ";
+    attr("tid", self.thread) << ", ";
+    attr("ph", ev.kind == event::BEGIN ? quote("B") : quote("E")) << ", ";
+    attr("name", quote(ev.id)) << ", ";
+    attr("ts", ev.timestamp());
+    out << "}\n";
+  }
+  out << "]\n";
+  out << "}\n";  
+  
+// {
+// "traceEvents": [
+// { "pid":1, "tid":1, "ts":87705, "dur":956189, "ph":"X", "name":"Jambase", "args":{ "ms":956.2 } },
+// { "pid":1, "tid":1, "ts":128154, "dur":75867, "ph":"X", "name":"SyncTargets", "args":{ "ms":75.9 } },
+// { "pid":1, "tid":1, "ts":546867, "dur":121564, "ph":"X", "name":"DoThings", "args":{ "ms":121.6 } }
+// ],
+// "meta_user": "aras",
+// "meta_cpu_count": "8"
+// }
+  
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <iostream>
+#include <fstream>
 
 void work() {
   const timer foo("foo");
@@ -311,15 +439,28 @@ void work() {
 }
 
 
-int main(int, char**) {
+int main(int argc, char** argv) {
   work();
 
-  for(auto& events: timeline::all()) {
-    report::write_header(std::cout);
-    report(call(*events).simplify()).write(std::cout);
+  // for(auto& events: timeline::all()) {
+  //   report::write_header(std::cout);
+  //   report(call(*events).simplify()).write(std::cout);
 
-    events->clear();
+  //   events->clear();
+  // }
+
+  // for(auto& events: timeline::all()) {
+  //   flame_graph(std::cout, call(*events).simplify());
+  //   events->clear();
+  // }
+
+  if(argc > 1) {
+    std::ofstream out(argv[1]);
+    for(auto* events: timeline::all()) {
+      trace_timeline(out, *events);
+      events->clear();
+    }
   }
-
+  
   return 0;
 }
