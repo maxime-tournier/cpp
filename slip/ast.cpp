@@ -66,7 +66,7 @@ static const auto empty = [](sexpr::list list) -> result<unit> {
 };
 
 template<class T>
-static auto expect(sexpr self) {
+static const auto expect = pop >>= [](sexpr self) {
   return [=](sexpr::list rest) -> result<T> {
     return match(self,
                  [=](T expected) -> result<T> {
@@ -76,7 +76,7 @@ static auto expect(sexpr self) {
                    return std::string("type error");
                  });
   };
-}
+};
 
 
 template<class LHS, class Func, class=value<LHS>>
@@ -193,11 +193,11 @@ static const auto nest(M parser) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static const auto check_arg_simple = (pop >>= expect<symbol>) |=
+static const auto check_arg_simple = expect<symbol> |=
     [](symbol name) { return ast::arg{name}; };
 
-static const auto check_arg_annot = (pop >>= expect<sexpr::list>) >>=
-  nest((pop >>= expect<symbol>) >>= [](symbol name) {
+static const auto check_arg_annot = expect<sexpr::list> >>=
+  nest(expect<symbol> >>= [](symbol name) {
     return pop >>= [=](sexpr type) {
       const ast::arg res = ast::annot{name, check(type)};
       return empty >> pure(res);
@@ -211,16 +211,15 @@ static const auto check_arg = check_arg_simple  | check_arg_annot;
 static const auto check_args = repeat(check_arg);
 
 
-
+// TODO simpler
 // check function definition
-static const auto check_abs =
-  ((pop >>= expect<sexpr::list>) >>= [](sexpr::list args) {
-    return pop >>= [=](sexpr body) {
-      return (empty >> nest(check_args)(args)) |= [=](list<ast::arg> args) -> expr {
-          return abs{args, check(body)};
-        };
-      };
-  }) | fail<expr>("(fn (`sym`...) `expr`)");
+static const auto check_abs = (expect<sexpr::list> >>= [](sexpr::list args) {
+  return pop >>= [=](sexpr body) {
+    return (empty >> nest(check_args)(args)) |= [=](list<ast::arg> args) -> expr {
+      return abs{args, check(body)};
+    };
+  };
+}) | fail<expr>("(fn (`sym`...) `expr`)");
 
 
 // conditionals
@@ -235,7 +234,7 @@ static const auto check_cond = (pop >>= [](sexpr pred) {
 
 
 // definition
-static const auto check_def = ((pop >>= expect<symbol>) >>= [](symbol name) {
+static const auto check_def = (expect<symbol> >>= [](symbol name) {
   return pop >>= [=](sexpr value) {
     return empty >> pure(def{name, check(value)});
   };
@@ -244,13 +243,13 @@ static const auto check_def = ((pop >>= expect<symbol>) >>= [](symbol name) {
 
 // TODO prevent redefinitions
 static const auto check_defs =
-  repeat(((pop >>= expect<sexpr::list>) >>= nest(check_def))
-         | fail<def>("((`sym` `expr`)...) expected for definitions"));
+  repeat((expect<sexpr::list> >>= nest(check_def)))
+  | fail<list<def>>("((`sym` `expr`)...) expected for definitions");
 
 
 // let
-static const auto check_let = (((pop >>= expect<sexpr::list>) >>=
-                                nest(check_defs)) >>= [](list<ast::def> defs) {
+static const auto check_let =
+  ((expect<sexpr::list> >>= nest(check_defs)) >>= [](list<ast::def> defs) {
   return pop >>= [=](sexpr body) {
     const expr res = let{defs, check(body)};
     return empty >> pure(res);
@@ -265,12 +264,44 @@ static const auto check_record = check_defs >>= [](list<ast::def> defs) {
 };
 
 
-// type
-static const auto check_type = (pop >>= expect<symbol>) >>= [](symbol name) {
-  return pop >>= [=](sexpr def) {
-    const expr res = type{name, check(def)};
-    return empty >> pure(res);
+static const auto check_choice = (expect<symbol> >>= [](symbol name) {
+  return check_arg >>= [=](ast::arg arg) {
+    return pop >>= [=](sexpr body) {
+      return empty >> pure(choice{name, arg, check(body)});
+    };
   };
+}) | fail<choice>("(`sym` `arg` `expr`) expected for choice");
+
+static const auto check_choices =
+  repeat((expect<sexpr::list> >>= nest(check_choice)))
+  | fail<list<choice>>("((`sym` `arg` `expr`)...) expected for choices");
+  
+
+// match
+static const auto check_match = pop >>= [](sexpr arg) {
+  return check_choices >>= [=](list<ast::choice> choices) {
+    const expr res = pattern{check(arg), choices};
+    return pure(res);
+  };
+};
+
+
+// sig
+static const auto check_sig = (expect<symbol> >>= [](symbol name) {
+  return check_args >>= [=](list<ast::arg> args) {
+    return pure(sig{name, args});
+  };
+}) | fail<sig>("(`sym` `arg`...) expected for signature");
+
+
+// module
+static const auto check_module = [](ast::module_type type) {
+  return ((expect<sexpr::list> >>= nest(check_sig)) >>= [=](ast::sig sig) {
+    return check_defs >>= [=](list<ast::def> defs) {
+      const expr res = module{type, sig, defs};
+      return pure(res);
+    };
+  }) | fail<expr>("(struct|union `sig` `def`...) expected for module");
 };
 
 
@@ -282,7 +313,9 @@ static const std::map<symbol, special_type> special = {
     {"if", check_cond},
     {"let", check_let},
     {"record", check_record},
-    {"type", check_type},
+    {"match", check_match},    
+    {"struct", check_module(ast::STRUCT)},
+    {"union", check_module(ast::UNION)},    
 };
 
 static expr check_app(sexpr func, sexpr::list args) {

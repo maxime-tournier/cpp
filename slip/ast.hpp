@@ -36,7 +36,7 @@ struct Arg: variant<symbol, Annot<E>> {
                  [](Annot<E> self) { return self.name; });
   }
 
-  template<class F, class G=typename std::result_of<F(E)>::type>
+  template<class F, class G=std::result_of_t<F(E)>>
   friend Arg<G> map(Arg self, const F& f) {
     return match(self,
                  [](symbol self) -> Arg<G> {
@@ -66,14 +66,20 @@ template<class E>
 struct Def {
   symbol name;
   E value;
+
+  template<class F, class G=std::result_of_t<F(E)>>
+  friend Def<G> map(Def self, const F& f) {
+    return {self.name, f(self.value) };
+  }
 };
+
 
 template<class E>
 struct Let {
   list<Def<E>> defs;
   E body;
 
-  template<class F, class G=typename std::result_of<F(E)>::type>
+  template<class F, class G=std::result_of_t<F(E)>>
   friend Let<G> map(Let self, const F& f) {
     return {map(self.defs, [&](Def<E> self) {
       return Def<G>{self.name, f(self.value)};
@@ -94,16 +100,60 @@ struct Record {
   list<Def<E>> attrs;
 };
 
+
+template<class E>
+struct Choice {
+  symbol name;
+  Arg<E> arg;
+  E value;
+};
+
+
+template<class E>
+struct Pattern {
+  E arg;
+  list<Choice<E>> choices;
+  // TODO fallback?
+};
+
 template<class E>
 struct Attr {
   symbol name;
   E arg;
 };
 
+enum module_type {
+  STRUCT,
+  UNION,
+};
+
 template<class E>
-struct Type {
+struct Sig {
   symbol name;
-  E def;
+  list<Arg<E>> args;
+
+  template<class F, class G=std::result_of_t<F(E)>>
+  friend Sig<G> map(Sig self, const F& f) {
+    return {self.name, map(self.args, [=](Arg<E> arg) {
+      return map(arg, f);
+    })};
+  }
+  
+};
+
+
+template<class E>
+struct Module {
+  module_type type;
+  Sig<E> sig;
+  list<Def<E>> defs;
+
+  template<class F, class G=std::result_of_t<F(E)>>
+  friend Module<G> map(Module self, const F& f) {
+    return {self.type, map(self.sig, f), map(self.defs, [=](Def<E> def) {
+      return map(def, f);
+    })};
+  }
 };
 
 
@@ -111,10 +161,11 @@ template<class E>
 struct Expr: variant<lit, var, Abs<E>, App<E>, Let<E>,
                      Cond<E>,
                      Record<E>, Attr<E>,
-                     Type<E>> {
+                     Pattern<E>,
+                     Module<E>> {
   using Expr::variant::variant;
 
-  template<class F, class G=typename std::result_of<F(E)>::type>
+  template<class F, class G=std::result_of_t<F(E)>>
   friend Expr<G> map(const Expr& self, const F& f) {
     return match(self,
                  [](lit self) -> Expr<G> { return self; },
@@ -129,23 +180,25 @@ struct Expr: variant<lit, var, Abs<E>, App<E>, Let<E>,
                  },
                  [&](Let<E> self) -> Expr<G> {
                    return Let<G>{map(self.defs, [&](Def<E> self) {
-                     return Def<G>{self.name, f(self.value)};
+                     return map(self, f);
                    }), f(self.body)};
                  },
                  [&](Cond<E> self) -> Expr<G> {
                    return Cond<G>{f(self.pred), f(self.conseq), f(self.alt)};
                  },
                  [&](Record<E> self) -> Expr<G> {
+                   
                    return Record<G>{map(self.attrs, [&](Def<E> self) {
-                     return Def<G>{self.name, f(self.value)};
+                     return map(self, f);
                    })};
                  },
                  [&](Attr<E> self) -> Expr<G> {
                    return Attr<G>{self.name, f(self.arg)};
                  },
-                 [&](Type<E> self) -> Expr<G> {
-                   return Type<G>{self.name, f(self.def)};
+                 [&](Module<E> self) -> Expr<G> {
+                   return map(self, f);
                  });
+                 
   }
 };
 
@@ -164,11 +217,15 @@ using app = App<expr>;
 using def = Def<expr>;
 using let = Let<expr>;
 using cond = Cond<expr>;
-using type = Type<expr>;
+
+using sig = Sig<expr>;
+using module = Module<expr>;
+
 using record = Record<expr>;
 using attr = Attr<expr>;
 
-// TODO recursion schemes?
+using pattern = Pattern<expr>;
+using choice = Choice<expr>;
 
 }
 

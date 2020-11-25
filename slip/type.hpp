@@ -125,7 +125,7 @@ using app = App<mono>;
 
 extern const mono func;
 extern const mono boolean, integer, number, string;
-extern const mono record;
+extern const mono record, sum;
 extern const mono box;
 
 template<class T>
