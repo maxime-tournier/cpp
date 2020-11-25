@@ -324,18 +324,9 @@ void trace_timeline(std::ostream& out, const timeline& self) {
     attr("ts", ev.timestamp());
     out << "}\n";
   }
+  
   out << "]\n";
   out << "}\n";  
-  
-// {
-// "traceEvents": [
-// { "pid":1, "tid":1, "ts":87705, "dur":956189, "ph":"X", "name":"Jambase", "args":{ "ms":956.2 } },
-// { "pid":1, "tid":1, "ts":128154, "dur":75867, "ph":"X", "name":"SyncTargets", "args":{ "ms":75.9 } },
-// { "pid":1, "tid":1, "ts":546867, "dur":121564, "ph":"X", "name":"DoThings", "args":{ "ms":121.6 } }
-// ],
-// "meta_user": "aras",
-// "meta_cpu_count": "8"
-// }
   
 }
 
