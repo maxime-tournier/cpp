@@ -17,6 +17,7 @@ struct kd_tree {
 
     struct triangle {
         index_type* indices;
+        std::size_t counter;
     };
 
     class plane {
@@ -34,7 +35,7 @@ struct kd_tree {
         }
         
     };
-    
+
     template<class Iterator>
     static Iterator split_positions(Iterator first, Iterator last, std::size_t axis) {
         const std::size_t size = last - first;
@@ -55,32 +56,48 @@ struct kd_tree {
     static std::pair<Iterator, Iterator> split_triangles(Iterator first, Iterator last,
                                                          real_type* points,
                                                          plane p) {
-        std::size_t negative_triangles = 0;
-        std::size_t positive_triangles = 0;
+        // TODO single sweep?
         
+        // compute positive vertices
         for(Iterator it = first; it != last; ++it) {
-            std::size_t positive_points = 0;
+            it->counter = 0;
             for(std::size_t i = 0; i < N; ++i) {
                 if(p.positive(points[3 * (it->indices[i])])) {
-                    ++positive_points;
+                    ++it->counter;
                 }
             }
-            switch(positive_points) {
-            case 0: {
-                // negative: put it with negatives
-                std::swap(*it, *(first + negative_triangles++));
-                break;
-            }
-            case 3: {
-                // positive: put it with positives
-                std::swap(*it, *(first + negative_triangles++));
-                break;
-            }
-            default:
-            }
         }
+
+        // partition
+        const Iterator negative = std::partition(first, last, [](const triangle& self) {
+            return self.counter > 0;
+        });
+
+        const Iterator positive = std::partition(negative, last, [](const triangle& self) {
+            return self.counter < 3;
+        });
+
+        return std::make_pair(negative, positive);
     }
 
+
+    template<class TriangleIterator>
+    static void create(TriangleIterator first_triangle, TriangleIterator last_triangle,
+                       real_type* points,
+                       std::size_t axis) {
+        const auto pivot = split_positions(first_point, last_point, axis);
+        const plane p = {pivot->coords, axis};
+        
+        const auto subsets = split_triangles(first_triangle, last_triangle, points, axis);
+
+        const std::size_t next = ++axis % N;
+        create(first_triangle, subsets.first, next);
+        create(subsets.first, subsets.second, next);
+        create(subsets.second, last_triangle, next);
+        
+    }
+    
+    
     static void create(real_type* points, std::size_t point_size,
                        index_type* triangles, std::size_t triangle_size) {
         // build vertex array
@@ -90,6 +107,12 @@ struct kd_tree {
         }
 
         // build triangle array
+        std::vector<triangle> triangles(triangle_size);
+        for(std::size_t i = 0; i < triangle_size; ++i) {
+            triangle[i].indices = triangles + (i * 3);
+        }
+
+        // 
         
     }
     
