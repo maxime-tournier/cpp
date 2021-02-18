@@ -1,123 +1,142 @@
 #ifndef KDTREE_TRIANGLES_HPP
 #define KDTREE_TRIANGLES_HPP
 
-#include <vector>
 #include <algorithm>
+#include <vector>
+#include <memory>
 
-
-template<class Real, class Index, std::size_t N=3>
+template<class Real, class Index, std::size_t N = 3>
 struct kd_tree {
+  using index_type = Index;
+  using real_type = Real;
+
+  struct vertex {
+    const real_type* coords;
+  };
+
+  struct triangle {
+    const index_type* indices;
+    std::size_t counter;
+  };
+
+  class plane {
+    vertex origin;
+    std::size_t axis;
+  public:
+    plane(vertex origin, std::size_t axis):
+      origin(origin), axis(axis) {}
     
-    using index_type = Index;
-    using real_type = Real;
+    bool positive(vertex v) const {
+      return v.coord[axis] >= v.coord[axis];
+    }
+  };
 
-    struct vertex {
-        real_type* coords;
-    };
 
-    struct triangle {
-        index_type* indices;
-        std::size_t counter;
-    };
-
-    class plane {
-        // TODO by value?
-        real_type* origin;
-        std::size_t axis;
-    public:
-        plane(real_type* origin,
-              std::size_t axis):
-            origin(origin),
-            axis(axis) { }
-        
-        bool positive(real_type* point) const {
-            return point[axis] >= origin[axis];
+  // partition(3) triangle range according to given plane
+  template<class Iterator>
+  static std::pair<Iterator, Iterator>
+  split_triangles(Iterator first, Iterator last, const vertex* vertices,
+                  plane p) {
+    // compute positive vertices
+    for(Iterator it = first; it != last; ++it) {
+      it->counter = 0;
+      for(std::size_t i = 0; i < N; ++i) {
+        if(p.positive(vertices[(it->indices[i])])) {
+          ++it->counter;
         }
-        
-    };
-
-    template<class Iterator>
-    static Iterator split_positions(Iterator first, Iterator last, std::size_t axis) {
-        const std::size_t size = last - first;
-        if(!size) {
-            return first;
-        }
-        
-        std::sort(first, last, [axis](const vertex& lhs, const vertex& rhs) {
-            return lhs[axis] < rhs[axis];
-        });
-
-        const std::size_t mid = size / 2;
-        return first + mid;
+      }
     }
 
+    // partition
+    const Iterator negative = std::partition(
+        first, last, [](const triangle& self) { return self.counter > 0; });
 
-    template<class Iterator>
-    static std::pair<Iterator, Iterator> split_triangles(Iterator first, Iterator last,
-                                                         real_type* points,
-                                                         plane p) {
-        // TODO single sweep?
-        
-        // compute positive vertices
-        for(Iterator it = first; it != last; ++it) {
-            it->counter = 0;
-            for(std::size_t i = 0; i < N; ++i) {
-                if(p.positive(points[3 * (it->indices[i])])) {
-                    ++it->counter;
-                }
-            }
-        }
+    const Iterator positive = std::partition(
+        negative, last, [](const triangle& self) { return self.counter < 3; });
 
-        // partition
-        const Iterator negative = std::partition(first, last, [](const triangle& self) {
-            return self.counter > 0;
-        });
+    return std::make_pair(negative, positive);
+  }
 
-        const Iterator positive = std::partition(negative, last, [](const triangle& self) {
-            return self.counter < 3;
-        });
+  template<class T>
+  using ref = std::shared_ptr<T>;
 
-        return std::make_pair(negative, positive);
-    }
+  struct node {
+    const plane p;
+    const ref<node> negative, overlap, positive;
+    node(plane p, ref<node> negative, ref<node> overlap, ref<node> positive):
+        p(p), negative(negative), overlap(overlap), positive(positive) {}
+  };
 
-
-    template<class TriangleIterator>
-    static void create(TriangleIterator first_triangle, TriangleIterator last_triangle,
-                       real_type* points,
-                       std::size_t axis) {
-        const auto pivot = split_positions(first_point, last_point, axis);
-        const plane p = {pivot->coords, axis};
-        
-        const auto subsets = split_triangles(first_triangle, last_triangle, points, axis);
-
-        const std::size_t next = ++axis % N;
-        create(first_triangle, subsets.first, next);
-        create(subsets.first, subsets.second, next);
-        create(subsets.second, last_triangle, next);
-        
+  template<class TriangleIterator, class VertexIterator>
+  static ref<node> create(TriangleIterator first_triangle,
+                          TriangleIterator last_triangle,
+                          const vertex* vertex_data, std::size_t axis) {
+    // base case
+    if(first_triangle == last_triangle) {
+      return {};
     }
     
+    // 1. fetch triangle vertices
+    std::vector<vertex> vertices;
+    for(auto it = first_triangle; it != last_triangle; ++it) {
+      for(std::size_t i = 0; i < 3; ++i) {
+        vertices.emplace_back(vertex_data[i]);
+      }
+    }
+
+    // 2. sort vertices along axis
+    const auto first_vertex = vertices.begin();
+    auto last_vertex = vertices.end();
+    std::sort(first_vertex, last_vertex, [axis](vertex lhs, vertex rhs) {
+      return lhs.coords[axis] < rhs.coords[axis];
+    });
+
+    // 3. prune duplicates
+    last_vertex = std::unique(first_vertex, last_vertex);
+
+    // 4. find pivot
+    const auto pivot = (first_vertex + last_vertex) / 2;
+    const plane p = {pivot->coords, axis};
+
+    // 5. partition triangles
+    const auto subsets =
+        split_triangles(first_triangle, last_triangle, vertex_data, axis);
+
+    // 7. recurse
+    const std::size_t next = ++axis % N;
+    const auto negative = create(first_triangle, subsets.first, vertex_data, next);
+    const auto overlap = create(subsets.first, subsets.second, vertex_data, next);
+    const auto positive = create(subsets.second, last_triangle, vertex_data, next);
     
-    static void create(real_type* points, std::size_t point_size,
-                       index_type* triangles, std::size_t triangle_size) {
-        // build vertex array
-        std::vector<vertex> vertices(point_size);
-        for(std::size_t i = 0; i < point_size; ++i) {
-            vertices[i].coords = points + (i * N);
-        }
+    return std::make_shared<node>(p, negative, overlap, positive);
+  }
 
-        // build triangle array
-        std::vector<triangle> triangles(triangle_size);
-        for(std::size_t i = 0; i < triangle_size; ++i) {
-            triangle[i].indices = triangles + (i * 3);
-        }
+  struct result {
+    ref<node> root;
+    std::vector<vertex> vertices;
+    std::vector<triangle> triangles;
+  };
 
-        // 
-        
+  static void create(result& out,
+                     real_type* point_data, std::size_t point_size,
+                     index_type* triangle_data, std::size_t triangle_size) {
+    // build vertex array
+    out.vertices.resize(point_size);
+    for(std::size_t i = 0; i < point_size; ++i) {
+      out.vertices[i].coords = point_data + (i * N);
+    }
+
+    // build triangle array
+    out.triangles.resize(triangle_size);
+    for(std::size_t i = 0; i < triangle_size; ++i) {
+      out.triangles[i].indices = triangle_data + (i * 3);
     }
     
-    
-
+    // create
+    const std::size_t axis = 0;
+    return create(out.triangles.begin(), out.triangles.end(), out.vertices.data(), axis);
+  }
+  
 };
 
 #endif
