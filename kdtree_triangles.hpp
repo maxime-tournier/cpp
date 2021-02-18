@@ -16,7 +16,7 @@ struct kd_tree {
 
   struct triangle {
     const index_type* indices;
-    std::size_t counter;
+    std::size_t counter = 0;
   };
 
   class plane {
@@ -27,18 +27,23 @@ struct kd_tree {
       origin(origin), axis(axis) {}
     
     bool positive(vertex v) const {
-      return v.coord[axis] >= v.coord[axis];
+      return v.coord[axis] >= origin.coord[axis];
+    }
+
+    real_type distance2(vertex v) const {
+      const real_type delta = v.coord[axis] - origin.coord[axis];
+      // TODO distance?
+      return delta * delta;
     }
   };
 
 
   // partition(3) triangle range according to given plane
-  template<class Iterator>
-  static std::pair<Iterator, Iterator>
-  split_triangles(Iterator first, Iterator last, const vertex* vertices,
+  static std::pair<triangle*, triangle*>
+  split_triangles(triangle* first, triangle* last, const vertex* vertices,
                   plane p) {
     // compute positive vertices
-    for(Iterator it = first; it != last; ++it) {
+    for(auto it = first; it != last; ++it) {
       it->counter = 0;
       for(std::size_t i = 0; i < N; ++i) {
         if(p.positive(vertices[(it->indices[i])])) {
@@ -48,10 +53,10 @@ struct kd_tree {
     }
 
     // partition
-    const Iterator negative = std::partition(
+    const auto negative = std::partition(
         first, last, [](const triangle& self) { return self.counter > 0; });
 
-    const Iterator positive = std::partition(
+    const auto positive = std::partition(
         negative, last, [](const triangle& self) { return self.counter < 3; });
 
     return std::make_pair(negative, positive);
@@ -62,23 +67,101 @@ struct kd_tree {
 
   struct node {
     const plane p;
+
+    const triangle* first;
+    const triangle* last;
+    
     const ref<node> negative, overlap, positive;
-    node(plane p, ref<node> negative, ref<node> overlap, ref<node> positive):
-        p(p), negative(negative), overlap(overlap), positive(positive) {}
+    node(plane p, const triangle* first, const triangle* last,
+         ref<node> negative, ref<node> overlap, ref<node> positive):
+        p(p),
+        first(first),
+        last(last),
+        negative(negative),
+        overlap(overlap),
+        positive(positive) {
+      assert(last > first);
+    }
+
+
+    struct closest_type {
+      const triangle* tri = nullptr;
+      real_type distance2 = std::numeric_limits<real_type>::infinity();
+      // TODO store proj as well?
+
+      closest_type min(closest_type other) const {
+        if(distance2 < other.distance2) {
+          return *this;
+        } else {
+          return other;
+        }
+      }
+    };
+
+
+    static closest_type closest_brute_force(vertex query, const triangle* first,
+                                            const triangle* last, real_type) {
+      // TODO exploit best?
+      closest_type res;
+      for(auto it = first; it != last; ++it) {
+        const real_type distance2 = it->distance2(query);
+        if(distance2 < res.distance2) {
+          res.distance2 = distance2;
+          res.tri = *it;
+        }
+      }
+
+      return res;
+    }
+
+
+    closest_type closest(vertex query, const ref<node>& near, const ref<node>& far, real_type best) const {
+      closest_type res;      
+      for(auto sub: {near, overlap}) {
+        if(sub) {
+          res = res.min(sub->closest(query, best));
+          if(res.distance2 < best) {
+            best = res.distance2;
+          }
+        }
+      }
+      
+      if(p.distance2(query) < best) {
+        res = res.min(far->closest(query, best));
+      }
+
+      return res;
+    }
+
+    static constexpr std::size_t brute_force_threshold = 1;
+    
+    closest_type closest(vertex query,
+                         real_type best=std::numeric_limits<real_type>::infinity()) const {
+      if(last - first < brute_force_threshold) {
+        return closest_brute_force(query, first, last, best);
+      }
+      
+      closest_type res;
+      if(p.positive(query)) {
+        return closest(query, positive, negative, best);
+      } else {
+        return closest(query, negative, positive, best);
+      }
+    }
+    
   };
 
-  template<class TriangleIterator, class VertexIterator>
-  static ref<node> create(TriangleIterator first_triangle,
-                          TriangleIterator last_triangle,
+  static ref<node> create(triangle* first,
+                          triangle* last,
                           const vertex* vertex_data, std::size_t axis) {
     // base case
-    if(first_triangle == last_triangle) {
+    if(first == last) {
       return {};
     }
     
     // 1. fetch triangle vertices
     std::vector<vertex> vertices;
-    for(auto it = first_triangle; it != last_triangle; ++it) {
+    for(auto it = first; it != last; ++it) {
       for(std::size_t i = 0; i < 3; ++i) {
         vertices.emplace_back(vertex_data[i]);
       }
@@ -100,26 +183,29 @@ struct kd_tree {
 
     // 5. partition triangles
     const auto subsets =
-        split_triangles(first_triangle, last_triangle, vertex_data, axis);
+        split_triangles(first, last, vertex_data, axis);
 
-    // 7. recurse
+    // 7. recurse on subclasses
     const std::size_t next = ++axis % N;
-    const auto negative = create(first_triangle, subsets.first, vertex_data, next);
+    const auto negative = create(first, subsets.first, vertex_data, next);
     const auto overlap = create(subsets.first, subsets.second, vertex_data, next);
-    const auto positive = create(subsets.second, last_triangle, vertex_data, next);
-    
-    return std::make_shared<node>(p, negative, overlap, positive);
+    const auto positive = create(subsets.second, last, vertex_data, next);
+
+    // 8. node
+    return std::make_shared<node>(p, first, last, negative, overlap, positive);
   }
 
+  
   struct result {
     ref<node> root;
     std::vector<vertex> vertices;
     std::vector<triangle> triangles;
+
   };
 
   static void create(result& out,
-                     real_type* point_data, std::size_t point_size,
-                     index_type* triangle_data, std::size_t triangle_size) {
+                     const real_type* point_data, std::size_t point_size,
+                     const index_type* triangle_data, std::size_t triangle_size) {
     // build vertex array
     out.vertices.resize(point_size);
     for(std::size_t i = 0; i < point_size; ++i) {
@@ -134,8 +220,11 @@ struct kd_tree {
     
     // create
     const std::size_t axis = 0;
-    return create(out.triangles.begin(), out.triangles.end(), out.vertices.data(), axis);
+    return create(out.triangles.data(), out.triangles.data() + triangle_size,
+                  out.vertices.data(), axis);
   }
+
+  
   
 };
 
