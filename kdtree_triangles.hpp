@@ -5,6 +5,8 @@
 #include <vector>
 #include <memory>
 
+#include <Eigen/Core>
+
 template<class Real, class Index, std::size_t N = 3>
 struct kd_tree {
   using index_type = Index;
@@ -17,6 +19,25 @@ struct kd_tree {
   struct triangle {
     const index_type* indices;
     std::size_t counter = 0;
+
+    // real_type distance2(vertex query, const vertex* data) const {
+    //   using vec3 = Eigen::Matrix<real_type, 3, 1>;
+    //   using mat3x2 = Eigen::Matrix<real_type, 3, 2>;      
+
+    //   const auto q = vec3::Map(query.coords);
+    //   const auto p = {vec3::Map(data + indices[0]),
+    //                   vec3::Map(data + indices[1]),
+    //                   vec3::Map(data + indices[2])};
+    //   mat3x2 A;
+    //   A << (p[1] - p[0]), (p[2] - p[0]);
+
+    //   const vec3 n = A.col(0).cross(A.col(1));
+    //   const vec3 s = q - p[0];
+      
+    //   const vec3 b = s - (n * n.dot(s)) / n.squaredNorm();
+      
+    // }
+    // TODO point-triangle distance2
   };
 
   class plane {
