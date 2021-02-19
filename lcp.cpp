@@ -68,18 +68,20 @@ struct closest {
     const vec3 w = a - c;
 
     const vec3 n = u.cross(v);
-    const vec3 u_bar = u.cross(n);
-    const vec3 v_bar = v.cross(n);
-    const vec3 w_bar = w.cross(n);
+    const vec3 u_in = n.cross(u);
+    const vec3 v_in = n.cross(v);
+    const vec3 w_in = n.cross(w);
 
     mat3x3 JT;
-    JT << -u_bar, -v_bar, -w_bar;
+    JT.col(0) = u_in;
+    JT.col(1) = v_in;
+    JT.col(2) = w_in;
 
     vec3 bound;
-    bound << -u_bar.dot(a), -v_bar.dot(b), -w_bar.dot(c);
-
+    bound << u_in.dot(a), v_in.dot(b), w_in.dot(c);
+    
     const mat3x3 M = JT.transpose() * JT;
-    const vec3 q = JT.transpose() * p - bound;
+    const vec3 q = (JT.transpose() * p - bound);
 
     vec3 lambda;
     lcp<real>::solve(lambda, M, q);
