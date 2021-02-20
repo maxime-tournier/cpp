@@ -1,10 +1,10 @@
-// -*- compile-command: "c++ -std=c++14 -O3 -march=native lcp.cpp -o lcp
-// `pkg-config --cflags eigen3` -lstdc++" -*-
+// -*- compile-command: "c++ -std=c++14 -O3 -march=native lcp.cpp -o lcp `pkg-config --cflags eigen3` -lstdc++" -*-
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
 #include <iostream>
+#include <array>
 
 template<class U>
 struct lcp {
@@ -21,15 +21,18 @@ struct lcp {
 
 
   static void solve(vector<1>& x, const matrix<1>& M, const vector<1>& q) {
+    assert(M(0, 0) > 0);
     x(0) = std::max<real>(0, -q(0) / M(0, 0));
   }
 
   template<int N>
-  static void solve(vector<N>& x, const matrix<N>& M, const vector<N>& q) {
+  static void solve(vector<N>& x, matrix<N> M, vector<N> q) {
     static_assert(N > 1, "size error");
     indices<N - 1> sub;
     vector<N> w;
 
+    std::array<bool, N> active;
+    
     for(std::size_t i = 0; i < N; ++i) {
       // filter all but ith component
       auto ptr = sub.data();
@@ -47,8 +50,18 @@ struct lcp {
       solve(xx, MM, qq);
 
       w(i) = std::max<real>(sub.unaryExpr(M.col(i)).dot(xx) + q(i), 0);
+      active[i] = w(i) == 0;
     }
 
+    for(int i = 0; i < N; ++i) {
+      if(!active[i]) {
+        M.row(i) = vector<N>::Zero().transpose();
+        M.col(i) = vector<N>::Zero();
+        M(i, i) = 1;
+        q(i) = w(i);
+      }
+    }
+    
     // TODO use LLT when N > 4?
     x.noalias() = M.inverse() * (w - q);
   }
@@ -59,33 +72,42 @@ template<class U>
 struct closest {
   using real = U;
   using vec3 = Eigen::Matrix<real, 3, 1>;
+  using vec2 = Eigen::Matrix<real, 2, 1>;
+  
   using mat3x3 = Eigen::Matrix<real, 3, 3>;
-
+  using mat2x2 = Eigen::Matrix<real, 2, 2>;  
 
   static vec3 project_triangle(vec3 a, vec3 b, vec3 c, vec3 p) {
-    const vec3 u = b - a;
-    const vec3 v = c - b;
-    const vec3 w = a - c;
+    const vec3* points[3] = {&a, &b, &c};
+    
+    const vec3 edges[3] = {
+      b - a,
+      c - b,
+      a - c
+    };
 
-    const vec3 n = u.cross(v);
-    const vec3 u_in = n.cross(u);
-    const vec3 v_in = n.cross(v);
-    const vec3 w_in = n.cross(w);
-
+    const vec3 n = edges[0].cross(edges[1]);
+    
     mat3x3 JT;
-    JT.col(0) = u_in;
-    JT.col(1) = v_in;
-    JT.col(2) = w_in;
+    for(int i = 0; i < 3; ++i) {
+      JT.col(i) = n.cross(edges[i]);
+    }
+    
+    vec3 bounds;
 
-    vec3 bound;
-    bound << u_in.dot(a), v_in.dot(b), w_in.dot(c);
+    for(int i = 0; i < 3; ++i) {
+      bounds(i) = JT.col(i).dot(*points[i]);
+    }
     
     const mat3x3 M = JT.transpose() * JT;
-    const vec3 q = (JT.transpose() * p - bound);
+    const vec3 q = (JT.transpose() * p - bounds);
 
     vec3 lambda;
     lcp<real>::solve(lambda, M, q);
-
+    std::clog << lambda.transpose() << std::endl;
+    std::clog << (M * lambda + q).transpose() << std::endl;    
+    std::clog << lambda.dot(M * lambda + q) << std::endl;
+    
     const vec3 origin = a;
     const vec3 delta = p - origin;
     const vec3 proj = origin + (delta - n * n.dot(delta) / n.dot(n));
@@ -121,6 +143,7 @@ int main(int argc, char** argv) {
   }
   
   {
+    std::clog << "=================" << std::endl;
     using closest = struct closest<double>;
     closest::vec3 a, b, c, p;
     a.setRandom();
@@ -132,7 +155,9 @@ int main(int argc, char** argv) {
     const closest::vec3 x = closest::project_triangle(a, b, c, p);
 
     closest::mat3x3 B;
-    B << a, b, c;
+    B.col(0) = a;
+    B.col(1) = b;
+    B.col(2) = c;
 
     const closest::vec3 coords = B.inverse() * x;
     std::clog << coords.sum() << std::endl;
