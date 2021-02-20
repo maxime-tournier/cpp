@@ -160,8 +160,8 @@ int main(int argc, char** argv) {
     B.col(2) = c;
 
     const closest::vec3 coords = B.inverse() * x;
-    std::clog << coords.sum() << std::endl;
-    std::clog << coords.transpose() << std::endl;
+    std::clog << "coords sum: " << coords.sum() << std::endl;
+    std::clog << "coords: " << coords.transpose() << std::endl;
   }  
   
   return 0;
