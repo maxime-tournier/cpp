@@ -77,6 +77,56 @@ struct closest {
   using mat3x3 = Eigen::Matrix<real, 3, 3>;
   using mat2x2 = Eigen::Matrix<real, 2, 2>;  
 
+  static real clamp(real x) {
+    return std::max<real>(x, 0);
+  }
+
+  static void fast_lcp(vec3& x, mat3x3 M, vec3 q) {
+    const real x1[3] = {
+      clamp(-q(0) / M(0, 0)),
+      clamp(-q(1) / M(1, 1)),
+      clamp(-q(2) / M(2, 2)),
+    };
+
+    using vec2i = Eigen::Matrix<Eigen::Index, 2, 1>;
+    // TODO make this constexpr?
+    const vec2i ind[3] = {{1, 2}, {0, 2}, {0, 1}};
+    
+    mat2x2 M2inv[3];
+    
+    vec2 x2[3];
+    vec3 w;
+    int skip = 0;
+    for(int i = 0; i < 3; ++i) {
+      mat2x2 sub;               // TODO optimize (symmetric)
+      for(int j = 0; j < 2; ++j) {
+        sub.col(j) = ind[i].unaryExpr(M.col(ind[i][j]));
+      }
+
+      vec2 w2;
+      for(int j = 0; j < 2; ++j) {
+        const int other = (j + 1) % 2;
+        w2(j) = clamp(sub(j, other) * x1[ind[i][other]] + q(ind[i][j]));
+      }
+
+      // TODO optimize?
+      M2inv[i] = sub.inverse();
+      x2[i].noalias() = M2inv[i] * (w2 - ind[i].unaryExpr(q));
+      
+      w[i] = clamp(ind[i].unaryExpr(M.col(i)).dot(x2[i]) + q(i));
+
+      // TODO branchless?
+      if(w[i] > 0) {
+        skip = i;
+      }
+    }
+
+    const vec2 res = M2inv[skip] * ind[skip].unaryExpr(w - q);
+    x[ind[skip][0]] = res[0];
+    x[ind[skip][1]] = res[1];    
+    x[skip] = 0;
+  }
+  
   static vec3 project_triangle(vec3 a, vec3 b, vec3 c, vec3 p) {
     const vec3* points[3] = {&a, &b, &c};
     
@@ -103,7 +153,9 @@ struct closest {
     const vec3 q = (JT.transpose() * p - bounds);
 
     vec3 lambda;
-    lcp<real>::solve(lambda, M, q);
+    // lcp<real>::solve(lambda, M, q);
+    fast_lcp(lambda, M, q);
+    
     std::clog << lambda.transpose() << std::endl;
     std::clog << (M * lambda + q).transpose() << std::endl;    
     std::clog << lambda.dot(M * lambda + q) << std::endl;
