@@ -106,7 +106,8 @@ struct closest {
       vec2 w2;
       for(int j = 0; j < 2; ++j) {
         const int other = (j + 1) % 2;
-        w2(j) = clamp(sub(j, other) * x1[ind[i][other]] + q(ind[i][j]));
+        // w2(j) = clamp(sub(j, other) * x1[ind[i][other]] + q(ind[i][j]));
+        w2(j) = clamp(M(ind[i][j], ind[i][other]) * x1[ind[i][other]] + q(ind[i][j]));        
       }
 
       // TODO optimize?
