@@ -316,7 +316,7 @@ struct closest {
     const vec3 delta = q - origin;
     const vec3 proj = origin + (delta - n * n.dot(delta) / n.dot(n));
 
-    const vec3 coords = vec3::Zero(); // points.inverse() * proj;
+    const vec3 coords = points.inverse() * proj;
 
     int negative = 0;
 
@@ -336,9 +336,9 @@ struct closest {
       const vec3 delta = q - origin;
       
       real alpha = e.dot(delta) / e.dot(e);
-      alpha = (alpha > 0) * alpha - (alpha > 1) * (alpha - 1);
-      // alpha = std::max<real>(0, alpha);
-      // alpha = std::min<real>(1, alpha);
+      // alpha = (alpha > 0) * alpha - (alpha > 1) * (alpha - 1);
+      alpha = std::max<real>(0, alpha);
+      alpha = std::min<real>(1, alpha);
 
       return origin + e * alpha;
     }      
