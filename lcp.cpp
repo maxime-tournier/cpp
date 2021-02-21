@@ -1,4 +1,4 @@
-// -*- compile-command: "c++ -std=c++14 -O3 -march=native lcp.cpp -o lcp `pkg-config --cflags eigen3` -lstdc++" -*-
+// -*- compile-command: "c++ -std=c++14 -O3 -DNDEBUG -ffast-math -march=native lcp.cpp -o lcp `pkg-config --cflags eigen3` -lstdc++" -*-
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -157,9 +157,9 @@ struct closest {
     // lcp<real>::solve(lambda, M, q);
     fast_lcp(lambda, M, q);
     
-    std::clog << lambda.transpose() << std::endl;
-    std::clog << (M * lambda + q).transpose() << std::endl;    
-    std::clog << lambda.dot(M * lambda + q) << std::endl;
+    // std::clog << lambda.transpose() << std::endl;
+    // std::clog << (M * lambda + q).transpose() << std::endl;    
+    // std::clog << lambda.dot(M * lambda + q) << std::endl;
     
     const vec3 origin = a;
     const vec3 delta = p - origin;
@@ -168,6 +168,141 @@ struct closest {
     return JT * lambda + proj;
   }
 
+
+  static vec3 project_triangle_ref(vec3 p1, vec3 p2, vec3 p3, vec3 p) {
+    const vec3 p1p2 = p2 - p1, p1p3 = p3 - p1, pp1 = p1 - p;
+    const real distp1p2 = p1p2.dot(p1p2), distp2p3 = (p3 - p2).dot(p3 - p2), distp3p1 = p1p3.dot(p1p3);
+
+    const real fa = distp1p2, fb = p1p2.dot(p1p3), fc = p1p3.dot(p1p3), fd = p1p2.dot(pp1),
+      fe = p1p3.dot(pp1);
+
+    const real fdet = fa * fc - fb * fb;
+    real fs = fb * fe - fc * fd, ft = fb * fd - fa * fe;
+
+    if(fs + ft <= fdet) {
+      if(fs < 0) {
+        if(ft < 0) {
+          // region 4
+          if(fd < 0) {
+            ft = 0;
+            if(-fd >= fa) {
+              fs = 1;
+            } else {
+              fs = -fd / fa;
+            }
+          } else {
+            fs = 0;
+            if(fe >= 0) {
+              ft = 0;
+            } else if(-fe >= fc) {
+              ft = 1;
+            } else {
+              ft = -fe / fc;
+            }
+          }
+        } else {
+          // region 3
+          fs = 0;
+          if(fe >= 0) {
+            ft = 0;
+          } else if(-fe >= fc) {
+            ft = 1;
+          } else {
+            ft = -fe / fc;
+          }
+        }
+      } else if(ft < 0) {
+        // region 5
+        ft = 0;
+        if(fd >= 0) {
+          fs = 0;
+        } else if(-fd >= fa) {
+          fs = 1;
+        } else {
+          fs = -fd / fa;
+        }
+
+      } else
+      {
+        // region 0        
+        // minimum at interior point
+        fs /= fdet;
+        ft /= fdet;
+      }
+    } else {
+      real ftmp0, ftmp1, fNumer, fDenom;
+
+      if(fs < 0) 
+        {
+          // region 2
+          ftmp0 = fb + fd;
+          ftmp1 = fc + fe;
+          if(ftmp1 > ftmp0) {
+            fNumer = ftmp1 - ftmp0;
+            fDenom = fa - 2 * fb + fc;
+            if(fNumer >= fDenom) {
+              fs = 1;
+              ft = 0;
+            } else {
+              fs = fNumer / fDenom;
+              ft = 1 - fs;
+            }
+          } else {
+            fs = 0;
+            if(ftmp1 <= 0) {
+              ft = 1;
+            } else if(fe >= 0) {
+              ft = 0;
+            } else {
+              ft = -fe / fc;
+            }
+          }
+        } else if(ft < 0) 
+        {
+          // region 6          
+          ftmp0 = fb + fe;
+          ftmp1 = fa + fd;
+          if(ftmp1 > ftmp0) {
+            fNumer = ftmp1 - ftmp0;
+            fDenom = fa - 2 * fb + fc;
+            if(fNumer >= fDenom) {
+              ft = 1;
+              fs = 0;
+            } else {
+              ft = fNumer / fDenom;
+              fs = 1 - ft;
+            }
+          } else {
+            ft = 0;
+            if(ftmp1 <= 0) {
+              fs = 1;
+            } else if(fd >= 0) {
+              fs = 0;
+            } else {
+              fs = -fd / fa;
+            }
+          }
+        } else // region 1
+        {
+          fNumer = fc + fe - fb - fd;
+          if(fNumer <= 0) {
+            fs = 0;
+            ft = 1;
+          } else {
+            fDenom = fa - 2 * fb + fc;
+            if(fNumer >= fDenom) {
+              fs = 1;
+              ft = 0;
+            } else {
+              fs = fNumer / fDenom;
+              ft = 1 - fs;
+            }
+          }
+        }
+    }
+    return (1 - fs - ft) * p1 + fs * p2 + ft * p3;    
+  }
+  
   static vec3 project_triangle_alt(vec3 a, vec3 b, vec3 c, vec3 q) {
     mat3x3 points;
     points << a, b, c;
@@ -217,7 +352,9 @@ struct closest {
   }
 };
 
+#include "timer.hpp"
 
+Eigen::Matrix<double, 3, 1> solution;
 
 int main(int argc, char** argv) {
   std::srand(time(0));
@@ -244,25 +381,58 @@ int main(int argc, char** argv) {
   }
   
   {
-    std::clog << "=================" << std::endl;
     using closest = struct closest<double>;
-    closest::vec3 a, b, c, p;
-    a.setRandom();
-    b.setRandom();
-    c.setRandom();
+    
+    std::clog << "=================" << std::endl;
+    static const auto make_problem = [](auto k) {
+      closest::vec3 a, b, c, p;
+      a.setRandom();
+      b.setRandom();
+      c.setRandom();
 
-    p.setRandom();
+      p.setRandom();
 
-    const closest::vec3 x = closest::project_triangle_alt(a, b, c, p);
+      return k(a, b, c, p);
+    };
 
-    closest::mat3x3 B;
-    B.col(0) = a;
-    B.col(1) = b;
-    B.col(2) = c;
+    static const int n = 1000000;
 
-    const closest::vec3 coords = B.inverse() * x;
-    std::clog << "coords sum: " << coords.sum() << std::endl;
-    std::clog << "coords: " << coords.transpose() << std::endl;
+    const auto normal_duration = with_time([] {
+      for(int i = 0; i < n; ++i) {
+        solution = make_problem([](auto a, auto b, auto c, auto p) {
+          return closest::project_triangle(a, b, c, p);
+        });
+      }
+    });
+
+    const auto alt_duration = with_time([] {
+      for(int i = 0; i < n; ++i) {
+        solution = make_problem([](auto a, auto b, auto c, auto p) {
+          return closest::project_triangle_alt(a, b, c, p);
+        });
+      }
+    });
+
+    const auto ref_duration = with_time([] {
+      for(int i = 0; i < n; ++i) {
+        solution = make_problem([](auto a, auto b, auto c, auto p) {
+          return closest::project_triangle_ref(a, b, c, p);
+        });
+      }
+    });
+    
+    std::clog << "normal: " << normal_duration << std::endl;
+    std::clog << "alt: " << alt_duration << std::endl;
+    std::clog << "ref: " << ref_duration << std::endl;        
+    
+    // closest::mat3x3 B;
+    // B.col(0) = a;
+    // B.col(1) = b;
+    // B.col(2) = c;
+
+    // const closest::vec3 coords = B.inverse() * x;
+    // std::clog << "coords sum: " << coords.sum() << std::endl;
+    // std::clog << "coords: " << coords.transpose() << std::endl;
   }  
   
   return 0;

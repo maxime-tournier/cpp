@@ -5,7 +5,7 @@
 
 template<class Action, class Resolution = std::chrono::milliseconds,
 		 class Clock = std::chrono::high_resolution_clock>
-static double time(const Action& action) {
+static double with_time(const Action& action) {
   typename Clock::time_point start = Clock::now();
   action();
   typename Clock::time_point stop = Clock::now();
@@ -101,11 +101,11 @@ struct node {
 };
 
 
-static tree<node> process(const timeline& self) {
-  for(const event& ev: self) {
-    // TODO
-  }
-}
+// static tree<node> process(const timeline& self) {
+//   for(const event& ev: self) {
+//     // TODO
+//   }
+// }
 
 
 #endif
