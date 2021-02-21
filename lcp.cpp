@@ -90,7 +90,7 @@ struct closest {
 
     using vec2i = Eigen::Matrix<Eigen::Index, 2, 1>;
     // TODO make this constexpr?
-    const vec2i ind[3] = {{1, 2}, {0, 2}, {0, 1}};
+    const vec2i ind[3] =  {{1, 2}, {0, 2}, {0, 1}};
     
     mat2x2 M2inv[3];
     
@@ -167,6 +167,54 @@ struct closest {
 
     return JT * lambda + proj;
   }
+
+  static vec3 project_triangle_alt(vec3 a, vec3 b, vec3 c, vec3 q) {
+    mat3x3 points;
+    points << a, b, c;
+
+    mat3x3 edges;
+    edges << c - b, a - c, b - a;
+    
+    const vec3 n = edges.col(0).cross(edges.col(1));
+    
+    const vec3 origin = a;
+    const vec3 delta = q - origin;
+    const vec3 proj = origin + (delta - n * n.dot(delta) / n.dot(n));
+
+    const vec3 coords = points.inverse() * proj;
+
+    int negative = 0;
+
+    int last_positive_index = 0;
+    int last_negative_index = 0;
+    for(int i = 0; i < 3; ++i) {
+      if(coords[i] < 0) {
+        ++negative;
+        last_negative_index = i;
+      } else {
+        last_positive_index = i;
+      }
+    }
+
+    switch(negative) {
+    case 0: return proj;
+    case 1: {
+      const vec3 e = edges.col(last_negative_index);
+      const vec3 origin = points.col(last_positive_index);
+      const vec3 delta = q - origin;
+      
+      real alpha = e.dot(delta) / e.dot(e);
+      alpha = std::max<real>(0, alpha);
+      alpha = std::min<real>(1, alpha);
+
+      return origin + e * alpha;
+    }      
+    case 2: return points.col(last_positive_index);
+    default:
+      throw std::logic_error("unreachable");
+    }
+    
+  }
 };
 
 
@@ -205,7 +253,7 @@ int main(int argc, char** argv) {
 
     p.setRandom();
 
-    const closest::vec3 x = closest::project_triangle(a, b, c, p);
+    const closest::vec3 x = closest::project_triangle_alt(a, b, c, p);
 
     closest::mat3x3 B;
     B.col(0) = a;
