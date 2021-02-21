@@ -316,35 +316,33 @@ struct closest {
     const vec3 delta = q - origin;
     const vec3 proj = origin + (delta - n * n.dot(delta) / n.dot(n));
 
-    const vec3 coords = points.inverse() * proj;
+    const vec3 coords = vec3::Zero(); // points.inverse() * proj;
 
     int negative = 0;
 
-    int last_positive_index = 0;
-    int last_negative_index = 0;
+    // negative, positive
+    int last_index[2];
     for(int i = 0; i < 3; ++i) {
-      if(coords[i] < 0) {
-        ++negative;
-        last_negative_index = i;
-      } else {
-        last_positive_index = i;
-      }
+      const auto neg = coords[i] < 0;
+      negative += neg;
+      last_index[neg] = i;
     }
 
     switch(negative) {
     case 0: return proj;
     case 1: {
-      const vec3 e = edges.col(last_negative_index);
-      const vec3 origin = points.col(last_positive_index);
+      const vec3 e = edges.col(last_index[0]);
+      const vec3 origin = points.col(last_index[1]);
       const vec3 delta = q - origin;
       
       real alpha = e.dot(delta) / e.dot(e);
-      alpha = std::max<real>(0, alpha);
-      alpha = std::min<real>(1, alpha);
+      alpha = (alpha > 0) * alpha - (alpha > 1) * (alpha - 1);
+      // alpha = std::max<real>(0, alpha);
+      // alpha = std::min<real>(1, alpha);
 
       return origin + e * alpha;
     }      
-    case 2: return points.col(last_positive_index);
+    case 2: return points.col(last_index[1]);
     default:
       throw std::logic_error("unreachable");
     }
