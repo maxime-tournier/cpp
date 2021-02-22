@@ -5,6 +5,8 @@
 #include <vector>
 #include <memory>
 
+#include "point_triangle.hpp"
+
 #include <Eigen/Core>
 
 template<class Real, class Index, std::size_t N = 3>

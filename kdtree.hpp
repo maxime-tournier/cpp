@@ -21,9 +21,10 @@ class kdtree {
   using storage_type = std::vector<distance_type>;
 
   static constexpr std::size_t dim = 3;
-  
+
   template<class Iterator>
-  index_type build_impl(Iterator first, Iterator last, dir_type dir, const vec3* positions, storage_type& storage) {
+  index_type build_impl(Iterator first, Iterator last, dir_type dir,
+                        const vec3* positions, storage_type& storage) {
     const std::size_t size = last - first; assert(size);
 
     if(size == 1) {
