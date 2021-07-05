@@ -5,9 +5,10 @@
 
 template<class U>
 class projector {
+public:
   using real = U;
   using vec3 = Eigen::Matrix<real, 3, 1>;
-  
+private:
   vec3 p1, p2, p3, p1p2, p1p3;
   real distp1p2;
   real fa, fb, fc;
